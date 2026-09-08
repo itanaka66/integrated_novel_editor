@@ -1,0 +1,166 @@
+from fastapi import FastAPI,Depends,HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+from .db import Base,engine,get_db,SessionLocal
+from .config import settings
+from .models import *
+from .schemas import *
+from .ollama import generate
+from .rag import index,search
+from .context import build
+from .continuity import update_character_states, check_continuity
+app=FastAPI(title='AI Novel Studio API',version='0.3.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
+def chunks(e):
+ s=e.content or ''; out=[]; start=0;i=0
+ while start<len(s):
+  t=s[start:start+1400];out.append({'id':e.id*100000+i,'project_id':e.project_id,'episode_id':e.id,'title':e.title,'source_type':'episode','text':t});i+=1;start+=1200
+ return out
+@app.on_event('startup')
+def init():
+ Base.metadata.create_all(bind=engine)
+ with SessionLocal() as d:
+  if not d.scalar(select(Project).limit(1)):
+   p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
+   d.add_all([Character(project_id=p.id,name='田中',role='主人公',personality='慎重だが好奇心旺盛',speech_style='現代日本語',goal='文明を安全に発展させる'),Character(project_id=p.id,name='リナ',role='仲間',personality='行動派',speech_style='短く率直',goal='集落を守る')])
+   d.add_all([WorldEntity(project_id=p.id,name='最初の集落',entity_type='location',description='森の近くの集落',location='大河東岸'),WorldEntity(project_id=p.id,name='鉄器',entity_type='technology',description='まだ存在しない重要技術',rules='鉱石→炉→燃料の順に確立')])
+   d.add(Plot(project_id=p.id,title='文明開拓編',plot_type='main_arc',status='active',start_episode=1,end_episode=100,objective='安全な集落を作る',conflict='自然災害と恐竜'))
+   d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
+   d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
+@app.get('/api/v1/health')
+def health():return {'status':'ok','version':'0.3.0','features':['continuity-checker','character-state-auto-update']}
+def crud_list(db,model,pid):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id)).all())
+@app.get('/api/v1/projects',response_model=list[ProjectOut])
+def projects(db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc())).all())
+@app.get('/api/v1/projects/{pid}',response_model=ProjectOut)
+def project(pid:int,db:Session=Depends(get_db)):
+ p=db.get(Project,pid)
+ if not p:raise HTTPException(404,'Project not found')
+ return p
+@app.post('/api/v1/projects',response_model=ProjectOut)
+def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
+@app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
+def episodes(pid:int,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
+@app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
+def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
+@app.put('/api/v1/episodes/{eid}',response_model=EpisodeOut)
+async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
+ e=db.get(Episode,eid)
+ if not e:raise HTTPException(404,'Episode not found')
+ for k,v in x.model_dump(exclude_unset=True).items():setattr(e,k,v)
+ db.commit();db.refresh(e)
+ try:await index(chunks(e))
+ except:pass
+ try: await update_character_states(db,e)
+ except Exception: pass
+ return e
+@app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
+def chars(pid:int,db:Session=Depends(get_db)):return crud_list(db,Character,pid)
+@app.post('/api/v1/projects/{pid}/characters',response_model=CharacterOut)
+def char_add(pid:int,x:CharacterCreate,db:Session=Depends(get_db)):o=Character(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.get('/api/v1/projects/{pid}/world',response_model=list[WorldOut])
+def worlds(pid:int,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid)
+@app.post('/api/v1/projects/{pid}/world',response_model=WorldOut)
+def world_add(pid:int,x:WorldCreate,db:Session=Depends(get_db)):o=WorldEntity(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.get('/api/v1/projects/{pid}/plots',response_model=list[PlotOut])
+def plots(pid:int,db:Session=Depends(get_db)):return crud_list(db,Plot,pid)
+@app.post('/api/v1/projects/{pid}/plots',response_model=PlotOut)
+def plot_add(pid:int,x:PlotCreate,db:Session=Depends(get_db)):o=Plot(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.get('/api/v1/projects/{pid}/foreshadowings',response_model=list[ForeshadowOut])
+def fs(pid:int,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid)
+@app.post('/api/v1/projects/{pid}/foreshadowings',response_model=ForeshadowOut)
+def fs_add(pid:int,x:ForeshadowCreate,db:Session=Depends(get_db)):o=Foreshadowing(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.post('/api/v1/rag/index')
+async def rag_index(x:RagIndex,db:Session=Depends(get_db)):
+ es=db.scalars(select(Episode).where(Episode.project_id==x.project_id)).all(); cs=[c for e in es for c in chunks(e)]
+ try:return {'indexed':await index(cs)}
+ except Exception as e:raise HTTPException(503,str(e))
+@app.post('/api/v1/rag/search')
+async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
+ try:return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
+ except:
+  rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all();return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
+@app.post('/api/v1/ai/generate')
+async def ai(x:AIGenerate,db:Session=Depends(get_db)):
+ e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
+ task={'continue':'本文の続きを書く','summary':'本文を要約する','plot':'次の展開を提案する','proofread':'設定・表現・時系列を校正する'}.get(x.mode,'依頼を実行する')
+ prompt=f'''あなたは長編小説の編集長AIです。作品の正本設定を最優先してください。\n作業:{task}\n\nContext:\n{__import__("json").dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
+ try:t,m=await generate(prompt)
+ except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ return {'text':t,'model':m,'context':{'characters':len(c['characters']),'world':len(c['world']),'plots':len(c['plots']),'foreshadowings':len(c['foreshadowings']),'rag':len(c['rag'])}}
+
+
+@app.get('/api/v1/projects/{pid}/characters/{cid}/states',response_model=list[CharacterStateOut])
+def character_states(pid:int,cid:int,db:Session=Depends(get_db)):
+    return list(db.scalars(select(CharacterState).where(CharacterState.project_id==pid,CharacterState.character_id==cid).order_by(CharacterState.episode_number.desc())).all())
+
+@app.get('/api/v1/projects/{pid}/continuity/issues',response_model=list[ContinuityIssueOut])
+def continuity_issues(pid:int,db:Session=Depends(get_db)):
+    return list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid).order_by(ContinuityIssue.id.desc()).limit(100)).all())
+
+@app.post('/api/v1/continuity/check')
+async def continuity_check(x:ContinuityCheck,db:Session=Depends(get_db)):
+    try:
+        issues=await check_continuity(db,x.project_id,x.episode_id)
+        return {'count':len(issues),'issues':[ContinuityIssueOut.model_validate(i).model_dump() for i in issues]}
+    except Exception as ex: raise HTTPException(503,str(ex))
+
+@app.post('/api/v1/episodes/{eid}/character-states')
+async def character_state_update(eid:int,db:Session=Depends(get_db)):
+    e=db.get(Episode,eid)
+    if not e: raise HTTPException(404,'Episode not found')
+    try:
+        states=await update_character_states(db,e.project_id,e)
+        return {'count':len(states),'states':[CharacterStateOut.model_validate(x).model_dump() for x in states]}
+    except Exception as ex: raise HTTPException(503,str(ex))
+
+@app.get('/api/v1/projects/{pid}/graphs/characters', response_model=GraphOut)
+def character_graph(pid:int,db:Session=Depends(get_db)):
+    chars=list(db.scalars(select(Character).where(Character.project_id==pid).order_by(Character.id)).all())
+    nodes=[GraphNode(id=c.id,label=c.name,node_type='character',meta={'role':c.role,'status':c.status}) for c in chars]
+    edges=[]
+    rels=list(db.scalars(select(CharacterRelation).where(CharacterRelation.project_id==pid)).all())
+    for r in rels: edges.append(GraphEdge(source=r.from_character_id,target=r.to_character_id,label=r.relation_type,weight=r.strength,meta={'description':r.description}))
+    # Fallback/augmentation: co-occurrence in episode text creates weak semantic links.
+    eps=list(db.scalars(select(Episode).where(Episode.project_id==pid)).all())
+    for i,a in enumerate(chars):
+        for b in chars[i+1:]:
+            count=sum(1 for e in eps if a.name in (e.content or '') and b.name in (e.content or ''))
+            if count and not any((x.source==a.id and x.target==b.id) or (x.source==b.id and x.target==a.id) for x in edges):
+                edges.append(GraphEdge(source=a.id,target=b.id,label='共演',weight=min(count,5),meta={'episodes':count}))
+    return GraphOut(nodes=nodes,edges=edges)
+
+@app.get('/api/v1/projects/{pid}/graphs/world', response_model=GraphOut)
+def world_graph(pid:int,db:Session=Depends(get_db)):
+    worlds=list(db.scalars(select(WorldEntity).where(WorldEntity.project_id==pid).order_by(WorldEntity.id)).all())
+    nodes=[GraphNode(id=w.id,label=w.name,node_type='world',meta={'type':w.entity_type,'location':w.location,'era':w.era}) for w in worlds]
+    edges=[]
+    rels=list(db.scalars(select(WorldRelation).where(WorldRelation.project_id==pid)).all())
+    for r in rels: edges.append(GraphEdge(source=r.from_world_id,target=r.to_world_id,label=r.relation_type,weight=r.strength,meta={'description':r.description}))
+    eps=list(db.scalars(select(Episode).where(Episode.project_id==pid)).all())
+    for i,a in enumerate(worlds):
+        for b in worlds[i+1:]:
+            count=sum(1 for e in eps if a.name in (e.content or '') and b.name in (e.content or ''))
+            if count and not any((x.source==a.id and x.target==b.id) or (x.source==b.id and x.target==a.id) for x in edges):
+                edges.append(GraphEdge(source=a.id,target=b.id,label='共起',weight=min(count,5),meta={'episodes':count}))
+    return GraphOut(nodes=nodes,edges=edges)
+
+@app.get('/api/v1/projects/{pid}/graphs/timeline', response_model=GraphOut)
+def timeline_graph(pid:int,db:Session=Depends(get_db)):
+    eps=list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
+    events=list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id)).all())
+    nodes=[]
+    for e in eps:
+        nodes.append(GraphNode(id=1000000+e.id,label=f'EP.{e.number} {e.title}',node_type='episode',meta={'episode':e.number,'summary':e.summary}))
+    for t in events:
+        nodes.append(GraphNode(id=2000000+t.id,label=t.title,node_type='event',meta={'episode':t.episode_number,'world_time':t.world_time,'description':t.description}))
+    edges=[]
+    for a,b in zip(eps,eps[1:]): edges.append(GraphEdge(source=1000000+a.id,target=1000000+b.id,label='次話',weight=1))
+    for t in events: edges.append(GraphEdge(source=1000000+next((e.id for e in eps if e.number==t.episode_number),0),target=2000000+t.id,label=t.world_time or '出来事',weight=1))
+    return GraphOut(nodes=nodes,edges=edges)
+
+@app.get('/api/v1/projects/{pid}/timeline',response_model=list[TimelineOut])
+def timeline(pid:int,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id)).all())
+@app.post('/api/v1/projects/{pid}/timeline',response_model=TimelineOut)
+def timeline_add(pid:int,x:TimelineCreate,db:Session=Depends(get_db)):
+    o=TimelineEvent(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
