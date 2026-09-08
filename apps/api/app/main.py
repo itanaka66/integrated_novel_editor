@@ -10,7 +10,7 @@ from .ollama import generate
 from .rag import index,search
 from .context import build
 from .continuity import update_character_states, check_continuity
-app=FastAPI(title='AI Novel Studio API',version='0.3.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
+app=FastAPI(title='AI Novel Studio API',version='0.5.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
  while start<len(s):
@@ -28,7 +28,7 @@ def init():
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
 @app.get('/api/v1/health')
-def health():return {'status':'ok','version':'0.3.0','features':['continuity-checker','character-state-auto-update']}
+def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
 def crud_list(db,model,pid):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id)).all())
 @app.get('/api/v1/projects',response_model=list[ProjectOut])
 def projects(db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc())).all())
@@ -158,6 +158,38 @@ def timeline_graph(pid:int,db:Session=Depends(get_db)):
     for a,b in zip(eps,eps[1:]): edges.append(GraphEdge(source=1000000+a.id,target=1000000+b.id,label='次話',weight=1))
     for t in events: edges.append(GraphEdge(source=1000000+next((e.id for e in eps if e.number==t.episode_number),0),target=2000000+t.id,label=t.world_time or '出来事',weight=1))
     return GraphOut(nodes=nodes,edges=edges)
+
+
+@app.get('/api/v1/projects/{pid}/story-twin', response_model=TwinOut)
+def story_twin(pid:int,db:Session=Depends(get_db)):
+    p=db.get(Project,pid)
+    if not p: raise HTTPException(404,'Project not found')
+    # Build the Digital Twin from the authoritative relational model plus derived graph views.
+    eps=list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
+    chars=list(db.scalars(select(Character).where(Character.project_id==pid)).all())
+    worlds=list(db.scalars(select(WorldEntity).where(WorldEntity.project_id==pid)).all())
+    plots=list(db.scalars(select(Plot).where(Plot.project_id==pid)).all())
+    fs=list(db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all())
+    states=list(db.scalars(select(CharacterState).where(CharacterState.project_id==pid).order_by(CharacterState.episode_number.desc(),CharacterState.id.desc()).limit(50)).all())
+    issues=list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid,ContinuityIssue.status=='open').all()))
+    cg=character_graph(pid,db); wg=world_graph(pid,db); tg=timeline_graph(pid,db)
+    completed=sum(1 for e in eps if (e.content or '').strip())
+    open_fs=sum(1 for f in fs if f.status=='open')
+    high=sum(1 for i in issues if i.severity=='high')
+    # Coverage is a practical quality signal, not an AI confidence score.
+    coverage=round((completed/len(eps))*100) if eps else 0
+    health_score=max(0,min(100,round(100 - high*15 - max(0,len(issues)-high)*4 + min(20,coverage*0.2))))
+    health_label='healthy' if health_score>=85 else ('attention' if health_score>=60 else 'risk')
+    recent=[CharacterStateOut.model_validate(x).model_dump() for x in states]
+    return TwinOut(
+      project={'id':p.id,'name':p.name,'genre':p.genre,'description':p.description},
+      metrics={'episodes':len(eps),'characters':len(chars),'world_entities':len(worlds),'plots':len(plots),'foreshadowings':len(fs),'states':len(states),'continuity_open':len(issues),'continuity_high':high,'graph_nodes':len(cg.nodes)+len(wg.nodes)+len(tg.nodes),'graph_edges':len(cg.edges)+len(wg.edges)+len(tg.edges)},
+      health={'score':health_score,'label':health_label,'episode_coverage':coverage,'explanation':'作品の構造化データ・状態履歴・未解決矛盾から算出した運用指標です。'},
+      characters=cg,world=wg,timeline=tg,recent_states=recent,
+      continuity={'open':len(issues),'high':high,'medium':sum(1 for i in issues if i.severity=='medium'),'low':sum(1 for i in issues if i.severity=='low')},
+      active_plots=[{'id':x.id,'title':x.title,'status':x.status,'start_episode':x.start_episode,'end_episode':x.end_episode} for x in plots if x.status in ('active','planned')],
+      open_foreshadowings=[{'id':x.id,'title':x.title,'setup_episode':x.setup_episode,'payoff_episode':x.payoff_episode,'status':x.status} for x in fs if x.status=='open']
+    )
 
 @app.get('/api/v1/projects/{pid}/timeline',response_model=list[TimelineOut])
 def timeline(pid:int,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id)).all())

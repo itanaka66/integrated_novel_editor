@@ -31,3 +31,15 @@ class GraphEdge(BaseModel):
     source:int; target:int; label:str=''; weight:int=1; meta:dict={}
 class GraphOut(BaseModel):
     nodes:list[GraphNode]; edges:list[GraphEdge]
+
+class TwinOut(BaseModel):
+    project: dict
+    metrics: dict
+    health: dict
+    characters: GraphOut
+    world: GraphOut
+    timeline: GraphOut
+    recent_states: list[dict]
+    continuity: dict
+    active_plots: list[dict]
+    open_foreshadowings: list[dict]
