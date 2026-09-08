@@ -19,6 +19,7 @@ jobs:
       - run: cd apps/api && ruff check app
       - run: python -m compileall apps/api/app
       - run: cd apps/api && pytest -q
+      - run: cd apps/api && DATABASE_URL=sqlite:///./_ci_migration_check.db alembic upgrade head && DATABASE_URL=sqlite:///./_ci_migration_check.db alembic downgrade base
 
   frontend:
     runs-on: ubuntu-latest

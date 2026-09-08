@@ -3,7 +3,7 @@ from fastapi import FastAPI,Depends,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from .db import Base,engine,get_db,SessionLocal
+from .db import get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
@@ -11,9 +11,18 @@ from .ollama import generate
 from .rag import index,search
 from .context import build
 from .continuity import update_character_states, check_continuity
+from .auth import BasicAuthMiddleware
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
-app=FastAPI(title='AI Novel Studio API',version='0.5.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
+if settings.admin_password=='novel-studio-change-me':
+ logger.warning('ADMIN_PASSWORD is not set; using the insecure default. Set ADMIN_USERNAME/ADMIN_PASSWORD before exposing this service.')
+app=FastAPI(title='AI Novel Studio API',version='0.5.0')
+# Starlette wraps middleware in reverse of add order (last added = outermost),
+# so BasicAuthMiddleware is added first: CORS must stay outermost or a 401
+# response never gets CORS headers and the browser reports an opaque network
+# error instead of a readable 401.
+app.add_middleware(BasicAuthMiddleware)
+app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
  while start<len(s):
@@ -21,7 +30,9 @@ def chunks(e):
  return out
 @app.on_event('startup')
 def init():
- Base.metadata.create_all(bind=engine)
+ # Schema is owned by Alembic migrations (see apps/api/alembic/); run
+ # `alembic upgrade head` before starting the app. We only seed demo data
+ # here, on top of whatever schema migrations have already applied.
  with SessionLocal() as d:
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
@@ -32,7 +43,9 @@ def init():
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
-def crud_list(db,model,pid):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id)).all())
+MAX_PAGE_SIZE=500
+def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
+def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 def crud_get_or_404(db,model,oid,label):
  o=db.get(model,oid)
  if not o:raise HTTPException(404,f'{label} not found')
@@ -46,7 +59,7 @@ def crud_delete(db,model,oid,label):
  o=crud_get_or_404(db,model,oid,label)
  db.delete(o);db.commit()
 @app.get('/api/v1/projects',response_model=list[ProjectOut])
-def projects(db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc())).all())
+def projects(limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc()).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.get('/api/v1/projects/{pid}',response_model=ProjectOut)
 def project(pid:int,db:Session=Depends(get_db)):
  p=db.get(Project,pid)
@@ -55,7 +68,7 @@ def project(pid:int,db:Session=Depends(get_db)):
 @app.post('/api/v1/projects',response_model=ProjectOut)
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
-def episodes(pid:int,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
+def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
 @app.put('/api/v1/episodes/{eid}',response_model=EpisodeSaveOut)
@@ -79,7 +92,7 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
 @app.delete('/api/v1/episodes/{eid}',status_code=204)
 def episode_delete(eid:int,db:Session=Depends(get_db)):crud_delete(db,Episode,eid,'Episode')
 @app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
-def chars(pid:int,db:Session=Depends(get_db)):return crud_list(db,Character,pid)
+def chars(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Character,pid,limit,offset)
 @app.post('/api/v1/projects/{pid}/characters',response_model=CharacterOut)
 def char_add(pid:int,x:CharacterCreate,db:Session=Depends(get_db)):o=Character(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.put('/api/v1/characters/{cid}',response_model=CharacterOut)
@@ -87,7 +100,7 @@ def char_put(cid:int,x:CharacterUpdate,db:Session=Depends(get_db)):return crud_u
 @app.delete('/api/v1/characters/{cid}',status_code=204)
 def char_delete(cid:int,db:Session=Depends(get_db)):crud_delete(db,Character,cid,'Character')
 @app.get('/api/v1/projects/{pid}/world',response_model=list[WorldOut])
-def worlds(pid:int,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid)
+def worlds(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid,limit,offset)
 @app.post('/api/v1/projects/{pid}/world',response_model=WorldOut)
 def world_add(pid:int,x:WorldCreate,db:Session=Depends(get_db)):o=WorldEntity(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.put('/api/v1/world/{wid}',response_model=WorldOut)
@@ -95,7 +108,7 @@ def world_put(wid:int,x:WorldUpdate,db:Session=Depends(get_db)):return crud_upda
 @app.delete('/api/v1/world/{wid}',status_code=204)
 def world_delete(wid:int,db:Session=Depends(get_db)):crud_delete(db,WorldEntity,wid,'World entity')
 @app.get('/api/v1/projects/{pid}/plots',response_model=list[PlotOut])
-def plots(pid:int,db:Session=Depends(get_db)):return crud_list(db,Plot,pid)
+def plots(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Plot,pid,limit,offset)
 @app.post('/api/v1/projects/{pid}/plots',response_model=PlotOut)
 def plot_add(pid:int,x:PlotCreate,db:Session=Depends(get_db)):o=Plot(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.put('/api/v1/plots/{pid}',response_model=PlotOut)
@@ -103,7 +116,7 @@ def plot_put(pid:int,x:PlotUpdate,db:Session=Depends(get_db)):return crud_update
 @app.delete('/api/v1/plots/{pid}',status_code=204)
 def plot_delete(pid:int,db:Session=Depends(get_db)):crud_delete(db,Plot,pid,'Plot')
 @app.get('/api/v1/projects/{pid}/foreshadowings',response_model=list[ForeshadowOut])
-def fs(pid:int,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid)
+def fs(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid,limit,offset)
 @app.post('/api/v1/projects/{pid}/foreshadowings',response_model=ForeshadowOut)
 def fs_add(pid:int,x:ForeshadowCreate,db:Session=Depends(get_db)):o=Foreshadowing(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.put('/api/v1/foreshadowings/{fid}',response_model=ForeshadowOut)
@@ -225,7 +238,7 @@ def story_twin(pid:int,db:Session=Depends(get_db)):
     plots=list(db.scalars(select(Plot).where(Plot.project_id==pid)).all())
     fs=list(db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all())
     states=list(db.scalars(select(CharacterState).where(CharacterState.project_id==pid).order_by(CharacterState.episode_number.desc(),CharacterState.id.desc()).limit(50)).all())
-    issues=list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid,ContinuityIssue.status=='open').all()))
+    issues=list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid,ContinuityIssue.status=='open')).all())
     cg=character_graph(pid,db); wg=world_graph(pid,db); tg=timeline_graph(pid,db)
     completed=sum(1 for e in eps if (e.content or '').strip())
     open_fs=sum(1 for f in fs if f.status=='open')
@@ -246,7 +259,7 @@ def story_twin(pid:int,db:Session=Depends(get_db)):
     )
 
 @app.get('/api/v1/projects/{pid}/timeline',response_model=list[TimelineOut])
-def timeline(pid:int,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id)).all())
+def timeline(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/timeline',response_model=TimelineOut)
 def timeline_add(pid:int,x:TimelineCreate,db:Session=Depends(get_db)):
     o=TimelineEvent(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o

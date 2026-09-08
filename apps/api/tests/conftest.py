@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.db import Base, get_db
 from app.main import app
 
@@ -31,6 +32,7 @@ def client():
     # app.config.settings, which isn't available in the test environment.
     app.dependency_overrides[get_db] = override_get_db
     c = TestClient(app)
+    c.auth = (settings.admin_username, settings.admin_password)
     yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
