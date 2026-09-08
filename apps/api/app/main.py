@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI,Depends,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from .ollama import generate
 from .rag import index,search
 from .context import build
 from .continuity import update_character_states, check_continuity
+logging.basicConfig(level=logging.INFO)
+logger=logging.getLogger(__name__)
 app=FastAPI(title='AI Novel Studio API',version='0.5.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
@@ -30,6 +33,18 @@ def init():
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
 def crud_list(db,model,pid):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id)).all())
+def crud_get_or_404(db,model,oid,label):
+ o=db.get(model,oid)
+ if not o:raise HTTPException(404,f'{label} not found')
+ return o
+def crud_update(db,model,oid,x,label):
+ o=crud_get_or_404(db,model,oid,label)
+ for k,v in x.model_dump(exclude_unset=True).items():setattr(o,k,v)
+ db.commit();db.refresh(o)
+ return o
+def crud_delete(db,model,oid,label):
+ o=crud_get_or_404(db,model,oid,label)
+ db.delete(o);db.commit()
 @app.get('/api/v1/projects',response_model=list[ProjectOut])
 def projects(db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc())).all())
 @app.get('/api/v1/projects/{pid}',response_model=ProjectOut)
@@ -43,43 +58,82 @@ def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_
 def episodes(pid:int,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
-@app.put('/api/v1/episodes/{eid}',response_model=EpisodeOut)
+@app.put('/api/v1/episodes/{eid}',response_model=EpisodeSaveOut)
 async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  e=db.get(Episode,eid)
  if not e:raise HTTPException(404,'Episode not found')
  for k,v in x.model_dump(exclude_unset=True).items():setattr(e,k,v)
  db.commit();db.refresh(e)
- try:await index(chunks(e))
- except:pass
- try: await update_character_states(db,e)
- except Exception: pass
- return e
+ warnings=[]
+ try:
+  await index(chunks(e))
+ except Exception:
+  logger.exception('RAG indexing failed for episode %s',eid)
+  warnings.append('RAG索引の更新に失敗しました。意味検索の結果が古いままの可能性があります。')
+ try:
+  await update_character_states(db,e.project_id,e)
+ except Exception:
+  logger.exception('Character-state auto-update failed for episode %s',eid)
+  warnings.append('キャラクター状態の自動更新に失敗しました。AIサービスの状態を確認してください。')
+ return EpisodeSaveOut(**EpisodeOut.model_validate(e).model_dump(),warnings=warnings)
+@app.delete('/api/v1/episodes/{eid}',status_code=204)
+def episode_delete(eid:int,db:Session=Depends(get_db)):crud_delete(db,Episode,eid,'Episode')
 @app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
 def chars(pid:int,db:Session=Depends(get_db)):return crud_list(db,Character,pid)
 @app.post('/api/v1/projects/{pid}/characters',response_model=CharacterOut)
 def char_add(pid:int,x:CharacterCreate,db:Session=Depends(get_db)):o=Character(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/characters/{cid}',response_model=CharacterOut)
+def char_put(cid:int,x:CharacterUpdate,db:Session=Depends(get_db)):return crud_update(db,Character,cid,x,'Character')
+@app.delete('/api/v1/characters/{cid}',status_code=204)
+def char_delete(cid:int,db:Session=Depends(get_db)):crud_delete(db,Character,cid,'Character')
 @app.get('/api/v1/projects/{pid}/world',response_model=list[WorldOut])
 def worlds(pid:int,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid)
 @app.post('/api/v1/projects/{pid}/world',response_model=WorldOut)
 def world_add(pid:int,x:WorldCreate,db:Session=Depends(get_db)):o=WorldEntity(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/world/{wid}',response_model=WorldOut)
+def world_put(wid:int,x:WorldUpdate,db:Session=Depends(get_db)):return crud_update(db,WorldEntity,wid,x,'World entity')
+@app.delete('/api/v1/world/{wid}',status_code=204)
+def world_delete(wid:int,db:Session=Depends(get_db)):crud_delete(db,WorldEntity,wid,'World entity')
 @app.get('/api/v1/projects/{pid}/plots',response_model=list[PlotOut])
 def plots(pid:int,db:Session=Depends(get_db)):return crud_list(db,Plot,pid)
 @app.post('/api/v1/projects/{pid}/plots',response_model=PlotOut)
 def plot_add(pid:int,x:PlotCreate,db:Session=Depends(get_db)):o=Plot(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/plots/{pid}',response_model=PlotOut)
+def plot_put(pid:int,x:PlotUpdate,db:Session=Depends(get_db)):return crud_update(db,Plot,pid,x,'Plot')
+@app.delete('/api/v1/plots/{pid}',status_code=204)
+def plot_delete(pid:int,db:Session=Depends(get_db)):crud_delete(db,Plot,pid,'Plot')
 @app.get('/api/v1/projects/{pid}/foreshadowings',response_model=list[ForeshadowOut])
 def fs(pid:int,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid)
 @app.post('/api/v1/projects/{pid}/foreshadowings',response_model=ForeshadowOut)
 def fs_add(pid:int,x:ForeshadowCreate,db:Session=Depends(get_db)):o=Foreshadowing(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/foreshadowings/{fid}',response_model=ForeshadowOut)
+def fs_put(fid:int,x:ForeshadowUpdate,db:Session=Depends(get_db)):return crud_update(db,Foreshadowing,fid,x,'Foreshadowing')
+@app.delete('/api/v1/foreshadowings/{fid}',status_code=204)
+def fs_delete(fid:int,db:Session=Depends(get_db)):crud_delete(db,Foreshadowing,fid,'Foreshadowing')
+@app.post('/api/v1/projects/{pid}/character-relations',response_model=CharacterRelationOut)
+def char_relation_add(pid:int,x:CharacterRelationCreate,db:Session=Depends(get_db)):o=CharacterRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.delete('/api/v1/character-relations/{rid}',status_code=204)
+def char_relation_delete(rid:int,db:Session=Depends(get_db)):crud_delete(db,CharacterRelation,rid,'Character relation')
+@app.post('/api/v1/projects/{pid}/world-relations',response_model=WorldRelationOut)
+def world_relation_add(pid:int,x:WorldRelationCreate,db:Session=Depends(get_db)):o=WorldRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.delete('/api/v1/world-relations/{rid}',status_code=204)
+def world_relation_delete(rid:int,db:Session=Depends(get_db)):crud_delete(db,WorldRelation,rid,'World relation')
 @app.post('/api/v1/rag/index')
 async def rag_index(x:RagIndex,db:Session=Depends(get_db)):
  es=db.scalars(select(Episode).where(Episode.project_id==x.project_id)).all(); cs=[c for e in es for c in chunks(e)]
- try:return {'indexed':await index(cs)}
- except Exception as e:raise HTTPException(503,str(e))
+ try:
+  return {'indexed':await index(cs)}
+ except Exception as ex:
+  logger.exception('RAG index rebuild failed for project %s',x.project_id)
+  raise HTTPException(503,f'RAG index rebuild failed: {ex}') from ex
 @app.post('/api/v1/rag/search')
 async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
- try:return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
- except:
-  rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all();return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
+ try:
+  return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
+ except Exception:
+  logger.exception('Qdrant search failed for project %s; falling back to PostgreSQL ILIKE search',x.project_id)
+  rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all()
+  return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
 @app.post('/api/v1/ai/generate')
 async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
@@ -196,3 +250,7 @@ def timeline(pid:int,db:Session=Depends(get_db)): return list(db.scalars(select(
 @app.post('/api/v1/projects/{pid}/timeline',response_model=TimelineOut)
 def timeline_add(pid:int,x:TimelineCreate,db:Session=Depends(get_db)):
     o=TimelineEvent(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
+@app.put('/api/v1/timeline/{tid}',response_model=TimelineOut)
+def timeline_put(tid:int,x:TimelineUpdate,db:Session=Depends(get_db)):return crud_update(db,TimelineEvent,tid,x,'Timeline event')
+@app.delete('/api/v1/timeline/{tid}',status_code=204)
+def timeline_delete(tid:int,db:Session=Depends(get_db)):crud_delete(db,TimelineEvent,tid,'Timeline event')
