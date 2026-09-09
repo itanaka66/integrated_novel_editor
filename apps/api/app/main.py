@@ -12,6 +12,8 @@ from .rag import index,search
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import BasicAuthMiddleware
+import asyncio
+from .auto_writer import run_job, running as auto_write_running
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -267,3 +269,78 @@ def timeline_add(pid:int,x:TimelineCreate,db:Session=Depends(get_db)):
 def timeline_put(tid:int,x:TimelineUpdate,db:Session=Depends(get_db)):return crud_update(db,TimelineEvent,tid,x,'Timeline event')
 @app.delete('/api/v1/timeline/{tid}',status_code=204)
 def timeline_delete(tid:int,db:Session=Depends(get_db)):crud_delete(db,TimelineEvent,tid,'Timeline event')
+
+def _job_progress(job,db):
+    """Derive display-friendly progress for an AutoWriteJob.
+
+    Pure of side effects so it's cheap to unit test: takes the job row and a
+    db session, and reads (never writes) the hierarchy tables to figure out
+    how far the Series/Arc/Mini Arc/Episode planners and the Writer have
+    actually gotten.
+    """
+    total_episodes=max(0,job.end_episode-job.start_episode+1)
+    series_planned=bool(db.scalar(select(SeriesPlan.id).where(SeriesPlan.project_id==job.project_id)))
+    arcs_planned=len(db.scalars(select(ArcPlan.id).where(ArcPlan.project_id==job.project_id)).all())
+    mini_arcs_planned=len(db.scalars(select(MiniArcPlan.id).where(MiniArcPlan.project_id==job.project_id)).all())
+    episodes_planned=len(db.scalars(select(EpisodePlan.id).where(EpisodePlan.project_id==job.project_id)).all())
+    episodes_written=len(db.scalars(select(Episode.id).where(Episode.project_id==job.project_id,Episode.number>=job.start_episode,Episode.number<=job.end_episode,Episode.content!='')).all())
+
+    msg=job.last_message or ''
+    in_progress_completed=min(max(job.current_episode-1,0),total_episodes)
+    if job.status=='completed':
+        phase='completed'; completed=total_episodes
+    elif job.status=='stopped':
+        phase='stopped'; completed=in_progress_completed
+    elif job.status=='error':
+        phase='error'; completed=in_progress_completed
+    elif not series_planned or 'Series Planner' in msg:
+        phase='series_planner'; completed=0
+    elif '階層Planner' in msg:
+        phase='arc_planner'; completed=in_progress_completed
+    elif 'Controller preflight' in msg:
+        phase='controller_preflight'; completed=in_progress_completed
+    elif 'Writer (' in msg:
+        phase='writer'; completed=in_progress_completed
+    elif 'Controller' in msg:
+        phase='controller_gate'; completed=in_progress_completed
+    else:
+        phase='queued'; completed=in_progress_completed
+
+    progress_percent=round(completed/total_episodes*100,1) if total_episodes else 0.0
+    progress_percent=max(0.0,min(100.0,progress_percent))
+    return {
+        'progress_percent':progress_percent,'completed_episodes':completed,'total_episodes':total_episodes,
+        'current_phase':phase,'series_planned':series_planned,'arcs_planned':arcs_planned,
+        'mini_arcs_planned':mini_arcs_planned,'episodes_planned':episodes_planned,'episodes_written':episodes_written,
+    }
+
+def _job_out(job,db):
+    return AutoWriteJobOut(**{c.name:getattr(job,c.name) for c in AutoWriteJob.__table__.columns},**_job_progress(job,db))
+
+@app.post('/api/v1/auto-write/start',response_model=AutoWriteJobOut)
+async def auto_write_start(x:AutoWriteStart,db:Session=Depends(get_db)):
+    p=db.get(Project,x.project_id)
+    if not p:raise HTTPException(404,'Project not found')
+    job=AutoWriteJob(project_id=x.project_id,start_episode=x.start_episode,end_episode=x.end_episode,current_episode=x.start_episode,status='queued',last_message='キューに追加しました')
+    if x.writer_model:job.writer_model=x.writer_model
+    if x.controller_model:job.controller_model=x.controller_model
+    db.add(job);db.commit();db.refresh(job)
+    task=asyncio.create_task(run_job(job.id,x.premise,x.overwrite))
+    auto_write_running[job.id]=task
+    return _job_out(job,db)
+
+@app.post('/api/v1/auto-write/{job_id}/stop',response_model=AutoWriteJobOut)
+def auto_write_stop(job_id:int,db:Session=Depends(get_db)):
+    job=crud_get_or_404(db,AutoWriteJob,job_id,'Auto-write job')
+    if job.status=='running':job.status='stopping';job.last_message='停止要求を受け付けました';db.commit();db.refresh(job)
+    return _job_out(job,db)
+
+@app.get('/api/v1/auto-write/{job_id}',response_model=AutoWriteJobOut)
+def auto_write_status(job_id:int,db:Session=Depends(get_db)):
+    job=crud_get_or_404(db,AutoWriteJob,job_id,'Auto-write job')
+    return _job_out(job,db)
+
+@app.get('/api/v1/projects/{pid}/auto-write/jobs',response_model=list[AutoWriteJobOut])
+def auto_write_jobs(pid:int,db:Session=Depends(get_db)):
+    jobs=db.scalars(select(AutoWriteJob).where(AutoWriteJob.project_id==pid).order_by(AutoWriteJob.id.desc()).limit(20)).all()
+    return [_job_out(j,db) for j in jobs]
