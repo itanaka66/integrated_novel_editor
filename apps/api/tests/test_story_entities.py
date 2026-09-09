@@ -91,8 +91,15 @@ def test_character_relation_add_and_delete(client, project):
     edges = r.json()["edges"]
     assert any(e["source"] == a["id"] and e["target"] == b["id"] for e in edges)
 
+    r = client.get(f"/api/v1/projects/{project['id']}/character-relations")
+    assert r.status_code == 200
+    assert any(x["id"] == rel["id"] for x in r.json())
+
     r = client.delete(f"/api/v1/character-relations/{rel['id']}")
     assert r.status_code == 204
+
+    r = client.get(f"/api/v1/projects/{project['id']}/character-relations")
+    assert all(x["id"] != rel["id"] for x in r.json())
 
 
 def test_world_relation_add_and_delete(client, project):
@@ -106,5 +113,12 @@ def test_world_relation_add_and_delete(client, project):
     assert r.status_code == 200, r.text
     rel = r.json()
 
+    r = client.get(f"/api/v1/projects/{project['id']}/world-relations")
+    assert r.status_code == 200
+    assert any(x["id"] == rel["id"] for x in r.json())
+
     r = client.delete(f"/api/v1/world-relations/{rel['id']}")
     assert r.status_code == 204
+
+    r = client.get(f"/api/v1/projects/{project['id']}/world-relations")
+    assert all(x["id"] != rel["id"] for x in r.json())

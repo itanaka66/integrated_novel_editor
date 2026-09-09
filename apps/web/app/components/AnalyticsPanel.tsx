@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, post } from "../lib/api";
+import { api, del, post } from "../lib/api";
 
 type Graph = { nodes: any[]; edges: any[] };
 
@@ -25,6 +25,93 @@ function GraphMini({ graph, timeline }: { graph: Graph; timeline?: boolean }) {
     </div>
   );
 }
+
+type EntityRef = { id: number; name: string };
+type RelationConfig = {
+  entityLabel: string;
+  listEntities: (pid: number) => Promise<EntityRef[]>;
+  listRelations: (pid: number) => Promise<any[]>;
+  createRelation: (pid: number, body: any) => Promise<any>;
+  deleteRelation: (rid: number) => Promise<void>;
+  fromKey: string; toKey: string;
+  defaultRelationType: string;
+};
+
+function RelationEditor({ projectId, cfg, onChanged }: { projectId: number; cfg: RelationConfig; onChanged: () => void }) {
+  const [entities, setEntities] = useState<EntityRef[]>([]);
+  const [relations, setRelations] = useState<any[]>([]);
+  const [from, setFrom] = useState<number | "">("");
+  const [to, setTo] = useState<number | "">("");
+  const [relationType, setRelationType] = useState(cfg.defaultRelationType);
+
+  async function load() {
+    const [es, rs] = await Promise.all([cfg.listEntities(projectId), cfg.listRelations(projectId)]);
+    setEntities(es);
+    setRelations(rs);
+  }
+  useEffect(() => { load(); }, [projectId]);
+
+  const nameOf = (id: number) => entities.find((x) => x.id === id)?.name || `#${id}`;
+
+  async function add() {
+    if (!from || !to || from === to) return;
+    await cfg.createRelation(projectId, { [cfg.fromKey]: from, [cfg.toKey]: to, relation_type: relationType, strength: 1, description: "" });
+    setFrom(""); setTo("");
+    await load();
+    onChanged();
+  }
+  async function remove(rid: number) {
+    await cfg.deleteRelation(rid);
+    await load();
+    onChanged();
+  }
+
+  return (
+    <div className="relationSection">
+      <small>{cfg.entityLabel}の関係を編集</small>
+      <div className="relationForm">
+        <select value={from} onChange={(e) => setFrom(e.target.value ? Number(e.target.value) : "")}>
+          <option value="">from...</option>
+          {entities.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <select value={to} onChange={(e) => setTo(e.target.value ? Number(e.target.value) : "")}>
+          <option value="">to...</option>
+          {entities.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <input value={relationType} onChange={(e) => setRelationType(e.target.value)} placeholder="関係の種類" />
+        <button onClick={add} disabled={!from || !to || from === to}>＋ 関係を追加</button>
+      </div>
+      {relations.length > 0 && (
+        <div className="relationList">
+          {relations.map((r) => (
+            <div className="relationRow" key={r.id}>
+              <span>{nameOf(r[cfg.fromKey])} → {nameOf(r[cfg.toKey])}（{r.relation_type}）</span>
+              <button onClick={() => remove(r.id)}>削除</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const characterRelationConfig: RelationConfig = {
+  entityLabel: "キャラクター",
+  listEntities: (pid) => api(`/projects/${pid}/characters`),
+  listRelations: (pid) => api(`/projects/${pid}/character-relations`),
+  createRelation: (pid, body) => post(`/projects/${pid}/character-relations`, body),
+  deleteRelation: (rid) => del(`/character-relations/${rid}`),
+  fromKey: "from_character_id", toKey: "to_character_id", defaultRelationType: "関係",
+};
+
+const worldRelationConfig: RelationConfig = {
+  entityLabel: "世界観",
+  listEntities: (pid) => api(`/projects/${pid}/world`),
+  listRelations: (pid) => api(`/projects/${pid}/world-relations`),
+  createRelation: (pid, body) => post(`/projects/${pid}/world-relations`, body),
+  deleteRelation: (rid) => del(`/world-relations/${rid}`),
+  fromKey: "from_world_id", toKey: "to_world_id", defaultRelationType: "関連",
+};
 
 function ContinuitySection({ projectId }: { projectId: number }) {
   const [issues, setIssues] = useState<any[]>([]), [busy, setBusy] = useState(false);
@@ -71,8 +158,8 @@ export default function AnalyticsPanel({ projectId }: { projectId: number }) {
           <div className="twinCard"><h3>未回収の伏線</h3>{t.open_foreshadowings.slice(0, 6).map((x: any) => <div className="twinRow" key={x.id}><b>{x.title}</b><span>設置 EP.{x.setup_episode ?? "?"}</span></div>)}</div>
         </div>
       )}
-      {tab === "characters" && <GraphMini graph={t.characters} />}
-      {tab === "world" && <GraphMini graph={t.world} />}
+      {tab === "characters" && <><GraphMini graph={t.characters} /><RelationEditor projectId={projectId} cfg={characterRelationConfig} onChanged={load} /></>}
+      {tab === "world" && <><GraphMini graph={t.world} /><RelationEditor projectId={projectId} cfg={worldRelationConfig} onChanged={load} /></>}
       {tab === "timeline" && <GraphMini graph={t.timeline} timeline />}
       {tab === "states" && <div className="stateTable">{t.recent_states.length === 0 ? <p>キャラクター状態履歴はまだありません。</p> : t.recent_states.map((x: any) => <div className="stateRow" key={x.id}><b>EP.{x.episode_number}</b><strong>#{x.character_id}</strong><span>{x.status || "—"}</span><span>{x.location || "—"}</span><span>{x.emotion || "—"}</span><p>{x.notes || "—"}</p></div>)}</div>}
       {tab === "continuity" && <ContinuitySection projectId={projectId} />}

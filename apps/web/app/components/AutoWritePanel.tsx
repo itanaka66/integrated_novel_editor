@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, post } from "../lib/api";
+import { api, post, streamSSE } from "../lib/api";
 import { loadModelDefaults } from "../lib/modelDefaults";
 
 const PHASE_LABEL: any = {
@@ -31,14 +31,16 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   useEffect(() => { loadJobs(); }, [projectId]);
   useEffect(() => {
     if (!job || !ACTIVE_STATUSES.includes(job.status)) return;
-    const t = setInterval(async () => {
-      const x = await api(`/auto-write/${job.id}`);
-      setJob(x);
-      setJobs((js) => js.map((j) => (j.id === x.id ? x : j)));
-      if (!ACTIVE_STATUSES.includes(x.status)) clearInterval(t);
-    }, 3000);
-    return () => clearInterval(t);
-  }, [job?.id, job?.status]);
+    // Server-Sent Events instead of polling: the backend pushes an update
+    // every ~1.5s while the job is active and closes the stream once it
+    // finishes, so we don't need our own interval/cleanup logic here.
+    const stop = streamSSE(`/auto-write/${job.id}/stream`, (data: any) => {
+      if (data.error) return;
+      setJob(data);
+      setJobs((js) => js.map((j) => (j.id === data.id ? data : j)));
+    });
+    return stop;
+  }, [job?.id]);
 
   async function start() {
     setBusy(true);

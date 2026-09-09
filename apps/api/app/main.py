@@ -1,6 +1,8 @@
 import logging
+import json
 from fastapi import FastAPI,Depends,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .db import get_db,SessionLocal
@@ -30,6 +32,15 @@ def chunks(e):
  while start<len(s):
   t=s[start:start+1400];out.append({'id':e.id*100000+i,'project_id':e.project_id,'episode_id':e.id,'title':e.title,'source_type':'episode','text':t});i+=1;start+=1200
  return out
+def cleanup_stale_auto_write_jobs(d):
+ # auto_write_running is an in-memory dict, so any job left 'queued'/'running'/
+ # 'stopping' from before a restart has no task actually driving it anymore —
+ # it would otherwise sit there forever looking active. Mark those as errored.
+ stale=d.scalars(select(AutoWriteJob).where(AutoWriteJob.status.in_(['queued','running','stopping']))).all()
+ for job in stale:
+  job.status='error'; job.last_message='サーバー再起動により中断されました。再度開始してください。'
+ if stale: d.commit()
+ return len(stale)
 @app.on_event('startup')
 def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
@@ -43,6 +54,7 @@ def init():
    d.add(Plot(project_id=p.id,title='文明開拓編',plot_type='main_arc',status='active',start_episode=1,end_episode=100,objective='安全な集落を作る',conflict='自然災害と恐竜'))
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
+  cleanup_stale_auto_write_jobs(d)
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
 MAX_PAGE_SIZE=500
@@ -75,11 +87,20 @@ def project_put(pid:int,x:ProjectUpdate,db:Session=Depends(get_db)):return crud_
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
+MAX_REVISIONS_PER_EPISODE=20
+def snapshot_revision(db,e):
+ db.add(EpisodeRevision(episode_id=e.id,project_id=e.project_id,title=e.title,summary=e.summary,content=e.content))
+ db.commit()
+ old=db.scalars(select(EpisodeRevision).where(EpisodeRevision.episode_id==e.id).order_by(EpisodeRevision.id.desc()).offset(MAX_REVISIONS_PER_EPISODE)).all()
+ for o in old:db.delete(o)
+ if old:db.commit()
 @app.put('/api/v1/episodes/{eid}',response_model=EpisodeSaveOut)
 async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  e=db.get(Episode,eid)
  if not e:raise HTTPException(404,'Episode not found')
- for k,v in x.model_dump(exclude_unset=True).items():setattr(e,k,v)
+ updates=x.model_dump(exclude_unset=True)
+ if 'content' in updates and updates['content']!=e.content:snapshot_revision(db,e)
+ for k,v in updates.items():setattr(e,k,v)
  db.commit();db.refresh(e)
  warnings=[]
  try:
@@ -95,6 +116,24 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  return EpisodeSaveOut(**EpisodeOut.model_validate(e).model_dump(),warnings=warnings)
 @app.delete('/api/v1/episodes/{eid}',status_code=204)
 def episode_delete(eid:int,db:Session=Depends(get_db)):crud_delete(db,Episode,eid,'Episode')
+@app.get('/api/v1/episodes/{eid}/revisions',response_model=list[EpisodeRevisionListOut])
+def episode_revisions(eid:int,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Episode,eid,'Episode')
+ return list(db.scalars(select(EpisodeRevision).where(EpisodeRevision.episode_id==eid).order_by(EpisodeRevision.id.desc())).all())
+@app.get('/api/v1/episodes/{eid}/revisions/{rid}',response_model=EpisodeRevisionOut)
+def episode_revision_get(eid:int,rid:int,db:Session=Depends(get_db)):
+ r=db.get(EpisodeRevision,rid)
+ if not r or r.episode_id!=eid:raise HTTPException(404,'Revision not found')
+ return r
+@app.post('/api/v1/episodes/{eid}/revisions/{rid}/restore',response_model=EpisodeOut)
+def episode_revision_restore(eid:int,rid:int,db:Session=Depends(get_db)):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ r=db.get(EpisodeRevision,rid)
+ if not r or r.episode_id!=eid:raise HTTPException(404,'Revision not found')
+ snapshot_revision(db,e)
+ e.title=r.title;e.summary=r.summary;e.content=r.content
+ db.commit();db.refresh(e)
+ return e
 @app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
 def chars(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Character,pid,limit,offset)
 @app.post('/api/v1/projects/{pid}/characters',response_model=CharacterOut)
@@ -127,10 +166,14 @@ def fs_add(pid:int,x:ForeshadowCreate,db:Session=Depends(get_db)):o=Foreshadowin
 def fs_put(fid:int,x:ForeshadowUpdate,db:Session=Depends(get_db)):return crud_update(db,Foreshadowing,fid,x,'Foreshadowing')
 @app.delete('/api/v1/foreshadowings/{fid}',status_code=204)
 def fs_delete(fid:int,db:Session=Depends(get_db)):crud_delete(db,Foreshadowing,fid,'Foreshadowing')
+@app.get('/api/v1/projects/{pid}/character-relations',response_model=list[CharacterRelationOut])
+def char_relations(pid:int,db:Session=Depends(get_db)):return crud_list(db,CharacterRelation,pid)
 @app.post('/api/v1/projects/{pid}/character-relations',response_model=CharacterRelationOut)
 def char_relation_add(pid:int,x:CharacterRelationCreate,db:Session=Depends(get_db)):o=CharacterRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.delete('/api/v1/character-relations/{rid}',status_code=204)
 def char_relation_delete(rid:int,db:Session=Depends(get_db)):crud_delete(db,CharacterRelation,rid,'Character relation')
+@app.get('/api/v1/projects/{pid}/world-relations',response_model=list[WorldRelationOut])
+def world_relations(pid:int,db:Session=Depends(get_db)):return crud_list(db,WorldRelation,pid)
 @app.post('/api/v1/projects/{pid}/world-relations',response_model=WorldRelationOut)
 def world_relation_add(pid:int,x:WorldRelationCreate,db:Session=Depends(get_db)):o=WorldRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
 @app.delete('/api/v1/world-relations/{rid}',status_code=204)
@@ -155,7 +198,7 @@ async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
 async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
  task={'continue':'本文の続きを書く','summary':'本文を要約する','plot':'次の展開を提案する','proofread':'設定・表現・時系列を校正する'}.get(x.mode,'依頼を実行する')
- prompt=f'''あなたは長編小説の編集長AIです。作品の正本設定を最優先してください。\n作業:{task}\n\nContext:\n{__import__("json").dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
+ prompt=f'''あなたは長編小説の編集長AIです。作品の正本設定を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
  try:t,m=await generate(prompt)
  except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
  return {'text':t,'model':m,'context':{'characters':len(c['characters']),'world':len(c['world']),'plots':len(c['plots']),'foreshadowings':len(c['foreshadowings']),'rag':len(c['rag'])}}
@@ -346,3 +389,23 @@ def auto_write_status(job_id:int,db:Session=Depends(get_db)):
 def auto_write_jobs(pid:int,db:Session=Depends(get_db)):
     jobs=db.scalars(select(AutoWriteJob).where(AutoWriteJob.project_id==pid).order_by(AutoWriteJob.id.desc()).limit(20)).all()
     return [_job_out(j,db) for j in jobs]
+
+ACTIVE_JOB_STATUSES=('queued','running','stopping')
+@app.get('/api/v1/auto-write/{job_id}/stream')
+async def auto_write_stream(job_id:int):
+    async def gen():
+        while True:
+            d=SessionLocal()
+            try:
+                job=d.get(AutoWriteJob,job_id)
+                if not job:
+                    yield f'data: {json.dumps({"error":"not_found"})}\n\n'
+                    return
+                payload=_job_out(job,d).model_dump(mode='json')
+                yield f'data: {json.dumps(payload,ensure_ascii=False)}\n\n'
+                if job.status not in ACTIVE_JOB_STATUSES:
+                    return
+            finally:
+                d.close()
+            await asyncio.sleep(1.5)
+    return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
