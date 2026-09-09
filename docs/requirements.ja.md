@@ -1,0 +1,48 @@
+# 動作要件
+
+## 方式A — Docker（推奨）
+
+| 要件 | バージョン | 補足 |
+|---|---|---|
+| Docker Engine | 24以上 | Docker Compose v2プラグイン(`docker compose`。古い`docker-compose`ではない)を含むこと |
+| 空きディスク容量 | 10GB以上 | Postgres/Qdrantのボリューム＋ビルド済みイメージ |
+| メモリ | 8GB以上 | 同じマシンでOllamaも動かす場合は16GB以上推奨 |
+
+Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグインのどちらでも動作します。
+
+## 方式B — Dockerを使わずネイティブに構築する場合
+
+| コンポーネント | 要件 |
+|---|---|
+| バックエンド（`apps/api`） | Python 3.13 |
+| フロントエンド（`apps/web`） | Node.js 22、npm |
+| データベース | PostgreSQL 17（15/16でもおそらく動作しますが、動作確認済みは17です） |
+| ベクトルストア | Qdrant（比較的新しいバージョンであればOK。HTTP API経由で利用） |
+| ローカルLLM実行環境 | [Ollama](https://ollama.com) |
+
+ネイティブ構築でもOllamaと（ベクトル検索を使うなら）Qdrantは別途必要です。DockerはPostgres/Qdrant/アプリのコンテナだけを代替するもので、LLM実行環境（GPUを使うためほぼ常にホスト側で動かします）は含まれません。
+
+## Ollamaモデル
+
+| 役割 | 設定項目 | デフォルトモデル | 用途 |
+|---|---|---|---|
+| Writer（通常） | `OLLAMA_URL` / `OLLAMA_MODEL` | `qwen3:8b` | 執筆画面・AIチャットでの手動AI支援（続きを書く、要約、校正、カスタムプロンプト） |
+| Writer（自動執筆） | ジョブごとの`writer_model`（既定値`qwen3.8:27b`） | `qwen3.8:27b` | 500話自動執筆ジョブでの本文生成。自動執筆画面でジョブごとに上書き可能 |
+| Controller | `CONTROLLER_OLLAMA_URL` / `CONTROLLER_OLLAMA_MODEL` | `qwen3:14b` | Series/Arc/Mini Arc/Episode Plannerの計画立案と、自動執筆時の事前・事後品質チェック |
+| 埋め込み | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | RAGセマンティック検索の索引生成 |
+
+ControllerとWriterは**同じ**Ollamaサーバー（モデル名だけ変える）でも、**別々の**Ollamaサーバー／GPUでも構いません。別マシンに分ける場合は`CONTROLLER_OLLAMA_URL`をそのマシンのアドレスに設定してください。大きめのモデル（`qwen3.8:27b`、`qwen3:14b`）を動かすには十分なVRAMを持つGPUが必要です。非力なマシンで導入する前に、Ollamaのモデル一覧でサイズを確認してください。
+
+## 使用ポート
+
+| ポート | サービス |
+|---|---|
+| 3000 | フロントエンド（Web） |
+| 8000 | API（`/docs`でOpenAPIのインタラクティブUIも提供） |
+| 5432 | PostgreSQL |
+| 6333 / 6334 | Qdrant（HTTP / gRPC） |
+| 11434 | Ollama（Docker Composeでは起動しません。ホスト側で起動してください） |
+
+## ブラウザ
+
+最新のChrome、Edge、Firefox、Safariのいずれか。IEおよび旧Edgeは非対応です。
