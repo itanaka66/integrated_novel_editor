@@ -10,10 +10,25 @@ class WorldCreate(BaseModel): name:str; entity_type:str='setting'; description:s
 class WorldOut(WorldCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
 class PlotCreate(BaseModel): title:str; plot_type:str='arc'; status:str='planned'; start_episode:int|None=None; end_episode:int|None=None; objective:str=''; conflict:str=''; resolution:str=''
 class PlotOut(PlotCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
+class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class CharacterUpdate(BaseModel): name:str|None=None; role:str|None=None; personality:str|None=None; speech_style:str|None=None; goal:str|None=None; status:str|None=None; description:str|None=None
+class WorldCreate(BaseModel): name:str; entity_type:str='setting'; description:str=''; rules:str=''; location:str=''; era:str=''
+class WorldOut(WorldCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class WorldUpdate(BaseModel): name:str|None=None; entity_type:str|None=None; description:str|None=None; rules:str|None=None; location:str|None=None; era:str|None=None
+class PlotCreate(BaseModel): title:str; plot_type:str='arc'; status:str='planned'; start_episode:int|None=None; end_episode:int|None=None; objective:str=''; conflict:str=''; resolution:str=''
+class PlotOut(PlotCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class PlotUpdate(BaseModel): title:str|None=None; plot_type:str|None=None; status:str|None=None; start_episode:int|None=None; end_episode:int|None=None; objective:str|None=None; conflict:str|None=None; resolution:str|None=None
 class ForeshadowCreate(BaseModel): title:str; description:str=''; setup_episode:int|None=None; payoff_episode:int|None=None; status:str='open'
 class ForeshadowOut(ForeshadowCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class ForeshadowUpdate(BaseModel): title:str|None=None; description:str|None=None; setup_episode:int|None=None; payoff_episode:int|None=None; status:str|None=None
 class TimelineCreate(BaseModel): episode_number:int; title:str; world_time:str=''; description:str=''
 class TimelineOut(TimelineCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class TimelineUpdate(BaseModel): episode_number:int|None=None; title:str|None=None; world_time:str|None=None; description:str|None=None
+class CharacterRelationCreate(BaseModel): from_character_id:int; to_character_id:int; relation_type:str='関係'; strength:int=1; description:str=''
+class CharacterRelationOut(CharacterRelationCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class WorldRelationCreate(BaseModel): from_world_id:int; to_world_id:int; relation_type:str='関連'; strength:int=1; description:str=''
+class WorldRelationOut(WorldRelationCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
 class AIGenerate(BaseModel): project_id:int; episode_id:int|None=None; instruction:str=''; mode:str='continue'; rag_limit:int=6
 class RagIndex(BaseModel): project_id:int
 class RagSearch(BaseModel): project_id:int; query:str; limit:int=8
