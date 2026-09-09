@@ -5,4 +5,3 @@ psycopg2-binary==2.9.10
 pydantic-settings==2.10.1
 httpx==0.28.1
 qdrant-client==1.15.1
-alembic==1.19.1

@@ -1,9 +1,8 @@
-import logging
 from fastapi import FastAPI,Depends,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from .db import get_db,SessionLocal
+from .db import Base,engine,get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
@@ -11,18 +10,10 @@ from .ollama import generate
 from .rag import index,search
 from .context import build
 from .continuity import update_character_states, check_continuity
-from .auth import BasicAuthMiddleware
-logging.basicConfig(level=logging.INFO)
-logger=logging.getLogger(__name__)
-if settings.admin_password=='novel-studio-change-me':
- logger.warning('ADMIN_PASSWORD is not set; using the insecure default. Set ADMIN_USERNAME/ADMIN_PASSWORD before exposing this service.')
-app=FastAPI(title='AI Novel Studio API',version='0.5.0')
-# Starlette wraps middleware in reverse of add order (last added = outermost),
-# so BasicAuthMiddleware is added first: CORS must stay outermost or a 401
-# response never gets CORS headers and the browser reports an opaque network
-# error instead of a readable 401.
-app.add_middleware(BasicAuthMiddleware)
-app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+from .auto_writer import run_job, running
+from .planner.planner_service import PlannerService
+from .models import SeriesPlan, ArcPlan, MiniArcPlan, EpisodePlan
+app=FastAPI(title='AI Novel Studio API',version='0.9.0');app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'])
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
  while start<len(s):
@@ -30,9 +21,7 @@ def chunks(e):
  return out
 @app.on_event('startup')
 def init():
- # Schema is owned by Alembic migrations (see apps/api/alembic/); run
- # `alembic upgrade head` before starting the app. We only seed demo data
- # here, on top of whatever schema migrations have already applied.
+ Base.metadata.create_all(bind=engine)
  with SessionLocal() as d:
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
@@ -42,24 +31,91 @@ def init():
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
 @app.get('/api/v1/health')
-def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
-MAX_PAGE_SIZE=500
-def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
-def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
-def crud_get_or_404(db,model,oid,label):
- o=db.get(model,oid)
- if not o:raise HTTPException(404,f'{label} not found')
- return o
-def crud_update(db,model,oid,x,label):
- o=crud_get_or_404(db,model,oid,label)
- for k,v in x.model_dump(exclude_unset=True).items():setattr(o,k,v)
- db.commit();db.refresh(o)
- return o
-def crud_delete(db,model,oid,label):
- o=crud_get_or_404(db,model,oid,label)
- db.delete(o);db.commit()
+def health():return {'status':'ok','version':'0.9.0','features':['continuity-checker','character-state-auto-update','story-digital-twin','auto-write-1-500','dual-ollama-controller','hierarchical-series-planner','arc-planner','mini-arc-planner','episode-planner']}
+
+@app.post('/api/v1/planner/series', response_model=PlanOut)
+async def planner_series(x:PlanGenerate, db:Session=Depends(get_db)):
+    return await PlannerService().ensure_series(db, x.project_id, x.premise)
+
+@app.post('/api/v1/planner/arc', response_model=PlanOut)
+async def planner_arc(x:PlanGenerate, db:Session=Depends(get_db)):
+    if not x.arc_number or not 1 <= x.arc_number <= 5: raise HTTPException(400,'arc_number must be 1..5')
+    return await PlannerService().ensure_arc(db, x.project_id, x.arc_number, x.premise)
+
+@app.post('/api/v1/planner/mini-arc', response_model=PlanOut)
+async def planner_mini(x:PlanGenerate, db:Session=Depends(get_db)):
+    if not x.arc_number or not x.mini_arc_number or not 1 <= x.arc_number <= 5 or not 1 <= x.mini_arc_number <= 10: raise HTTPException(400,'arc_number 1..5 and mini_arc_number 1..10 required')
+    return await PlannerService().ensure_mini(db, x.project_id, x.arc_number, x.mini_arc_number, x.premise)
+
+@app.post('/api/v1/planner/episode', response_model=PlanOut)
+async def planner_episode(x:PlanGenerate, db:Session=Depends(get_db)):
+    if not x.episode_number or not 1 <= x.episode_number <= 500: raise HTTPException(400,'episode_number must be 1..500')
+    return await PlannerService().ensure_episode(db, x.project_id, x.episode_number, x.premise)
+
+@app.get('/api/v1/projects/{pid}/planner')
+def planner_tree(pid:int, db:Session=Depends(get_db)):
+    series=db.scalar(select(SeriesPlan).where(SeriesPlan.project_id==pid))
+    if not series: return {'series':None,'arcs':[]}
+    arcs=list(db.scalars(select(ArcPlan).where(ArcPlan.project_id==pid).order_by(ArcPlan.arc_number)).all())
+    out=[]
+    for a in arcs:
+        minis=list(db.scalars(select(MiniArcPlan).where(MiniArcPlan.arc_plan_id==a.id).order_by(MiniArcPlan.mini_arc_number)).all())
+        out.append({'arc':a,'mini_arcs':minis})
+    return {'series':series,'arcs':out}
+
+@app.post('/api/v1/auto-write/start', response_model=AutoWriteJobOut)
+async def auto_write_start(x:AutoWriteStart, db:Session=Depends(get_db)):
+    if x.start_episode<1 or x.end_episode>x.start_episode+999 or x.start_episode>x.end_episode: raise HTTPException(400,'episode range must be valid and max 1000 episodes')
+    j=AutoWriteJob(project_id=x.project_id,start_episode=x.start_episode,end_episode=x.end_episode,current_episode=x.start_episode,status='queued',writer_model=x.writer_model or settings.ollama_model,controller_model=x.controller_model or settings.controller_ollama_model,last_message='queued')
+    db.add(j);db.commit();db.refresh(j)
+    import asyncio
+    running[j.id]=asyncio.create_task(run_job(j.id,x.premise,x.overwrite))
+    return j
+
+def _job_progress(j, db):
+    total=max(1, j.end_episode-j.start_episode+1)
+    completed=max(0, min(total, j.current_episode-j.start_episode))
+    if j.status=='completed': completed=total
+    # current_episode is the episode being processed, so completed is the number fully finished.
+    percent=round(completed/total*100, 1)
+    msg=(j.last_message or '').lower()
+    phase='queued'
+    if j.status in ('completed','error','stopped'): phase=j.status
+    elif 'series planner' in msg: phase='series_planner'
+    elif '階層planner' in msg: phase='arc_planner'
+    elif 'preflight' in msg: phase='preflight'
+    elif 'writer' in msg and '再執筆' not in msg: phase='writer'
+    elif '再執筆' in msg: phase='revision'
+    elif 'final gate' in msg: phase='quality_gate'
+    elif 'completed' in msg: phase='episode_complete'
+    elif j.status=='running': phase='episode_planner'
+    from .models import SeriesPlan, ArcPlan, MiniArcPlan, EpisodePlan, Episode
+    series_planned=db.scalar(select(SeriesPlan).where(SeriesPlan.project_id==j.project_id)) is not None
+    arcs=db.scalar(select(ArcPlan).where(ArcPlan.project_id==j.project_id).order_by(ArcPlan.id.desc()))
+    arc_count=len(db.scalars(select(ArcPlan).where(ArcPlan.project_id==j.project_id)).all())
+    mini_count=len(db.scalars(select(MiniArcPlan).where(MiniArcPlan.project_id==j.project_id)).all())
+    epplan_count=len(db.scalars(select(EpisodePlan).where(EpisodePlan.project_id==j.project_id)).all())
+    written=len(db.scalars(select(Episode).where(Episode.project_id==j.project_id, Episode.number>=j.start_episode, Episode.number<=j.end_episode, Episode.content!='')).all())
+    return {**j.__dict__, 'progress_percent':percent, 'completed_episodes':completed, 'total_episodes':total,
+            'current_phase':phase, 'series_planned':series_planned, 'arcs_planned':arc_count,
+            'mini_arcs_planned':mini_count, 'episodes_planned':epplan_count, 'episodes_written':written}
+
+@app.get('/api/v1/auto-write/{job_id}', response_model=AutoWriteJobOut)
+def auto_write_status(job_id:int,db:Session=Depends(get_db)):
+    j=db.get(AutoWriteJob,job_id)
+    if not j: raise HTTPException(404,'Auto-write job not found')
+    return _job_progress(j,db)
+
+@app.post('/api/v1/auto-write/{job_id}/stop', response_model=AutoWriteJobOut)
+def auto_write_stop(job_id:int,db:Session=Depends(get_db)):
+    j=db.get(AutoWriteJob,job_id)
+    if not j: raise HTTPException(404,'Auto-write job not found')
+    if j.status in ('queued','running'): j.status='stopping';j.last_message='停止要求を受け付けました';db.commit();db.refresh(j)
+    return j
+
+def crud_list(db,model,pid):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id)).all())
 @app.get('/api/v1/projects',response_model=list[ProjectOut])
-def projects(limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc()).limit(clamp_limit(limit)).offset(max(0,offset))).all())
+def projects(db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc())).all())
 @app.get('/api/v1/projects/{pid}',response_model=ProjectOut)
 def project(pid:int,db:Session=Depends(get_db)):
  p=db.get(Project,pid)
@@ -68,85 +124,46 @@ def project(pid:int,db:Session=Depends(get_db)):
 @app.post('/api/v1/projects',response_model=ProjectOut)
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
-def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
+def episodes(pid:int,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
-@app.put('/api/v1/episodes/{eid}',response_model=EpisodeSaveOut)
+@app.put('/api/v1/episodes/{eid}',response_model=EpisodeOut)
 async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  e=db.get(Episode,eid)
  if not e:raise HTTPException(404,'Episode not found')
  for k,v in x.model_dump(exclude_unset=True).items():setattr(e,k,v)
  db.commit();db.refresh(e)
- warnings=[]
- try:
-  await index(chunks(e))
- except Exception:
-  logger.exception('RAG indexing failed for episode %s',eid)
-  warnings.append('RAG索引の更新に失敗しました。意味検索の結果が古いままの可能性があります。')
- try:
-  await update_character_states(db,e.project_id,e)
- except Exception:
-  logger.exception('Character-state auto-update failed for episode %s',eid)
-  warnings.append('キャラクター状態の自動更新に失敗しました。AIサービスの状態を確認してください。')
- return EpisodeSaveOut(**EpisodeOut.model_validate(e).model_dump(),warnings=warnings)
-@app.delete('/api/v1/episodes/{eid}',status_code=204)
-def episode_delete(eid:int,db:Session=Depends(get_db)):crud_delete(db,Episode,eid,'Episode')
+ try:await index(chunks(e))
+ except:pass
+ try: await update_character_states(db,e)
+ except Exception: pass
+ return e
 @app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
-def chars(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Character,pid,limit,offset)
+def chars(pid:int,db:Session=Depends(get_db)):return crud_list(db,Character,pid)
 @app.post('/api/v1/projects/{pid}/characters',response_model=CharacterOut)
 def char_add(pid:int,x:CharacterCreate,db:Session=Depends(get_db)):o=Character(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.put('/api/v1/characters/{cid}',response_model=CharacterOut)
-def char_put(cid:int,x:CharacterUpdate,db:Session=Depends(get_db)):return crud_update(db,Character,cid,x,'Character')
-@app.delete('/api/v1/characters/{cid}',status_code=204)
-def char_delete(cid:int,db:Session=Depends(get_db)):crud_delete(db,Character,cid,'Character')
 @app.get('/api/v1/projects/{pid}/world',response_model=list[WorldOut])
-def worlds(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid,limit,offset)
+def worlds(pid:int,db:Session=Depends(get_db)):return crud_list(db,WorldEntity,pid)
 @app.post('/api/v1/projects/{pid}/world',response_model=WorldOut)
 def world_add(pid:int,x:WorldCreate,db:Session=Depends(get_db)):o=WorldEntity(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.put('/api/v1/world/{wid}',response_model=WorldOut)
-def world_put(wid:int,x:WorldUpdate,db:Session=Depends(get_db)):return crud_update(db,WorldEntity,wid,x,'World entity')
-@app.delete('/api/v1/world/{wid}',status_code=204)
-def world_delete(wid:int,db:Session=Depends(get_db)):crud_delete(db,WorldEntity,wid,'World entity')
 @app.get('/api/v1/projects/{pid}/plots',response_model=list[PlotOut])
-def plots(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Plot,pid,limit,offset)
+def plots(pid:int,db:Session=Depends(get_db)):return crud_list(db,Plot,pid)
 @app.post('/api/v1/projects/{pid}/plots',response_model=PlotOut)
 def plot_add(pid:int,x:PlotCreate,db:Session=Depends(get_db)):o=Plot(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.put('/api/v1/plots/{pid}',response_model=PlotOut)
-def plot_put(pid:int,x:PlotUpdate,db:Session=Depends(get_db)):return crud_update(db,Plot,pid,x,'Plot')
-@app.delete('/api/v1/plots/{pid}',status_code=204)
-def plot_delete(pid:int,db:Session=Depends(get_db)):crud_delete(db,Plot,pid,'Plot')
 @app.get('/api/v1/projects/{pid}/foreshadowings',response_model=list[ForeshadowOut])
-def fs(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid,limit,offset)
+def fs(pid:int,db:Session=Depends(get_db)):return crud_list(db,Foreshadowing,pid)
 @app.post('/api/v1/projects/{pid}/foreshadowings',response_model=ForeshadowOut)
 def fs_add(pid:int,x:ForeshadowCreate,db:Session=Depends(get_db)):o=Foreshadowing(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.put('/api/v1/foreshadowings/{fid}',response_model=ForeshadowOut)
-def fs_put(fid:int,x:ForeshadowUpdate,db:Session=Depends(get_db)):return crud_update(db,Foreshadowing,fid,x,'Foreshadowing')
-@app.delete('/api/v1/foreshadowings/{fid}',status_code=204)
-def fs_delete(fid:int,db:Session=Depends(get_db)):crud_delete(db,Foreshadowing,fid,'Foreshadowing')
-@app.post('/api/v1/projects/{pid}/character-relations',response_model=CharacterRelationOut)
-def char_relation_add(pid:int,x:CharacterRelationCreate,db:Session=Depends(get_db)):o=CharacterRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.delete('/api/v1/character-relations/{rid}',status_code=204)
-def char_relation_delete(rid:int,db:Session=Depends(get_db)):crud_delete(db,CharacterRelation,rid,'Character relation')
-@app.post('/api/v1/projects/{pid}/world-relations',response_model=WorldRelationOut)
-def world_relation_add(pid:int,x:WorldRelationCreate,db:Session=Depends(get_db)):o=WorldRelation(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.delete('/api/v1/world-relations/{rid}',status_code=204)
-def world_relation_delete(rid:int,db:Session=Depends(get_db)):crud_delete(db,WorldRelation,rid,'World relation')
 @app.post('/api/v1/rag/index')
 async def rag_index(x:RagIndex,db:Session=Depends(get_db)):
  es=db.scalars(select(Episode).where(Episode.project_id==x.project_id)).all(); cs=[c for e in es for c in chunks(e)]
- try:
-  return {'indexed':await index(cs)}
- except Exception as ex:
-  logger.exception('RAG index rebuild failed for project %s',x.project_id)
-  raise HTTPException(503,f'RAG index rebuild failed: {ex}') from ex
+ try:return {'indexed':await index(cs)}
+ except Exception as e:raise HTTPException(503,str(e))
 @app.post('/api/v1/rag/search')
 async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
- try:
-  return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
- except Exception:
-  logger.exception('Qdrant search failed for project %s; falling back to PostgreSQL ILIKE search',x.project_id)
-  rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all()
-  return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
+ try:return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
+ except:
+  rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all();return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
 @app.post('/api/v1/ai/generate')
 async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
@@ -238,7 +255,7 @@ def story_twin(pid:int,db:Session=Depends(get_db)):
     plots=list(db.scalars(select(Plot).where(Plot.project_id==pid)).all())
     fs=list(db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all())
     states=list(db.scalars(select(CharacterState).where(CharacterState.project_id==pid).order_by(CharacterState.episode_number.desc(),CharacterState.id.desc()).limit(50)).all())
-    issues=list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid,ContinuityIssue.status=='open')).all())
+    issues=list(db.scalars(select(ContinuityIssue).where(ContinuityIssue.project_id==pid,ContinuityIssue.status=='open').all()))
     cg=character_graph(pid,db); wg=world_graph(pid,db); tg=timeline_graph(pid,db)
     completed=sum(1 for e in eps if (e.content or '').strip())
     open_fs=sum(1 for f in fs if f.status=='open')
@@ -259,11 +276,7 @@ def story_twin(pid:int,db:Session=Depends(get_db)):
     )
 
 @app.get('/api/v1/projects/{pid}/timeline',response_model=list[TimelineOut])
-def timeline(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
+def timeline(pid:int,db:Session=Depends(get_db)): return list(db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid).order_by(TimelineEvent.episode_number,TimelineEvent.id)).all())
 @app.post('/api/v1/projects/{pid}/timeline',response_model=TimelineOut)
 def timeline_add(pid:int,x:TimelineCreate,db:Session=Depends(get_db)):
     o=TimelineEvent(project_id=pid,**x.model_dump());db.add(o);db.commit();db.refresh(o);return o
-@app.put('/api/v1/timeline/{tid}',response_model=TimelineOut)
-def timeline_put(tid:int,x:TimelineUpdate,db:Session=Depends(get_db)):return crud_update(db,TimelineEvent,tid,x,'Timeline event')
-@app.delete('/api/v1/timeline/{tid}',status_code=204)
-def timeline_delete(tid:int,db:Session=Depends(get_db)):crud_delete(db,TimelineEvent,tid,'Timeline event')

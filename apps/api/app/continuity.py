@@ -1,19 +1,15 @@
-import json, re, logging
+import json, re
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .models import Episode, Character, CharacterState, ContinuityIssue
 from .ollama import generate
 
-logger = logging.getLogger(__name__)
 
 def extract_json(text: str):
     m = re.search(r'\{.*\}', text, re.S)
     if not m: return {}
-    try:
-        return json.loads(m.group(0))
-    except json.JSONDecodeError:
-        logger.warning('Failed to parse JSON from AI response: %r', text[:500])
-        return {}
+    try: return json.loads(m.group(0))
+    except Exception: return {}
 
 async def update_character_states(db: Session, project_id: int, episode: Episode):
     chars = db.scalars(select(Character).where(Character.project_id == project_id).order_by(Character.id)).all()
@@ -30,9 +26,9 @@ JSONのみで回答。形式:
 本文に根拠がない項目は空文字。推測で新事実を作らない。'''
     try:
         text,_=await generate(prompt)
-    except Exception as ex:
-        raise RuntimeError(f'character-state update AI error: {ex}') from ex
-    data=extract_json(text)
+        data=extract_json(text)
+    except Exception:
+        data={}
     results=[]
     for s in data.get('states',[]):
         c=next((x for x in chars if x.id==s.get('character_id')),None)
@@ -66,7 +62,7 @@ JSONのみで回答:
         text,model=await generate(prompt)
         data=extract_json(text)
     except Exception as ex:
-        raise RuntimeError(f'continuity AI error: {ex}') from ex
+        raise RuntimeError(f'continuity AI error: {ex}')
     # Keep latest run; unresolved issues remain historical until manually resolved.
     issues=[]
     for x in data.get('issues',[]):
