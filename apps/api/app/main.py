@@ -69,6 +69,8 @@ def project(pid:int,db:Session=Depends(get_db)):
  return p
 @app.post('/api/v1/projects',response_model=ProjectOut)
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
+@app.put('/api/v1/projects/{pid}',response_model=ProjectOut)
+def project_put(pid:int,x:ProjectUpdate,db:Session=Depends(get_db)):return crud_update(db,Project,pid,x,'Project')
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
