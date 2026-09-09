@@ -101,3 +101,29 @@ export function streamSSE(path: string, onMessage: (data: unknown) => void, onDo
   })();
   return () => controller.abort();
 }
+
+// Triggers a browser download for an endpoint that returns a file body
+// (Content-Disposition: attachment) rather than JSON — export downloads.
+export async function downloadFile(path: string, fallbackFilename: string) {
+  const auth = getAuth();
+  const headers = new Headers();
+  if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
+  const r = await fetch(API + path, { headers });
+  if (r.status === 401) {
+    onUnauthorized?.();
+    throw new Error("unauthorized");
+  }
+  if (!r.ok) throw new Error(`Export failed: ${r.status}`);
+  const blob = await r.blob();
+  const disposition = r.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : fallbackFilename;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

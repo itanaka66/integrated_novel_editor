@@ -6,7 +6,7 @@ export type Project = {
   rules: string;
   episode_goal?: number;
 };
-export type Episode = { id: number; project_id: number; number: number; title: string; summary: string; content: string };
+export type Episode = { id: number; project_id: number; number: number; title: string; summary: string; content: string; updated_at: string };
 export type Item = {
   id: number;
   name?: string;

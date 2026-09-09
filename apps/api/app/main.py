@@ -1,6 +1,6 @@
 import logging
 import json
-from fastapi import FastAPI,Depends,HTTPException
+from fastapi import FastAPI,Depends,HTTPException,Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -10,10 +10,11 @@ from .config import settings
 from .models import *
 from .schemas import *
 from .ollama import generate
-from .rag import index,search
+from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import BasicAuthMiddleware
+from . import export as export_mod
 import asyncio
 from .auto_writer import run_job, running as auto_write_running
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +84,24 @@ def project(pid:int,db:Session=Depends(get_db)):
 def project_add(x:ProjectCreate,db:Session=Depends(get_db)):p=Project(**x.model_dump());db.add(p);db.commit();db.refresh(p);return p
 @app.put('/api/v1/projects/{pid}',response_model=ProjectOut)
 def project_put(pid:int,x:ProjectUpdate,db:Session=Depends(get_db)):return crud_update(db,Project,pid,x,'Project')
+def content_disposition(filename,ext):
+ # filename=... must be latin-1 (the title is almost always non-ASCII
+ # Japanese), so give ASCII-only clients a safe fallback name and encode
+ # the real one as filename* per RFC 5987/6266.
+ from urllib.parse import quote
+ return f'attachment; filename="export.{ext}"; filename*=UTF-8\'\'{quote(filename)}.{ext}'
+@app.get('/api/v1/projects/{pid}/export')
+def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ name=p.name or f'project-{pid}'
+ if format=='txt':
+  return Response(export_mod.build_text(p,eps),media_type='text/plain; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'txt')})
+ if format=='md':
+  return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
+ if format=='epub':
+  return Response(export_mod.build_epub(p,eps),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+ raise HTTPException(400,'format must be one of: txt, md, epub')
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
@@ -194,6 +213,15 @@ async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
   logger.exception('Qdrant search failed for project %s; falling back to PostgreSQL ILIKE search',x.project_id)
   rows=db.scalars(select(Episode).where(Episode.project_id==x.project_id,Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all()
   return {'source':'postgresql','results':[{'episode_id':e.id,'title':e.title,'text':e.content} for e in rows]}
+@app.post('/api/v1/rag/search-all')
+async def rag_search_all(x:RagSearchAll,db:Session=Depends(get_db)):
+ try:
+  return {'source':'qdrant','results':await search_all_projects(x.query,x.limit)}
+ except Exception:
+  logger.exception('Cross-project Qdrant search failed; falling back to PostgreSQL ILIKE search')
+  rows=db.scalars(select(Episode).where(Episode.content.ilike('%'+x.query+'%')).limit(x.limit)).all()
+  projects={p.id:p.name for p in db.scalars(select(Project)).all()}
+  return {'source':'postgresql','results':[{'episode_id':e.id,'project_id':e.project_id,'project_name':projects.get(e.project_id,''),'title':e.title,'text':e.content} for e in rows]}
 @app.post('/api/v1/ai/generate')
 async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
@@ -202,6 +230,28 @@ async def ai(x:AIGenerate,db:Session=Depends(get_db)):
  try:t,m=await generate(prompt)
  except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
  return {'text':t,'model':m,'context':{'characters':len(c['characters']),'world':len(c['world']),'plots':len(c['plots']),'foreshadowings':len(c['foreshadowings']),'rag':len(c['rag'])}}
+
+@app.get('/api/v1/projects/{pid}/chat',response_model=list[ChatMessageOut])
+def chat_history(pid:int,limit:int=200,db:Session=Depends(get_db)):
+ return list(db.scalars(select(ChatMessage).where(ChatMessage.project_id==pid).order_by(ChatMessage.id).limit(clamp_limit(limit))).all())
+
+@app.post('/api/v1/projects/{pid}/chat',response_model=list[ChatMessageOut])
+async def chat_send(pid:int,x:ChatMessageCreate,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ user_msg=ChatMessage(project_id=pid,role='user',content=x.content);db.add(user_msg);db.commit();db.refresh(user_msg)
+ c=await build(db,pid,None,8)
+ prompt=f'''あなたは長編小説のAIチャットアシスタントです。作品の正本設定を最優先してください。\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n質問:{x.content}\n日本語で出力してください。'''
+ try:
+  t,_=await generate(prompt)
+ except Exception as ex:
+  t=f'エラーが発生しました。AIサービスの状態を確認してください。（{ex}）'
+ assistant_msg=ChatMessage(project_id=pid,role='assistant',content=t);db.add(assistant_msg);db.commit();db.refresh(assistant_msg)
+ return [user_msg,assistant_msg]
+
+@app.delete('/api/v1/projects/{pid}/chat',status_code=204)
+def chat_clear(pid:int,db:Session=Depends(get_db)):
+ for m in db.scalars(select(ChatMessage).where(ChatMessage.project_id==pid)).all():db.delete(m)
+ db.commit()
 
 
 @app.get('/api/v1/projects/{pid}/characters/{cid}/states',response_model=list[CharacterStateOut])

@@ -30,4 +30,5 @@ jobs:
           node-version: 22
       - run: cd apps/web && npm install
       - run: cd apps/web && npm run lint
+      - run: cd apps/web && npm test
       - run: cd apps/web && npm run build

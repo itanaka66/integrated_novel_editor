@@ -29,6 +29,8 @@ The core writing screen, three columns:
 - **Left**: the episode list for this project, plus "＋ 新規エピソード" to add the next one (numbered automatically).
 - **Center**: title, one-line summary, and the main body textarea for the selected episode. "保存＋人物状態更新" saves the episode, re-indexes it for semantic search, and asks the AI to extract character-state changes from the new text — if either of those background steps fails (e.g. Ollama or Qdrant is down), a warning banner appears above the editor instead of failing silently.
 - **Right ("AI EDITOR-IN-CHIEF")**: a Context Builder–backed assistant. "⚠ 連続性を監査" runs a continuity audit against everything registered for the project. The four main actions (続きを書く / 次の展開 / 要約 / 校正) and the six "QUICK CUSTOM CHECKS" buttons all send a prompt to the AI along with the current story context; the result appears in the AI RESULT box, and "＋ 本文に追加" appends it to the episode body.
+- **Editor toolbar**: B / I / H / ❝ buttons wrap the current selection (or insert at the cursor) with Markdown syntax (`**bold**`, `*italic*`, `## heading`, `> quote`) rather than applying real rich-text formatting — the stored content is still plain Markdown text. "プレビュー" renders that Markdown to HTML so you can check how it reads; "編集に戻る" switches back to the raw textarea. A live character count (whitespace excluded) is shown next to the toolbar.
+- **🕘 履歴 (revision history)**: every time you save different content than what was there before, the previous version is snapshotted (kept up to 20 per episode). This button lists them with a "この版に復元" (restore) action — restoring itself snapshots the version you're leaving, so restoring is itself undoable.
 
 ## Plot / Characters / World / Timeline / Foreshadowing / Glossary
 
@@ -54,17 +56,20 @@ A tabbed dashboard built on the "Story Digital Twin" (`GET /api/v1/projects/{id}
 - **概要 (Overview)**: episode/character/world/plot/foreshadowing counts, a health score, prose coverage (% of episodes with non-empty content), active plots, and open foreshadowing.
 - **人物関係図 / 世界観グラフ / 時系列グラフ**: relationship graphs. Character/world edges come from explicit relations you've registered *plus* a same-episode co-occurrence heuristic (two characters mentioned in the same episode text get a weak automatic link) — don't read too much into faint auto-inferred edges.
 - **状態履歴 (State history)**: the most recent character-state snapshots the AI has extracted after each episode save.
+- **文字数 (Word count)**: total/average character counts (whitespace excluded) and a cumulative-character-count-by-episode-order chart — a rough proxy for writing pace, not a time-based one (it has no notion of *when* an episode was written, only its position in the sequence).
 - **連続性 (Continuity)**: run or review the same continuity audit available from the Write screen, project-wide.
 
 The health score is a heuristic (continuity issue counts + episode coverage), not a measure of prose quality.
 
 ## Search (検索)
 
-Semantic search over your episode text via Qdrant. If Qdrant is unreachable, it silently falls back to a plain PostgreSQL substring match (`ILIKE`) — the screen tells you which one actually served the results ("セマンティック検索 (Qdrant)" vs "全文一致 (PostgreSQL フォールバック)"). "再構築" (Rebuild) re-indexes every episode in the project.
+Semantic search over your episode text via Qdrant. If Qdrant is unreachable, it silently falls back to a plain PostgreSQL substring match (`ILIKE`) — the screen tells you which one actually served the results ("セマンティック検索 (Qdrant)" vs "全文一致 (PostgreSQL フォールバック)"). "再構築" (Rebuild) re-indexes every episode in the project (this button only appears when searching the current project — see below).
+
+Checking "すべての作品を検索対象にする" (search all projects) switches to `POST /api/v1/rag/search-all`, which searches across every project's episodes instead of just the current one. Each result shows which project it came from. There's no "rebuild index" button in this mode — rebuild from each project's own Search screen instead.
 
 ## AI Chat (AIチャット)
 
-A free-form chat with the same story context the Write screen's assistant uses. **Conversation history is kept only in this browser tab's memory** — nothing is persisted server-side, so reloading the page or switching projects clears it.
+A free-form chat with the same story context the Write screen's assistant uses. Conversation history is **persisted per project** (`GET`/`POST`/`DELETE /api/v1/projects/{id}/chat`) — it's still there when you come back to this screen or reload the page. "履歴を削除" permanently deletes it for that project.
 
 ## Auto-write (自動執筆)
 
@@ -94,6 +99,11 @@ Every 5th episode written also triggers a full continuity audit automatically.
 
 - **基本設定 (Basic)**: edit the project's name, genre, synopsis, rules, and episode target. Saves immediately via the API.
 - **AI設定 (AI settings)**: sets *this browser's* default Writer/Controller model names, which prefill the Auto-write start form. This does **not** change the actual Ollama server addresses — those are fixed server-side via `CONTROLLER_OLLAMA_URL`/`OLLAMA_URL` and can only be changed by whoever deploys the app (see [Software Requirements](requirements.md)).
+- **エクスポート (Export)**: downloads every episode's prose (title + summary + body only — no characters/world/plot/foreshadowing data) as a single file in one of three formats: plain text (`.txt`), Markdown (`.md`), or a minimal but valid EPUB3 (`.epub`) you can open in any e-reader. `GET /api/v1/projects/{id}/export?format=txt|md|epub`.
+
+## Backup and restore
+
+Not a screen — `scripts/backup.sh` and `scripts/restore.sh` at the repo root, run from a machine with the `docker-compose` stack up. `backup.sh [output-dir]` dumps PostgreSQL (`pg_dump`) and, if anything has been indexed, a Qdrant collection snapshot, into a timestamped directory. `restore.sh <backup-dir>` reverses that — **it replaces the current database contents with no confirmation prompt**, so double-check the path before running it. Ollama models aren't covered; re-pull them separately if needed. See the scripts' own comments for exact commands.
 
 ## Mobile
 
