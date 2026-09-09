@@ -1,86 +1,63 @@
-# AI Novel Studio v0.3
+# AI Novel Studio
 
-AI-powered long-form novel IDE for 300–500+ episode stories.
+日本語版はこちら → [README.ja.md](README.ja.md)
 
-## v0.3 highlights
-- AI continuity checker: character / timeline / world / ability / foreshadowing contradictions
-- Automatic character-state extraction after episode save
-- Character state history by episode
-- PostgreSQL as story truth, Qdrant as semantic memory, Ollama as local AI
-- RAG + Context Builder + AI generation
+An AI-assisted writing environment for long-form novels (from a handful of episodes up to ~500), built around a structured story database — characters, world, plot, foreshadowing, timeline — that the AI reads before generating text, so long-running stories stay internally consistent. Runs entirely on your own machine/server with a local [Ollama](https://ollama.com) LLM; no external cloud AI API is called.
+
+## Documentation
+
+| | English | 日本語 |
+|---|---|---|
+| Software requirements | [docs/requirements.md](docs/requirements.md) | [docs/requirements.ja.md](docs/requirements.ja.md) |
+| Installation manual | [docs/installation.md](docs/installation.md) | [docs/installation.ja.md](docs/installation.ja.md) |
+| Beginner's guide | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
+| User guide (operation manual) | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
 
 ## Quick start
+
 ```bash
+cp .env.example .env   # then edit ADMIN_PASSWORD (required) and Ollama URLs if needed
 docker compose up --build
 ```
-Open `http://localhost:3000` and API docs at `http://localhost:8000/docs`.
+
+Open the web app at `http://localhost:3000` (log in with `admin` and your `ADMIN_PASSWORD`) and the API's interactive docs at `http://localhost:8000/docs`. See the [Installation Manual](docs/installation.md) for the full walkthrough, including running without Docker.
 
 For local Ollama:
 ```bash
-ollama pull qwen3:8b
-ollama pull nomic-embed-text
+ollama pull qwen3:8b        # manual AI-assist (write screen, chat)
+ollama pull qwen3.8:27b     # auto-write Writer (default)
+ollama pull qwen3:14b       # auto-write Controller (default)
+ollama pull nomic-embed-text  # RAG embeddings
 ```
 
-> The first v0.3 implementation uses LLM JSON extraction for state updates and continuity findings. Always review AI findings before treating them as canonical story facts.
+## Feature overview
 
+- **Structured story data**: characters, world entities, plot, foreshadowing, and a timeline, each with full create/edit/delete, plus a glossary view (world entities tagged `glossary`). All of it feeds the AI's context on every generation and continuity check.
+- **AI writing assistant**: continue/summarize/proofread the current episode, six quick "consistency check" prompts (timeline, character state, world, foreshadowing, plot, prose quality), and a free-form AI chat — all backed by the same Context Builder.
+- **Continuity auditing**: an AI-driven audit that flags contradictions across timeline, character state, world setting, and foreshadowing, with severity and suggested fixes. Always review its findings — it's a first-pass check, not a source of truth.
+- **Character-state tracking**: after saving an episode, the AI extracts what changed (status, location, emotion, health, goal, knowledge) and records it as history, separate from the character's own base profile.
+- **Story Digital Twin** (`GET /api/v1/projects/{id}/story-twin`): one consolidated view of a project's health score, episode coverage, relationship graphs (character/world/timeline), recent character-state history, and open continuity issues. Surfaced in the app as the 分析 (Analytics) screen.
+- **Semantic search (RAG)**: Qdrant-backed search over episode text, with an automatic PostgreSQL substring-match fallback if Qdrant is unreachable — the search screen tells you which one actually served the results.
+- **Auto-write**: generates episodes 1 through up to 500 with minimal supervision, using a four-level planning hierarchy (Series → 5×100-episode Arcs → 50×10-episode Mini Arcs → per-episode blueprints) owned by a separate "Controller" Ollama model, handed off to a "Writer" Ollama model for prose. The Controller also runs a pre-write and post-write quality gate (timeline/character/world/plot only) and can force a rewrite. Existing episodes are skipped by default; overwrite is opt-in. A continuity audit runs automatically every 5 episodes. Live progress (percentage, phase, per-level plan counts) is exposed via API and shown in the 自動執筆 screen. See [the Auto-write section of the User Guide](docs/user-guide.md#auto-write) for the full mechanics.
+- **Deterministic planner-structure validation**: separately from the AI-generated plan content, `apps/api/app/planner/structure_validator.py` checks the *shape* the Series/Arc/Mini-Arc/Episode hierarchy is required to satisfy — exactly 5 arcs of exactly 100 episodes each, exactly 10 mini-arcs of exactly 10 episodes each, no gaps/overlaps/duplicates, full 1–500 coverage — independent of whatever the LLM actually generated.
 
-## v0.5 Story Digital Twin
+## Architecture
 
-作品を「文章の集合」ではなく、人物・世界・時系列・プロット・伏線・キャラクター状態・連続性を統合したStory Digital Twinとして扱います。
+| | |
+|---|---|
+| Backend | FastAPI + SQLAlchemy 2.0, Python 3.13, Alembic migrations |
+| Frontend | Next.js 16 (App Router) + React 19, TypeScript |
+| Database | PostgreSQL (story data) |
+| Vector store | Qdrant (semantic search index) |
+| LLM runtime | Ollama, run locally — two configurable model roles: Writer and Controller |
+| Auth | Single shared HTTP Basic Auth account (`ADMIN_USERNAME`/`ADMIN_PASSWORD`) — no per-user accounts, no OAuth |
+| CI | GitHub Actions: ruff + pytest + Alembic migration round-trip (backend), eslint + `next build` (frontend) |
 
-### Digital Twin API
-- `GET /api/v1/projects/{id}/story-twin`
-- 統合メトリクス
-- 作品健全性スコア
-- キャラクター関係グラフ
-- 世界観グラフ
-- 時系列グラフ
-- キャラクター状態履歴
-- 未解決の連続性問題
-- アクティブなプロット
-- 未回収伏線
+## Known limitations
 
-Story Digital Twin画面では、これらを1つの作品状態として俯瞰できます。
+- Single shared password, no per-user accounts or permissions — see [User Guide → Login](docs/user-guide.md#login).
+- AI chat history is kept only in the browser tab's memory, not persisted server-side.
+- The "AI設定" (AI settings) screen only sets this browser's default model names for the auto-write form; it does not change which Ollama servers the backend actually talks to (that's `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL`, server-side only).
+- No usage/token-tracking dashboard yet.
 
-
-## v0.8 Autonomous 1→500 Writing
-
-- Separate Ollama Controller / Writer architecture
-- Controller default: `qwen3:8b`
-- Writer default: `qwen3.8:27b`
-- Generate episodes sequentially from 1 to 500
-- Existing episodes are skipped by default; optional overwrite
-- After each episode: Character State update + Qdrant indexing
-- Every 5 episodes: continuity audit
-- Start/stop/progress API and Web UI
-
-### Dual Ollama environment
-
-`OLLAMA_URL` / `OLLAMA_MODEL` control the Writer. `CONTROLLER_OLLAMA_URL` / `CONTROLLER_OLLAMA_MODEL` control the planning AI. They can point to the same Ollama server with different models, or to two separate Ollama servers.
-
-
-## v0.8 Controller Quality Control
-Controller Ollama is responsible for episode planning plus a subset of quality checks: timeline, character state, world setting, and plot consistency. It performs a preflight check before Writer generation and a draft gate after generation. BLOCK results trigger one repair/revision pass. Writer Ollama remains responsible for final prose generation.
-
-## v0.9 Hierarchical Story Planner
-
-A770 Controller now owns a four-level planning hierarchy:
-
-- Series Planner: EP001-EP500
-- Arc Planner: 5 × 100 episodes
-- Mini Arc Planner: 50 × 10 episodes
-- Episode Planner: 500 individual episode blueprints
-
-The hierarchy is persisted in PostgreSQL. AutoWrite lazily expands only the Arc/Mini Arc/Episode plans needed for the requested episode range. RTX 3090 Writer receives the final Episode Blueprint. Controller remains responsible for timeline, character-state, world-setting and plot quality gates.
-
-### Planner API
-
-- `POST /api/v1/planner/series`
-- `POST /api/v1/planner/arc`
-- `POST /api/v1/planner/mini-arc`
-- `POST /api/v1/planner/episode`
-- `GET /api/v1/projects/{project_id}/planner`
-
-### 500話Planner構造検証
-
-A770 ControllerのSeries → Arc → Mini Arc → Episode階層には決定論的な構造バリデータを搭載しています。LLMが「5 Arc」「100話」「50 Mini Arc」「500 Episode」を正しく生成したかを、欠番・重複・範囲ずれまで自動検証します。
+Contributions and issue reports are welcome via this repository's issue tracker.
