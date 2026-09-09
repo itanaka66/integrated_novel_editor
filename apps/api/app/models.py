@@ -84,7 +84,7 @@ class WorldRelation(Base):
 class AutoWriteJob(Base):
     __tablename__='auto_write_jobs'
     id:Mapped[int]=mapped_column(primary_key=True)
-    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'))
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
     start_episode:Mapped[int]=mapped_column(Integer,default=1)
     end_episode:Mapped[int]=mapped_column(Integer,default=500)
     current_episode:Mapped[int]=mapped_column(Integer,default=1)
@@ -98,7 +98,7 @@ class AutoWriteJob(Base):
 class SeriesPlan(Base):
     __tablename__='series_plans'
     id:Mapped[int]=mapped_column(primary_key=True)
-    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),unique=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),unique=True,index=True)
     total_episodes:Mapped[int]=mapped_column(Integer,default=500)
     title:Mapped[str]=mapped_column(String(300),default='')
     premise:Mapped[str]=mapped_column(Text,default='')
@@ -109,8 +109,8 @@ class SeriesPlan(Base):
 class ArcPlan(Base):
     __tablename__='arc_plans'
     id:Mapped[int]=mapped_column(primary_key=True)
-    series_plan_id:Mapped[int]=mapped_column(ForeignKey('series_plans.id',ondelete='CASCADE'))
-    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'))
+    series_plan_id:Mapped[int]=mapped_column(ForeignKey('series_plans.id',ondelete='CASCADE'),index=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
     arc_number:Mapped[int]=mapped_column(Integer)
     start_episode:Mapped[int]=mapped_column(Integer)
     end_episode:Mapped[int]=mapped_column(Integer)
@@ -122,8 +122,8 @@ class ArcPlan(Base):
 class MiniArcPlan(Base):
     __tablename__='mini_arc_plans'
     id:Mapped[int]=mapped_column(primary_key=True)
-    arc_plan_id:Mapped[int]=mapped_column(ForeignKey('arc_plans.id',ondelete='CASCADE'))
-    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'))
+    arc_plan_id:Mapped[int]=mapped_column(ForeignKey('arc_plans.id',ondelete='CASCADE'),index=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
     mini_arc_number:Mapped[int]=mapped_column(Integer)
     start_episode:Mapped[int]=mapped_column(Integer)
     end_episode:Mapped[int]=mapped_column(Integer)
@@ -135,10 +135,20 @@ class MiniArcPlan(Base):
 class EpisodePlan(Base):
     __tablename__='episode_plans'
     id:Mapped[int]=mapped_column(primary_key=True)
-    mini_arc_plan_id:Mapped[int]=mapped_column(ForeignKey('mini_arc_plans.id',ondelete='CASCADE'))
-    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'))
+    mini_arc_plan_id:Mapped[int]=mapped_column(ForeignKey('mini_arc_plans.id',ondelete='CASCADE'),index=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
     episode_number:Mapped[int]=mapped_column(Integer)
     title:Mapped[str]=mapped_column(String(300),default='')
     content:Mapped[str]=mapped_column(Text,default='')
     status:Mapped[str]=mapped_column(String(30),default='planned')
     model:Mapped[str]=mapped_column(String(150),default='')
+
+class EpisodeRevision(Base):
+    __tablename__='episode_revisions'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    episode_id:Mapped[int]=mapped_column(ForeignKey('episodes.id',ondelete='CASCADE'),index=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
+    title:Mapped[str]=mapped_column(String(300),default='')
+    summary:Mapped[str]=mapped_column(Text,default='')
+    content:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)

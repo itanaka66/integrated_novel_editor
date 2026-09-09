@@ -55,3 +55,49 @@ export async function put(p: string, b: unknown) {
 export async function del(p: string) {
   return api(p, { method: "DELETE" });
 }
+
+// Server-Sent Events, consumed manually via fetch()+ReadableStream instead of
+// the browser's native EventSource — EventSource can't send an Authorization
+// header, and this API requires one on every request. Returns a function
+// that aborts the stream (call it on unmount / when switching jobs).
+export function streamSSE(path: string, onMessage: (data: unknown) => void, onDone?: () => void): () => void {
+  const controller = new AbortController();
+  (async () => {
+    const auth = getAuth();
+    const headers = new Headers();
+    if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
+    try {
+      const r = await fetch(API + path, { headers, signal: controller.signal });
+      if (r.status === 401) {
+        onUnauthorized?.();
+        return;
+      }
+      if (!r.body) return;
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const chunk = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const line = chunk.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          try {
+            onMessage(JSON.parse(line.slice(6)));
+          } catch {
+            /* malformed chunk; ignore */
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as { name?: string }).name !== "AbortError") throw err;
+    } finally {
+      onDone?.();
+    }
+  })();
+  return () => controller.abort();
+}

@@ -12,6 +12,8 @@ const CUSTOM_ACTIONS = [
   { label: "✎ 文章品質チェック", prompt: "このエピソードを長編小説の編集者としてチェックしてください。設定・時系列・人物描写の一貫性に加え、冗長表現、説明過多、視点の乱れ、会話の不自然さ、読者の没入を妨げる箇所を指摘し、具体的な改善案を示してください。" },
 ];
 
+type Revision = { id: number; title: string; summary: string; created_at: string };
+
 export default function WritePanel({ project }: { project: Project }) {
   const [es, setEs] = useState<Episode[]>([]);
   const [e, setE] = useState<Episode | null>(null);
@@ -19,6 +21,8 @@ export default function WritePanel({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const [inst, setInst] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [revisions, setRevisions] = useState<Revision[]>([]);
 
   async function load() {
     const d = await api(`/projects/${project.id}/episodes`);
@@ -42,6 +46,18 @@ export default function WritePanel({ project }: { project: Project }) {
       const x = await put(`/episodes/${e.id}`, e);
       setE(x); setEs(es.map((v) => (v.id === x.id ? x : v))); setWarnings(x.warnings || []);
     } finally { setBusy(false); }
+  }
+
+  async function openHistory() {
+    if (!e) return;
+    setRevisions(await api(`/episodes/${e.id}/revisions`));
+    setShowHistory(true);
+  }
+  async function restoreRevision(revisionId: number) {
+    if (!e) return;
+    if (!confirm("この版に復元しますか？現在の内容は履歴として保存されます。")) return;
+    const x = await post(`/episodes/${e.id}/revisions/${revisionId}/restore`, {});
+    setE(x); setEs(es.map((v) => (v.id === x.id ? x : v))); setShowHistory(false);
   }
 
   async function aiRun(mode: string, instructionOverride?: string) {
@@ -69,7 +85,10 @@ export default function WritePanel({ project }: { project: Project }) {
       <section className="main">
         <div className="writeHead">
           <div><small>EPISODE {e.number}</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
-          <button onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? "保存中" : "保存＋人物状態更新"}</button>
+          <div className="writeHeadActions">
+            <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
+            <button onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? "保存中" : "保存＋人物状態更新"}</button>
+          </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
         <div className="summary"><small>SUMMARY</small><input value={e.summary} onChange={(x) => setE({ ...e, summary: x.target.value })} /></div>
@@ -91,6 +110,27 @@ export default function WritePanel({ project }: { project: Project }) {
         <div className="result"><small>AI RESULT</small><pre>{busy ? "AI処理中..." : ai || "結果がここに表示されます"}</pre></div>
         {ai && <button className="adopt" onClick={() => { setE({ ...e, content: e.content + "\n\n" + ai }); setAi(""); }}>＋ 本文に追加</button>}
       </aside>
+      {showHistory && (
+        <div className="modalOverlay" onClick={() => setShowHistory(false)}>
+          <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
+            <h1>変更履歴</h1>
+            <p style={{ color: "#687386", fontSize: 12, margin: 0 }}>本文を上書き保存するたびに、直前の版が最大20件まで保存されます。</p>
+            {revisions.length === 0 ? (
+              <p>まだ履歴はありません（本文が変更されて保存されると記録されます）。</p>
+            ) : (
+              <div className="revisionList">
+                {revisions.map((r) => (
+                  <div className="revisionRow" key={r.id}>
+                    <div><b>{r.title}</b><span>{new Date(r.created_at).toLocaleString("ja-JP")}</span></div>
+                    <button onClick={() => restoreRevision(r.id)}>この版に復元</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modalActions"><button onClick={() => setShowHistory(false)}>閉じる</button></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

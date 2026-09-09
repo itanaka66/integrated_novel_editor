@@ -88,3 +88,10 @@ class PlanGenerate(BaseModel):
 class PlanOut(BaseModel):
     id:int; project_id:int; title:str=''; content:str; status:str; model:str
     model_config=ConfigDict(from_attributes=True)
+
+class EpisodeRevisionListOut(BaseModel):
+    id:int; title:str; summary:str; created_at:object
+    model_config=ConfigDict(from_attributes=True)
+
+class EpisodeRevisionOut(EpisodeRevisionListOut):
+    content:str
