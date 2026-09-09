@@ -4,12 +4,7 @@ class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes
 class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
-class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
-class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
-class WorldCreate(BaseModel): name:str; entity_type:str='setting'; description:str=''; rules:str=''; location:str=''; era:str=''
-class WorldOut(WorldCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
-class PlotCreate(BaseModel): title:str; plot_type:str='arc'; status:str='planned'; start_episode:int|None=None; end_episode:int|None=None; objective:str=''; conflict:str=''; resolution:str=''
-class PlotOut(PlotCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
 class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
 class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
 class CharacterUpdate(BaseModel): name:str|None=None; role:str|None=None; personality:str|None=None; speech_style:str|None=None; goal:str|None=None; status:str|None=None; description:str|None=None
