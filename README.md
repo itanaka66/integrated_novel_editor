@@ -22,6 +22,8 @@ docker compose up --build
 
 Open the web app at `http://localhost:3000` (log in with `admin` and your `ADMIN_PASSWORD`) and the API's interactive docs at `http://localhost:8000/docs`. See the [Installation Manual](docs/installation.md) for the full walkthrough, including running without Docker.
 
+Prefer not to touch a terminal? Grab the **Windows (`.exe`)** or **macOS (`.pkg`)** desktop installer from the [Releases page](https://github.com/itanaka66/integrated_novel_editor/releases) — Docker Desktop is still required, but the installer handles everything else and gives you "Launch"/"Stop" shortcuts. See [installer/](installer/) and the Installation Manual's desktop-installer section for details.
+
 For local Ollama:
 ```bash
 ollama pull qwen3:8b        # manual AI-assist (write screen, chat)
