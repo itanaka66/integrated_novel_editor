@@ -3,7 +3,7 @@ class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rule
 class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes=True)
 class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None
 class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
-class EpisodeOut(EpisodeCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
+class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
 class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
 class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
@@ -28,6 +28,7 @@ class WorldRelationOut(WorldRelationCreate): id:int; project_id:int; model_confi
 class AIGenerate(BaseModel): project_id:int; episode_id:int|None=None; instruction:str=''; mode:str='continue'; rag_limit:int=6
 class RagIndex(BaseModel): project_id:int
 class RagSearch(BaseModel): project_id:int; query:str; limit:int=8
+class RagSearchAll(BaseModel): query:str; limit:int=8
 class CharacterStateOut(BaseModel):
     id:int; project_id:int; character_id:int; episode_id:int|None; episode_number:int; status:str; location:str; emotion:str; health:str; goal:str; knowledge:str; notes:str
     model_config=ConfigDict(from_attributes=True)
@@ -95,3 +96,8 @@ class EpisodeRevisionListOut(BaseModel):
 
 class EpisodeRevisionOut(EpisodeRevisionListOut):
     content:str
+
+class ChatMessageCreate(BaseModel): content:str
+class ChatMessageOut(BaseModel):
+    id:int; project_id:int; role:str; content:str; created_at:object
+    model_config=ConfigDict(from_attributes=True)

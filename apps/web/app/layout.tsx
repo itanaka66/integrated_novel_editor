@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "AI Novel Studio",
+  title: "Integrated Novel Editor (INE)",
   description: "AI-powered long-form novel development environment",
 };
 

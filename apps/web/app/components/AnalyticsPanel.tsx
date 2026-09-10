@@ -133,7 +133,47 @@ function ContinuitySection({ projectId }: { projectId: number }) {
   );
 }
 
-const TABS = [["overview", "概要"], ["characters", "人物関係図"], ["world", "世界観グラフ"], ["timeline", "時系列グラフ"], ["states", "状態履歴"], ["continuity", "連続性"]] as const;
+function WordCountSection({ projectId }: { projectId: number }) {
+  const [episodes, setEpisodes] = useState<any[]>([]);
+  useEffect(() => { api(`/projects/${projectId}/episodes`).then(setEpisodes); }, [projectId]);
+  const sorted = [...episodes].sort((a, b) => a.number - b.number);
+  let cumulative = 0;
+  const points = sorted.map((e) => {
+    cumulative += (e.content || "").replace(/\s/g, "").length;
+    return { number: e.number, chars: (e.content || "").replace(/\s/g, "").length, cumulative };
+  });
+  const total = cumulative;
+  const w = 880, h = 220, maxY = Math.max(1, ...points.map((p) => p.cumulative));
+  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${i * stepX} ${h - (p.cumulative / maxY) * h}`).join(" ");
+
+  return (
+    <div>
+      <div className="twinMetrics" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+        <div className="metric"><small>総文字数</small><b>{total.toLocaleString()}</b></div>
+        <div className="metric"><small>エピソード数</small><b>{points.length}</b></div>
+        <div className="metric"><small>1話あたり平均</small><b>{points.length ? Math.round(total / points.length).toLocaleString() : 0}</b></div>
+      </div>
+      {points.length > 1 && (
+        <div className="wordCountChart">
+          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+            <path d={path} fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+          <p className="graphHint">累積文字数の推移（話数順）。横軸はエピソード順、縦軸は累積文字数。</p>
+        </div>
+      )}
+      <div className="stateTable" style={{ marginTop: 14 }}>
+        {points.map((p) => (
+          <div className="stateRow" key={p.number} style={{ gridTemplateColumns: "70px 1fr 1fr" }}>
+            <b>EP.{p.number}</b><span>{p.chars.toLocaleString()}文字</span><span>累計 {p.cumulative.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const TABS = [["overview", "概要"], ["characters", "人物関係図"], ["world", "世界観グラフ"], ["timeline", "時系列グラフ"], ["states", "状態履歴"], ["wordcount", "文字数"], ["continuity", "連続性"]] as const;
 
 export default function AnalyticsPanel({ projectId }: { projectId: number }) {
   const [t, setT] = useState<any | null>(null), [busy, setBusy] = useState(false), [tab, setTab] = useState<string>("overview");
@@ -162,6 +202,7 @@ export default function AnalyticsPanel({ projectId }: { projectId: number }) {
       {tab === "world" && <><GraphMini graph={t.world} /><RelationEditor projectId={projectId} cfg={worldRelationConfig} onChanged={load} /></>}
       {tab === "timeline" && <GraphMini graph={t.timeline} timeline />}
       {tab === "states" && <div className="stateTable">{t.recent_states.length === 0 ? <p>キャラクター状態履歴はまだありません。</p> : t.recent_states.map((x: any) => <div className="stateRow" key={x.id}><b>EP.{x.episode_number}</b><strong>#{x.character_id}</strong><span>{x.status || "—"}</span><span>{x.location || "—"}</span><span>{x.emotion || "—"}</span><p>{x.notes || "—"}</p></div>)}</div>}
+      {tab === "wordcount" && <WordCountSection projectId={projectId} />}
       {tab === "continuity" && <ContinuitySection projectId={projectId} />}
     </div>
   );

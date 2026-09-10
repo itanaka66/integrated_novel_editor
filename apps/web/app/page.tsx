@@ -1,5 +1,5 @@
-import NovelStudio from "./studio";
+import Studio from "./studio";
 
 export default function Page() {
-  return <NovelStudio />;
+  return <Studio />;
 }

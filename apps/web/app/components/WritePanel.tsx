@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { marked } from "marked";
 import { api, post, put } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 
@@ -23,6 +24,8 @@ export default function WritePanel({ project }: { project: Project }) {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [preview, setPreview] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   async function load() {
     const d = await api(`/projects/${project.id}/episodes`);
@@ -60,6 +63,32 @@ export default function WritePanel({ project }: { project: Project }) {
     setE(x); setEs(es.map((v) => (v.id === x.id ? x : v))); setShowHistory(false);
   }
 
+  function wrapSelection(before: string, after: string = before) {
+    if (!e) return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const selected = e.content.slice(start, end);
+    const next = e.content.slice(0, start) + before + selected + after + e.content.slice(end);
+    setE({ ...e, content: next });
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(start + before.length, start + before.length + selected.length);
+    });
+  }
+  function insertLinePrefix(prefix: string) {
+    if (!e) return;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const lineStart = e.content.lastIndexOf("\n", start - 1) + 1;
+    const next = e.content.slice(0, lineStart) + prefix + e.content.slice(lineStart);
+    setE({ ...e, content: next });
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + prefix.length, start + prefix.length); });
+  }
+
+  const wordCount = (e?.content || "").replace(/\s/g, "").length;
+
   async function aiRun(mode: string, instructionOverride?: string) {
     if (!e) return;
     setBusy(true);
@@ -92,7 +121,22 @@ export default function WritePanel({ project }: { project: Project }) {
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
         <div className="summary"><small>SUMMARY</small><input value={e.summary} onChange={(x) => setE({ ...e, summary: x.target.value })} /></div>
-        <textarea className="novel" value={e.content} onChange={(x) => setE({ ...e, content: x.target.value })} />
+        <div className="editorToolbar">
+          <button onClick={() => wrapSelection("**")} title="太字">B</button>
+          <button onClick={() => wrapSelection("*")} title="斜体"><i>I</i></button>
+          <button onClick={() => insertLinePrefix("## ")} title="見出し">H</button>
+          <button onClick={() => insertLinePrefix("> ")} title="引用">❝</button>
+          <button className={preview ? "on" : ""} onClick={() => setPreview((p) => !p)}>{preview ? "編集に戻る" : "プレビュー"}</button>
+          <span className="wordCount">{wordCount.toLocaleString()}文字</span>
+        </div>
+        {preview ? (
+          // Single-user app; the content is always this same user's own
+          // Markdown (never third-party input), so raw HTML rendering here
+          // carries no cross-user XSS risk.
+          <div className="novelPreview" dangerouslySetInnerHTML={{ __html: marked.parse(e.content || "", { async: false }) as string }} />
+        ) : (
+          <textarea ref={textareaRef} className="novel" value={e.content} onChange={(x) => setE({ ...e, content: x.target.value })} />
+        )}
       </section>
       <aside className="right">
         <b>AI EDITOR-IN-CHIEF</b>

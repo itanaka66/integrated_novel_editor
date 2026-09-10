@@ -152,3 +152,11 @@ class EpisodeRevision(Base):
     summary:Mapped[str]=mapped_column(Text,default='')
     content:Mapped[str]=mapped_column(Text,default='')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class ChatMessage(Base):
+    __tablename__='chat_messages'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True)
+    role:Mapped[str]=mapped_column(String(20))
+    content:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)

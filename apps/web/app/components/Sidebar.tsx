@@ -26,7 +26,7 @@ export default function Sidebar({ project, section, onSection, onDashboard }: {
 }) {
   return (
     <aside className="appSidebar">
-      <div className="appSidebarBrand">✦ Novel Studio</div>
+      <div className="appSidebarBrand" title="Integrated Novel Editor">✦ INE</div>
       <button className="appSidebarDashboard" onClick={onDashboard}>← ダッシュボードへ</button>
       <div className="appSidebarProject"><small>PROJECT</small><b>{project.name}</b></div>
       <div className="appSidebarNav">

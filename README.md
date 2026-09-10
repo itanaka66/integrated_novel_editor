@@ -1,4 +1,4 @@
-# AI Novel Studio
+# Integrated Novel Editor (INE)
 
 日本語版はこちら → [README.ja.md](README.ja.md)
 
@@ -33,11 +33,13 @@ ollama pull nomic-embed-text  # RAG embeddings
 ## Feature overview
 
 - **Structured story data**: characters, world entities, plot, foreshadowing, and a timeline, each with full create/edit/delete, plus a glossary view (world entities tagged `glossary`). All of it feeds the AI's context on every generation and continuity check.
-- **AI writing assistant**: continue/summarize/proofread the current episode, six quick "consistency check" prompts (timeline, character state, world, foreshadowing, plot, prose quality), and a free-form AI chat — all backed by the same Context Builder.
+- **AI writing assistant**: continue/summarize/proofread the current episode, six quick "consistency check" prompts (timeline, character state, world, foreshadowing, plot, prose quality), and a free-form, per-project AI chat with persisted history — all backed by the same Context Builder.
+- **Editor**: a lightweight Markdown toolbar (bold/italic/heading/quote) plus a rendered preview, revision history (last 20 versions per episode, with restore), and a live character count.
 - **Continuity auditing**: an AI-driven audit that flags contradictions across timeline, character state, world setting, and foreshadowing, with severity and suggested fixes. Always review its findings — it's a first-pass check, not a source of truth.
 - **Character-state tracking**: after saving an episode, the AI extracts what changed (status, location, emotion, health, goal, knowledge) and records it as history, separate from the character's own base profile.
 - **Story Digital Twin** (`GET /api/v1/projects/{id}/story-twin`): one consolidated view of a project's health score, episode coverage, relationship graphs (character/world/timeline), recent character-state history, and open continuity issues. Surfaced in the app as the 分析 (Analytics) screen.
-- **Semantic search (RAG)**: Qdrant-backed search over episode text, with an automatic PostgreSQL substring-match fallback if Qdrant is unreachable — the search screen tells you which one actually served the results.
+- **Semantic search (RAG)**: Qdrant-backed search over episode text, with an automatic PostgreSQL substring-match fallback if Qdrant is unreachable — the search screen tells you which one actually served the results. Optionally searches across all projects at once instead of just the current one.
+- **Export**: download a project's episodes as plain text, Markdown, or a minimal EPUB3 file.
 - **Auto-write**: generates episodes 1 through up to 500 with minimal supervision, using a four-level planning hierarchy (Series → 5×100-episode Arcs → 50×10-episode Mini Arcs → per-episode blueprints) owned by a separate "Controller" Ollama model, handed off to a "Writer" Ollama model for prose. The Controller also runs a pre-write and post-write quality gate (timeline/character/world/plot only) and can force a rewrite. Existing episodes are skipped by default; overwrite is opt-in. A continuity audit runs automatically every 5 episodes. Live progress (percentage, phase, per-level plan counts) is exposed via API and shown in the 自動執筆 screen. See [the Auto-write section of the User Guide](docs/user-guide.md#auto-write) for the full mechanics.
 - **Deterministic planner-structure validation**: separately from the AI-generated plan content, `apps/api/app/planner/structure_validator.py` checks the *shape* the Series/Arc/Mini-Arc/Episode hierarchy is required to satisfy — exactly 5 arcs of exactly 100 episodes each, exactly 10 mini-arcs of exactly 10 episodes each, no gaps/overlaps/duplicates, full 1–500 coverage — independent of whatever the LLM actually generated.
 
@@ -51,13 +53,15 @@ ollama pull nomic-embed-text  # RAG embeddings
 | Vector store | Qdrant (semantic search index) |
 | LLM runtime | Ollama, run locally — two configurable model roles: Writer and Controller |
 | Auth | Single shared HTTP Basic Auth account (`ADMIN_USERNAME`/`ADMIN_PASSWORD`) — no per-user accounts, no OAuth |
-| CI | GitHub Actions: ruff + pytest + Alembic migration round-trip (backend), eslint + `next build` (frontend) |
+| CI | GitHub Actions: ruff + pytest + Alembic migration round-trip (backend), eslint + Vitest + `next build` (frontend) |
+
+Ollama calls (`generate`/`embed`) retry transient network failures up to 3 times with backoff before giving up. `scripts/backup.sh`/`scripts/restore.sh` handle PostgreSQL + Qdrant backup/restore for self-hosted deployments — see [the Backup and restore section of the User Guide](docs/user-guide.md#backup-and-restore).
 
 ## Known limitations
 
 - Single shared password, no per-user accounts or permissions — see [User Guide → Login](docs/user-guide.md#login).
-- AI chat history is kept only in the browser tab's memory, not persisted server-side.
 - The "AI設定" (AI settings) screen only sets this browser's default model names for the auto-write form; it does not change which Ollama servers the backend actually talks to (that's `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL`, server-side only).
+- The editor's Markdown toolbar/preview is not a rich-text editor — the stored content is always plain Markdown text.
 - No usage/token-tracking dashboard yet.
 
 Contributions and issue reports are welcome via this repository's issue tracker.
