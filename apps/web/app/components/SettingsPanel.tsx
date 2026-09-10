@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, downloadFile, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
+import { ensureNotificationPermission, notify } from "../lib/notify";
 
 type ImportJob = {
   id: number; mode: "novel" | "episodes"; source_filename: string;
@@ -139,6 +140,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   async function startImport() {
     if (!importFile) return;
     setImportBusy(true);
+    ensureNotificationPermission();
     try {
       const j: ImportJob = await postFile(`/projects/${project.id}/import/episodes`, importFile);
       setImportJob(j);
@@ -147,6 +149,10 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         setImportJob(latest);
         if ((latest.status === "completed" || latest.status === "error") && importTimer.current) {
           clearInterval(importTimer.current);
+          notify(
+            latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
+            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}話・更新${latest.updated_episodes}話）` : `: ${latest.last_message}`}`,
+          );
         }
       }, 2000);
     } finally { setImportBusy(false); }

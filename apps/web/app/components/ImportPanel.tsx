@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, postFile } from "../lib/api";
 import { Project } from "../lib/types";
+import { ensureNotificationPermission, notify } from "../lib/notify";
 
 type ImportJob = {
   id: number;
@@ -29,6 +30,7 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
   async function start() {
     if (!file) return;
     setBusy(true);
+    ensureNotificationPermission();
     try {
       const j: ImportJob = await postFile("/import/novel", file);
       setJob(j);
@@ -37,6 +39,10 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
         setJob(latest);
         if (latest.status === "completed" || latest.status === "error") {
           if (timer.current) clearInterval(timer.current);
+          notify(
+            latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
+            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}話・更新${latest.updated_episodes}話）` : `: ${latest.last_message}`}`,
+          );
         }
       }, 2000);
     } finally { setBusy(false); }
