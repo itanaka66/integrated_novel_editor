@@ -1,3 +1,10 @@
+---
+title: Beginner's Guide
+layout: default
+---
+
+[← Manual home](index.md) | [日本語](getting-started.ja.md)
+
 # Beginner's Guide
 
 This guide is for readers who aren't necessarily comfortable with Docker or command lines. For exact commands see the [Installation Manual](installation.md); for a full reference of every screen see the [User Guide](user-guide.md).

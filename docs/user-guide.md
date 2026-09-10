@@ -1,3 +1,10 @@
+---
+title: User Guide
+layout: default
+---
+
+[← Manual home](index.md) | [日本語](user-guide.ja.md)
+
 # User Guide (Operation Manual)
 
 A screen-by-screen reference. For setup, see the [Installation Manual](installation.md); for a gentler first walkthrough, see the [Beginner's Guide](getting-started.md).

@@ -1,3 +1,10 @@
+---
+title: Installation Manual
+layout: default
+---
+
+[← Manual home](index.md) | [日本語](installation.ja.md)
+
 # Installation Manual
 
 See [requirements.md](requirements.md) first to confirm your machine meets the prerequisites.

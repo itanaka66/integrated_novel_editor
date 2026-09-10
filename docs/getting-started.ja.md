@@ -1,3 +1,10 @@
+---
+title: はじめての方向けガイド
+layout: default
+---
+
+[← マニュアルトップ](index.md) | [English](getting-started.md)
+
 # はじめての方向けガイド
 
 このガイドは、プログラミングやDockerに詳しくない方でも迷わずアプリを使い始められるようにするためのものです。詳しいコマンドは[インストールマニュアル](installation.ja.md)、各画面の詳細は[操作マニュアル](user-guide.ja.md)を参照してください。

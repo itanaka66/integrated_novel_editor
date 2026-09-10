@@ -6,6 +6,8 @@ An AI-assisted writing environment for long-form novels (from a handful of episo
 
 ## Documentation
 
+Browse the online manual: **https://itanaka66.github.io/integrated_novel_editor/** — or read the same files directly in [`docs/`](docs/):
+
 | | English | 日本語 |
 |---|---|---|
 | Software requirements | [docs/requirements.md](docs/requirements.md) | [docs/requirements.ja.md](docs/requirements.ja.md) |

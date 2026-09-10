@@ -1,3 +1,10 @@
+---
+title: インストールマニュアル
+layout: default
+---
+
+[← マニュアルトップ](index.md) | [English](installation.md)
+
 # インストールマニュアル
 
 先に [requirements.ja.md](requirements.ja.md) で動作要件を確認してください。
