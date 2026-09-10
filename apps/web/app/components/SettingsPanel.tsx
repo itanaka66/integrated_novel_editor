@@ -1,16 +1,73 @@
 "use client";
-import { useState } from "react";
-import { downloadFile, put } from "../lib/api";
+import { useEffect, useState } from "react";
+import { api, downloadFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
 
+type SystemSettings = {
+  database_url_masked: string;
+  qdrant_url: string; qdrant_url_is_override: boolean;
+  ollama_url: string; ollama_url_is_override: boolean;
+  ollama_model: string; ollama_model_is_override: boolean;
+  ollama_embed_model: string; ollama_embed_model_is_override: boolean;
+  controller_ollama_url: string; controller_ollama_url_is_override: boolean;
+  controller_ollama_model: string; controller_ollama_model_is_override: boolean;
+};
+
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "export">("basic");
+  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "export">("basic");
   const [exporting, setExporting] = useState<string | null>(null);
   const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500 });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [defaults, setDefaults] = useState(loadModelDefaults());
+  const [sys, setSys] = useState<SystemSettings | null>(null);
+  const [sysForm, setSysForm] = useState({
+    qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
+    controller_ollama_url: "", controller_ollama_model: "",
+  });
+  const [sysBusy, setSysBusy] = useState(false);
+  const [sysSaved, setSysSaved] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "connection") return;
+    api("/system-settings").then((s: SystemSettings) => {
+      setSys(s);
+      setSysForm({
+        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
+        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
+        controller_ollama_model: s.controller_ollama_model,
+      });
+    });
+  }, [tab]);
+
+  async function saveConnection() {
+    setSysBusy(true); setSysSaved(false);
+    try {
+      const s: SystemSettings = await put("/system-settings", sysForm);
+      setSys(s);
+      setSysForm({
+        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
+        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
+        controller_ollama_model: s.controller_ollama_model,
+      });
+      setSysSaved(true);
+    } finally { setSysBusy(false); }
+  }
+
+  async function resetField(field: keyof typeof sysForm) {
+    setSysBusy(true); setSysSaved(false);
+    try {
+      const s: SystemSettings = await put("/system-settings", { [field]: "" });
+      setSys(s);
+      setSysForm({
+        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
+        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
+        controller_ollama_model: s.controller_ollama_model,
+      });
+      setSysSaved(true);
+    } finally { setSysBusy(false); }
+  }
 
   async function exportAs(format: "txt" | "md" | "epub") {
     setExporting(format);
@@ -35,6 +92,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       <div className="twinTabs">
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>基本設定</button>
         <button className={tab === "ai" ? "on" : ""} onClick={() => setTab("ai")}>AI設定</button>
+        <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
       </div>
       {tab === "basic" && (
@@ -61,6 +119,65 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
             <button onClick={() => { saveModelDefaults(defaults); setSaved(true); }}>保存</button>
             {saved && <span className="savedNote">保存しました</span>}
           </div>
+        </div>
+      )}
+      {tab === "connection" && (
+        <div className="entityForm" style={{ marginTop: 14 }}>
+          {!sys && <p style={{ gridColumn: "1/-1" }}>読み込み中...</p>}
+          {sys && (
+            <>
+              <label>
+                SQL（データベース）<input value={sys.database_url_masked} readOnly disabled />
+              </label>
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
+                データベース接続先は稼働中のアプリから安全に切り替えられないため、読み取り専用です。変更するにはサーバーの環境変数 <code>DATABASE_URL</code> を編集して再起動してください。
+              </p>
+
+              <label>
+                Qdrant URL {sys.qdrant_url_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.qdrant_url} onChange={(e) => setSysForm({ ...sysForm, qdrant_url: e.target.value })} placeholder="http://qdrant:6333" />
+              </label>
+              {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label>
+                Ollama 1（Writer）URL {sys.ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.ollama_url} onChange={(e) => setSysForm({ ...sysForm, ollama_url: e.target.value })} placeholder="http://ollama:11434" />
+              </label>
+              {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label>
+                Ollama 1（Writer）モデル {sys.ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.ollama_model} onChange={(e) => setSysForm({ ...sysForm, ollama_model: e.target.value })} />
+              </label>
+              {sys.ollama_model_is_override && <button type="button" onClick={() => resetField("ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label>
+                Ollama 1（Writer）埋め込みモデル {sys.ollama_embed_model_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.ollama_embed_model} onChange={(e) => setSysForm({ ...sysForm, ollama_embed_model: e.target.value })} />
+              </label>
+              {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label>
+                Ollama 2（Controller）URL {sys.controller_ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.controller_ollama_url} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_url: e.target.value })} placeholder="http://ollama:11434" />
+              </label>
+              {sys.controller_ollama_url_is_override && <button type="button" onClick={() => resetField("controller_ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <label>
+                Ollama 2（Controller）モデル {sys.controller_ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.controller_ollama_model} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_model: e.target.value })} />
+              </label>
+              {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
+
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
+                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはステートレスなクライアントのため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
+              </p>
+              <div className="entityFormActions">
+                <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? "保存中..." : "保存"}</button>
+                {sysSaved && <span className="savedNote">保存しました</span>}
+              </div>
+            </>
+          )}
         </div>
       )}
       {tab === "export" && (

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import httpx
-from .config import settings
+from .runtime_config import get_effective_config
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +30,17 @@ async def _post_with_retry(url, json, timeout):
  raise last_error
 
 async def generate(prompt,model=None,url=None,timeout=240):
- m=model or settings.ollama_model
- base=(url or settings.ollama_url).rstrip('/')
+ cfg=get_effective_config()
+ m=model or cfg.ollama_model
+ base=(url or cfg.ollama_url).rstrip('/')
  r=await _post_with_retry(base+'/api/generate',{'model':m,'prompt':prompt,'stream':False},timeout)
  return r.json().get('response',''),m
 
 async def controller_generate(prompt):
- return await generate(prompt, settings.controller_ollama_model, settings.controller_ollama_url, 180)
+ cfg=get_effective_config()
+ return await generate(prompt, cfg.controller_ollama_model, cfg.controller_ollama_url, 180)
 
 async def embed(texts):
- r=await _post_with_retry(settings.ollama_url.rstrip('/')+'/api/embed',{'model':settings.ollama_embed_model,'input':texts},180)
+ cfg=get_effective_config()
+ r=await _post_with_retry(cfg.ollama_url.rstrip('/')+'/api/embed',{'model':cfg.ollama_embed_model,'input':texts},180)
  return r.json()['embeddings']
