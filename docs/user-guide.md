@@ -91,7 +91,7 @@ The "検索・全置換" tab on the same screen is a separate, plain-text (not s
 
 ## AI Chat (AIチャット)
 
-A free-form chat with the same story context the Write screen's assistant uses. Conversation history is **persisted per project** (`GET`/`POST`/`DELETE /api/v1/projects/{id}/chat`) — it's still there when you come back to this screen or reload the page. "履歴を削除" permanently deletes it for that project.
+A free-form chat with the same story context the Write screen's assistant uses. Conversation history is **persisted per project** (`GET`/`POST`/`DELETE /api/v1/projects/{id}/chat`) — it's still there when you come back to this screen or reload the page. "履歴を削除" permanently deletes it for that project. Replies are rendered as Markdown (headings, bold, tables, rules), same as the Write screen's preview — not shown as raw `##`/`**`/`|` syntax.
 
 ## Auto-write (自動執筆)
 
@@ -140,7 +140,11 @@ If `GIT_REMOTE_URL` is set (a git remote URL with your Personal Access Token emb
 
 ## Backup and restore
 
-Not a screen — `scripts/backup.sh` and `scripts/restore.sh` at the repo root, run from a machine with the `docker-compose` stack up. `backup.sh [output-dir]` dumps PostgreSQL (`pg_dump`) and, if anything has been indexed, a Qdrant collection snapshot, into a timestamped directory. `restore.sh <backup-dir>` reverses that — **it replaces the current database contents with no confirmation prompt**, so double-check the path before running it. Ollama models aren't covered; re-pull them separately if needed. See the scripts' own comments for exact commands. The local-disk episode mirror (and its GitHub sync, if configured) is a separate, always-on backstop for episode text specifically — it isn't part of these scripts.
+Settings → "バックアップ" tab (a server-wide feature, not scoped to the current project): shows whether scheduled backups are on, the interval/retention currently configured, and a list of backups taken so far with what each one covers and its size. "今すぐバックアップ" (Backup now) triggers one on demand and shows its result (success/failure per component) right there.
+
+Scheduled backups are **off by default** — set `BACKUP_ENABLED=true` (`BACKUP_INTERVAL_SECONDS`, default 86400 = daily; `BACKUP_RETENTION_COUNT`, default 7, older ones are deleted automatically) to turn them on. Each run does the same thing `scripts/backup.sh` does by hand — a PostgreSQL dump (`pg_dump`) plus a Qdrant collection snapshot, if anything's been indexed — written to a timestamped folder under `BACKUP_DIR` (a container volume by default in the Docker Compose / desktop-installer setups). Unlike the standalone script, it resolves the Qdrant URL the same way the rest of the app does, including any live override set from 接続設定, not just a fixed env var.
+
+To restore, use `scripts/restore.sh <backup-dir>` at the repo root, run from a machine with the `docker-compose` stack up — **it replaces the current database contents with no confirmation prompt**, so double-check the path before running it. There's no restore button in the UI; restoring is inherently destructive to whatever's currently in the database, so it stays a deliberate command-line step. Ollama models aren't covered by any of this; re-pull them separately if needed. The local-disk episode mirror (and its GitHub sync, if configured) is a separate, always-on backstop for episode text specifically — it isn't part of the backup/restore flow above.
 
 ## Mobile
 

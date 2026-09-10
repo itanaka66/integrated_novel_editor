@@ -11,6 +11,10 @@ type ImportJob = {
   last_message: string; progress_percent: number;
 };
 
+type BackupEntry = { timestamp: string; has_postgres: boolean; has_qdrant: boolean; size_bytes: number };
+type BackupStatus = { enabled: boolean; interval_seconds: number; retention_count: number; backup_dir: string; backups: BackupEntry[] };
+type BackupResult = { timestamp: string; postgres_ok: boolean; postgres_error: string; qdrant_ok: boolean; qdrant_error: string; duration_seconds: number };
+
 type SystemSettings = {
   database_url_masked: string;
   qdrant_url: string; qdrant_url_is_override: boolean;
@@ -22,7 +26,7 @@ type SystemSettings = {
 };
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "export">("basic");
+  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export">("basic");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -41,6 +45,22 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [sysSaved, setSysSaved] = useState(false);
   type TestResult = { ok: boolean; message: string; latency_ms: number };
   const [testResults, setTestResults] = useState<Record<string, TestResult | "testing" | undefined>>({});
+  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupResult, setBackupResult] = useState<BackupResult | null>(null);
+
+  async function loadBackupStatus() {
+    setBackupStatus(await api("/backups"));
+  }
+
+  async function runBackupNow() {
+    setBackupBusy(true); setBackupResult(null);
+    try {
+      const r: BackupResult = await post("/backups/run", {});
+      setBackupResult(r);
+      await loadBackupStatus();
+    } finally { setBackupBusy(false); }
+  }
 
   async function testConnection(resultKey: string, target: string, url?: string, model?: string) {
     setTestResults((prev) => ({ ...prev, [resultKey]: "testing" }));
@@ -79,6 +99,11 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         controller_ollama_model: s.controller_ollama_model,
       });
     });
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "backup") return;
+    loadBackupStatus();
   }, [tab]);
 
   async function saveConnection() {
@@ -152,6 +177,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         <button className={tab === "ai" ? "on" : ""} onClick={() => setTab("ai")}>AI設定</button>
         <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
         <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>インポート</button>
+        <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>バックアップ</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
       </div>
       {tab === "basic" && (
@@ -279,6 +305,50 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 {importJob.status === "error" && `エラー: ${importJob.last_message}`}
               </p>
             </div>
+          )}
+        </div>
+      )}
+      {tab === "backup" && (
+        <div className="entityForm" style={{ marginTop: 14 }}>
+          {!backupStatus && <p style={{ gridColumn: "1/-1" }}>読み込み中...</p>}
+          {backupStatus && (
+            <>
+              <p style={{ gridColumn: "1/-1" }}>
+                データベース（PostgreSQL）とQdrantのバックアップです。全プロジェクト共通のサーバー全体の機能で、この作品専用の設定ではありません。
+              </p>
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
+                自動バックアップ：{backupStatus.enabled ? (
+                  <span className="savedNote">✓ 有効（{Math.round(backupStatus.interval_seconds / 3600)}時間ごと、直近{backupStatus.retention_count}件を保持、保存先: {backupStatus.backup_dir}）</span>
+                ) : (
+                  <span>無効（環境変数 <code>BACKUP_ENABLED=true</code> で有効化できます。詳しくは動作要件のドキュメントを参照してください）</span>
+                )}
+              </p>
+              <div className="entityFormActions">
+                <button onClick={runBackupNow} disabled={backupBusy}>{backupBusy ? "バックアップ中..." : "今すぐバックアップ"}</button>
+              </div>
+              {backupResult && (
+                <p style={{ gridColumn: "1/-1" }} className={backupResult.postgres_ok ? "savedNote" : "errorNote"}>
+                  {backupResult.postgres_ok ? "✓" : "✗"} PostgreSQL: {backupResult.postgres_ok ? "成功" : backupResult.postgres_error}
+                  {" / "}Qdrant: {backupResult.qdrant_ok ? "成功" : backupResult.qdrant_error}
+                  （{backupResult.duration_seconds}秒）
+                </p>
+              )}
+              <div style={{ gridColumn: "1/-1" }}>
+                <small>バックアップ履歴（最新{backupStatus.backups.length}件）</small>
+                {backupStatus.backups.length === 0 && <p className="searchSource">まだバックアップがありません。</p>}
+                {backupStatus.backups.map((b) => (
+                  <div className="resultCard" key={b.timestamp}>
+                    <b>{b.timestamp}</b>
+                    <p>
+                      PostgreSQL: {b.has_postgres ? "✓" : "—"} / Qdrant: {b.has_qdrant ? "✓" : "—"} / {(b.size_bytes / 1024 / 1024).toFixed(1)}MB
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
+                リストアは`scripts/restore.sh`から行います（確認プロンプトなしで現在のデータを置き換えるため、パスの確認を必ず行ってください）。詳しくは操作マニュアルの「バックアップとリストア」を参照してください。
+              </p>
+            </>
           )}
         </div>
       )}

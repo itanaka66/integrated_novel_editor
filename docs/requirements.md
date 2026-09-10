@@ -50,6 +50,17 @@ Qdrant URL and both Ollama endpoints/models above can also be changed live from 
 | `GIT_REMOTE_URL` | *(unset)* | A git remote URL with your token embedded (e.g. `https://<token>@github.com/<you>/<repo>.git`); when set, the mirror is auto-committed and pushed on a timer. Unset = disk mirror only, no GitHub sync |
 | `GIT_AUTOSYNC_INTERVAL_SECONDS` | `300` | How often the auto-commit/push loop runs |
 
+## Scheduled backups
+
+| Config | Default | Purpose |
+|---|---|---|
+| `BACKUP_ENABLED` | `false` | Turns on the scheduled PostgreSQL + Qdrant backup loop. Off by default; a manual backup ("今すぐバックアップ" in Settings, or `scripts/backup.sh`) works either way |
+| `BACKUP_DIR` | `./backups` | Where timestamped backup folders are written (a container volume in the Docker Compose / desktop-installer setups) |
+| `BACKUP_INTERVAL_SECONDS` | `86400` | How often a scheduled backup runs (default: daily) |
+| `BACKUP_RETENTION_COUNT` | `7` | How many of the most recent backups to keep; older ones are deleted automatically after each run |
+
+Restoring is a manual, command-line-only step (`scripts/restore.sh`) — see [User Guide](user-guide.md#backup-and-restore) for why.
+
 ## Ports used
 
 | Port | Service |

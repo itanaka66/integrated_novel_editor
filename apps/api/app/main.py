@@ -24,6 +24,7 @@ from .auto_writer import run_job, running as auto_write_running
 from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
+from . import backup as backup_mod
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -72,6 +73,7 @@ def init():
   cleanup_stale_auto_write_jobs(d)
   cleanup_stale_import_jobs(d)
  _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
+ _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
 MAX_PAGE_SIZE=500
@@ -143,6 +145,16 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
  for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
  db.commit();db.refresh(row)
  return _system_settings_out(db)
+@app.get('/api/v1/backups',response_model=BackupStatusOut)
+def backups_status():
+ return BackupStatusOut(
+  enabled=settings.backup_enabled,interval_seconds=settings.backup_interval_seconds,
+  retention_count=settings.backup_retention_count,backup_dir=settings.backup_dir,
+  backups=[BackupListEntry(**b) for b in backup_mod.list_backups()],
+ )
+@app.post('/api/v1/backups/run',response_model=BackupResult)
+def backups_run():
+ return BackupResult(**backup_mod.run_backup())
 @app.post('/api/v1/system-settings/test-connection',response_model=ConnectionTestResult)
 def system_settings_test_connection(x:ConnectionTestRequest):
  if x.target=='database':
