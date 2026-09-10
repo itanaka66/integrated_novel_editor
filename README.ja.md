@@ -22,6 +22,8 @@ docker compose up --build
 
 Webアプリは `http://localhost:3000`（ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログイン）、APIのインタラクティブドキュメントは `http://localhost:8000/docs` で開けます。Dockerを使わない構築方法も含めた詳細は[インストールマニュアル](docs/installation.ja.md)を参照してください。
 
+ターミナル操作をしたくない場合は、[Releasesページ](https://github.com/itanaka66/integrated_novel_editor/releases)から**Windows（`.exe`）**または**macOS（`.pkg`）**のデスクトップインストーラをどうぞ。Docker Desktopは別途必要ですが、それ以外はインストーラが行い、「起動」「停止」ショートカットが作成されます。詳しくは[installer/](installer/)とインストールマニュアルのデスクトップインストーラの項目を参照してください。
+
 ローカルOllamaのモデル取得：
 ```bash
 ollama pull qwen3:8b        # 手動AI支援（執筆画面・チャット）
