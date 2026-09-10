@@ -43,6 +43,20 @@ describe("ChatPanel", () => {
     expect(post).toHaveBeenCalledWith("/projects/1/chat", { content: "質問です" });
   });
 
+  it("renders assistant Markdown as HTML instead of raw syntax", async () => {
+    // AI replies are Markdown (headings/bold/tables/rules); dumping them as
+    // a single plain-text node ran every line together into one unreadable
+    // block. This locks in that they render as real elements instead.
+    vi.mocked(api).mockResolvedValue([
+      { id: 1, role: "assistant", content: "## 見出し\n\n**強調**テキスト\n\n| A | B |\n|---|---|\n| 1 | 2 |" },
+    ]);
+    render(<ChatPanel projectId={1} />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "見出し" })).toBeInTheDocument());
+    expect(screen.getByText("強調").tagName).toBe("STRONG");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
   it("clears history after confirmation", async () => {
     vi.mocked(api).mockResolvedValue([{ id: 1, role: "user", content: "hi" }]);
     vi.mocked(del).mockResolvedValue(undefined);

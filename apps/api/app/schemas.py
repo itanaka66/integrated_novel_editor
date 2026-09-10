@@ -117,6 +117,19 @@ class ConnectionTestRequest(BaseModel):
 class ConnectionTestResult(BaseModel):
     ok:bool; message:str; latency_ms:int
 
+class BackupResult(BaseModel):
+    timestamp:str
+    postgres_ok:bool; postgres_error:str
+    qdrant_ok:bool; qdrant_error:str
+    duration_seconds:float
+
+class BackupListEntry(BaseModel):
+    timestamp:str; has_postgres:bool; has_qdrant:bool; size_bytes:int
+
+class BackupStatusOut(BaseModel):
+    enabled:bool; interval_seconds:int; retention_count:int; backup_dir:str
+    backups:list[BackupListEntry]
+
 class SystemSettingsOut(BaseModel):
     database_url_masked:str
     qdrant_url:str; qdrant_url_is_override:bool

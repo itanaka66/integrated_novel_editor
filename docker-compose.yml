@@ -39,8 +39,13 @@ services:
       NOVEL_STORAGE_DIR: /novel_storage
       GIT_REMOTE_URL: ${GIT_REMOTE_URL:-}
       GIT_AUTOSYNC_INTERVAL_SECONDS: ${GIT_AUTOSYNC_INTERVAL_SECONDS:-300}
+      BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-7}
     volumes:
       - novel_storage:/novel_storage
+      - backups:/backups
     ports:
       - "8000:8000"
     depends_on:
@@ -66,3 +71,4 @@ volumes:
   qdrant_data:
   ollama_data:
   novel_storage:
+  backups:

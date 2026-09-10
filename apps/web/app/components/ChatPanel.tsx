@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { marked } from "marked";
 import { api, del, post } from "../lib/api";
 
 type Msg = { id: number; role: "user" | "assistant"; content: string };
@@ -41,7 +42,19 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
       <p>Context Builder（本文・人物・世界観・プロット・伏線・RAG）を踏まえた自由対話です。会話履歴はこの作品ごとにサーバーに保存され、次回開いたときも表示されます。</p>
       <div className="chatMessages">
         {messages.length === 0 && <div className="card"><b>質問してみましょう</b><p>例：「田中の現在の目標は？」「第3話の伏線はまだ回収されていない？」</p></div>}
-        {messages.map((m) => <div className={`chatBubble ${m.role}`} key={m.id}><b>{m.role === "user" ? "あなた" : "AI"}</b><p>{m.content}</p></div>)}
+        {messages.map((m) => (
+          <div className={`chatBubble ${m.role}`} key={m.id}>
+            <b>{m.role === "user" ? "あなた" : "AI"}</b>
+            {/* Single-user app; content is always this same admin's own
+                Markdown or this same admin's AI conversation (never
+                third-party input), so raw HTML rendering here carries no
+                cross-user XSS risk — same reasoning as WritePanel's preview.
+                Rendering as Markdown (instead of a plain <p>) is what keeps
+                AI replies with headings/tables/rules from turning into an
+                unreadable wall of "##"/"|"/"---" run together on one line. */}
+            <div className="chatMarkdown" dangerouslySetInnerHTML={{ __html: marked.parse(m.content || "", { async: false, breaks: true }) as string }} />
+          </div>
+        ))}
         {busy && <div className="chatBubble assistant"><b>AI</b><p className="thinking">考えています...</p></div>}
       </div>
       <div className="chatInputRow">

@@ -50,6 +50,17 @@ ControllerとWriterは**同じ**Ollamaサーバー（モデル名だけ変える
 | `GIT_REMOTE_URL` | （未設定） | トークンを埋め込んだgitリモートURL（例：`https://<token>@github.com/<you>/<repo>.git`）。設定するとこのミラーがタイマーで自動コミット・プッシュされます。未設定の場合はディスクへのミラーのみでGitHub同期は行われません |
 | `GIT_AUTOSYNC_INTERVAL_SECONDS` | `300` | 自動コミット・プッシュを実行する間隔（秒） |
 
+## 自動バックアップ
+
+| 設定項目 | デフォルト | 用途 |
+|---|---|---|
+| `BACKUP_ENABLED` | `false` | PostgreSQL＋Qdrantの自動バックアップループを有効化します。既定は無効。手動バックアップ（設定画面の「今すぐバックアップ」、または`scripts/backup.sh`）はどちらでも利用可能です |
+| `BACKUP_DIR` | `./backups` | タイムスタンプ付きバックアップフォルダの保存先（Docker Compose／デスクトップインストーラ構成では既定でコンテナボリューム） |
+| `BACKUP_INTERVAL_SECONDS` | `86400` | 自動バックアップの実行間隔（既定：1日ごと） |
+| `BACKUP_RETENTION_COUNT` | `7` | 保持する直近バックアップの件数。それより古いものは実行のたびに自動削除されます |
+
+リストアはコマンドライン操作（`scripts/restore.sh`）のみです。理由は[操作マニュアル](user-guide.ja.md#バックアップとリストア)を参照してください。
+
 ## 使用ポート
 
 | ポート | サービス |
