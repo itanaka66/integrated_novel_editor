@@ -36,6 +36,11 @@ services:
       CORS_ORIGINS: http://localhost:3000
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your .env before running}
+      NOVEL_STORAGE_DIR: /novel_storage
+      GIT_REMOTE_URL: ${GIT_REMOTE_URL:-}
+      GIT_AUTOSYNC_INTERVAL_SECONDS: ${GIT_AUTOSYNC_INTERVAL_SECONDS:-300}
+    volumes:
+      - novel_storage:/novel_storage
     ports:
       - "8000:8000"
     depends_on:
@@ -60,3 +65,4 @@ volumes:
   postgres_data:
   qdrant_data:
   ollama_data:
+  novel_storage:

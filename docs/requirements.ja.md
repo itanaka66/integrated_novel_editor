@@ -33,6 +33,16 @@ Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグイン�
 
 ControllerとWriterは**同じ**Ollamaサーバー（モデル名だけ変える）でも、**別々の**Ollamaサーバー／GPUでも構いません。別マシンに分ける場合は`CONTROLLER_OLLAMA_URL`をそのマシンのアドレスに設定してください。大きめのモデル（`qwen3.8:27b`、`qwen3:14b`）を動かすには十分なVRAMを持つGPUが必要です。非力なマシンで導入する前に、Ollamaのモデル一覧でサイズを確認してください。
 
+上記のQdrant URLと両方のOllamaのURL/モデルは、アプリの設定＞接続設定画面からも実行中に変更できます（[操作マニュアル](user-guide.ja.md#接続設定)参照）。多くの場合、環境変数を編集して再起動するよりこちらの方が手軽です。
+
+## ローカルディスク／GitHubへのエピソード保存
+
+| 設定項目 | デフォルト | 用途 |
+|---|---|---|
+| `NOVEL_STORAGE_DIR` | `./novel_storage` | エピソード本文が保存のたびにMarkdownとしてミラーされるディスク上の場所（エピソードごとに1ファイル） |
+| `GIT_REMOTE_URL` | （未設定） | トークンを埋め込んだgitリモートURL（例：`https://<token>@github.com/<you>/<repo>.git`）。設定するとこのミラーがタイマーで自動コミット・プッシュされます。未設定の場合はディスクへのミラーのみでGitHub同期は行われません |
+| `GIT_AUTOSYNC_INTERVAL_SECONDS` | `300` | 自動コミット・プッシュを実行する間隔（秒） |
+
 ## 使用ポート
 
 | ポート | サービス |
