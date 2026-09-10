@@ -112,6 +112,22 @@ class SystemSettingsOut(BaseModel):
     controller_ollama_model:str; controller_ollama_model_is_override:bool
     updated_at:object|None=None
 
+class TextSearchMatch(BaseModel):
+    episode_id:int; number:int; title:str; count:int; snippets:list[str]
+
+class TextSearchResult(BaseModel):
+    matches:list[TextSearchMatch]; total_matches:int
+
+class TextReplaceRequest(BaseModel):
+    query:str; replacement:str; case_sensitive:bool=True
+    episode_ids:list[int]|None=None # None = every episode in the project
+
+class TextReplaceEpisodeResult(BaseModel):
+    episode_id:int; number:int; title:str; replaced_count:int
+
+class TextReplaceResult(BaseModel):
+    episodes:list[TextReplaceEpisodeResult]; total_replaced:int
+
 class SystemSettingsUpdate(BaseModel):
     # Empty string clears the override (reverts to the env var). Omitted
     # (unset) fields are left untouched.

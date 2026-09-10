@@ -33,6 +33,16 @@ Native installs still need Ollama and (if you want vector search) Qdrant — Doc
 
 The Controller and Writer can point at the **same** Ollama server (just different model names) or at **two separate** Ollama servers/GPUs — set `CONTROLLER_OLLAMA_URL` to a second machine's address to split them. Larger models (`qwen3.8:27b`, `qwen3:14b`) need a GPU with enough VRAM to hold them; check the model's Ollama listing for its size before pulling it on modest hardware.
 
+Qdrant URL and both Ollama endpoints/models above can also be changed live from the app's 設定 > 接続設定 screen — see the [User Guide](user-guide.md#connection-settings) — which is usually more convenient than editing these env vars and restarting.
+
+## Local-disk / GitHub episode storage
+
+| Config | Default | Purpose |
+|---|---|---|
+| `NOVEL_STORAGE_DIR` | `./novel_storage` | Where episode text is mirrored to disk as Markdown, one file per episode, on every save |
+| `GIT_REMOTE_URL` | *(unset)* | A git remote URL with your token embedded (e.g. `https://<token>@github.com/<you>/<repo>.git`); when set, the mirror is auto-committed and pushed on a timer. Unset = disk mirror only, no GitHub sync |
+| `GIT_AUTOSYNC_INTERVAL_SECONDS` | `300` | How often the auto-commit/push loop runs |
+
 ## Ports used
 
 | Port | Service |

@@ -67,6 +67,10 @@ Semantic search over your episode text via Qdrant. If Qdrant is unreachable, it 
 
 Checking "すべての作品を検索対象にする" (search all projects) switches to `POST /api/v1/rag/search-all`, which searches across every project's episodes instead of just the current one. Each result shows which project it came from. There's no "rebuild index" button in this mode — rebuild from each project's own Search screen instead.
 
+### Search and replace-all (検索・全置換)
+
+The "検索・全置換" tab on the same screen is a separate, plain-text (not semantic) find/replace scoped to the current project's episodes (`GET`/`POST /api/v1/projects/{id}/text-search` and `/text-replace`). Enter a search string and optional replacement, toggle case sensitivity, and search — each matching episode is listed with its hit count and a few surrounding snippets, and is pre-selected for replacement (uncheck any you want to skip). Replacing is scoped to whichever episodes are checked; each affected episode's prior content is snapshotted to its revision history first (see Write screen's revision history), so a replace-all can always be undone episode by episode afterward.
+
 ## AI Chat (AIチャット)
 
 A free-form chat with the same story context the Write screen's assistant uses. Conversation history is **persisted per project** (`GET`/`POST`/`DELETE /api/v1/projects/{id}/chat`) — it's still there when you come back to this screen or reload the page. "履歴を削除" permanently deletes it for that project.
@@ -98,12 +102,25 @@ Every 5th episode written also triggers a full continuity audit automatically.
 ## Settings (設定)
 
 - **基本設定 (Basic)**: edit the project's name, genre, synopsis, rules, and episode target. Saves immediately via the API.
-- **AI設定 (AI settings)**: sets *this browser's* default Writer/Controller model names, which prefill the Auto-write start form. This does **not** change the actual Ollama server addresses — those are fixed server-side via `CONTROLLER_OLLAMA_URL`/`OLLAMA_URL` and can only be changed by whoever deploys the app (see [Software Requirements](requirements.md)).
+- **AI設定 (AI settings)**: sets *this browser's* default Writer/Controller model names, which prefill the Auto-write start form.
+- **接続設定 (Connection settings)**: Qdrant URL, and both Ollama endpoints/models (Writer and Controller) can be changed here and take effect immediately, no restart needed — see [Connection settings](#connection-settings) below. SQL (the database itself) is shown masked, read-only.
 - **エクスポート (Export)**: downloads every episode's prose (title + summary + body only — no characters/world/plot/foreshadowing data) as a single file in one of three formats: plain text (`.txt`), Markdown (`.md`), or a minimal but valid EPUB3 (`.epub`) you can open in any e-reader. `GET /api/v1/projects/{id}/export?format=txt|md|epub`.
+
+### Connection settings
+
+`GET`/`PUT /api/v1/system-settings`. Each of Qdrant URL, Ollama 1 (Writer) URL/model/embedding-model, and Ollama 2 (Controller) URL/model can be overridden from this screen; a field shows "（上書き中）" when it's currently an override rather than the server's environment-variable default. Saving an empty value for a field reverts it to that default. These overrides are stored in the database and take effect on the very next AI/search call — Qdrant and Ollama clients are constructed fresh per call, so there's nothing to restart.
+
+The database connection (`DATABASE_URL`) is deliberately **not** editable from here — the app would have to swap the very connection it's using to read this settings screen out from under itself mid-request, which isn't safe to do live. Change it via the `DATABASE_URL` environment variable and restart the server instead.
+
+## Local-disk mirror and GitHub auto-save
+
+Every episode save also writes a plain Markdown copy to disk (`NOVEL_STORAGE_DIR`, one folder per project, one `.md` file per episode — filenames are keyed by episode number and id, so renaming a title never orphans a file). The database stays authoritative for everything the app reads; this is a write-through mirror, kept for readability outside the app and as the basis for GitHub sync.
+
+If `GIT_REMOTE_URL` is set (a git remote URL with your Personal Access Token embedded, e.g. `https://<token>@github.com/<you>/<repo>.git`), a background loop commits whatever changed in that mirror and pushes it every `GIT_AUTOSYNC_INTERVAL_SECONDS` (default 300). Nothing is pushed if `GIT_REMOTE_URL` is unset — the local-disk mirror still works on its own. Push/commit failures (no network, bad token, remote rejected) are logged and simply retried on the next tick; they never interrupt saving in the app itself.
 
 ## Backup and restore
 
-Not a screen — `scripts/backup.sh` and `scripts/restore.sh` at the repo root, run from a machine with the `docker-compose` stack up. `backup.sh [output-dir]` dumps PostgreSQL (`pg_dump`) and, if anything has been indexed, a Qdrant collection snapshot, into a timestamped directory. `restore.sh <backup-dir>` reverses that — **it replaces the current database contents with no confirmation prompt**, so double-check the path before running it. Ollama models aren't covered; re-pull them separately if needed. See the scripts' own comments for exact commands.
+Not a screen — `scripts/backup.sh` and `scripts/restore.sh` at the repo root, run from a machine with the `docker-compose` stack up. `backup.sh [output-dir]` dumps PostgreSQL (`pg_dump`) and, if anything has been indexed, a Qdrant collection snapshot, into a timestamped directory. `restore.sh <backup-dir>` reverses that — **it replaces the current database contents with no confirmation prompt**, so double-check the path before running it. Ollama models aren't covered; re-pull them separately if needed. See the scripts' own comments for exact commands. The local-disk episode mirror (and its GitHub sync, if configured) is a separate, always-on backstop for episode text specifically — it isn't part of these scripts.
 
 ## Mobile
 

@@ -1,5 +1,6 @@
 import logging
 import json
+import re
 from fastapi import FastAPI,Depends,HTTPException,Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,7 @@ from .continuity import update_character_states, check_continuity
 from .auth import BasicAuthMiddleware
 from . import export as export_mod
 from . import runtime_config as rc
+from . import file_sync
 import asyncio
 from .auto_writer import run_job, running as auto_write_running
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +31,7 @@ app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 # error instead of a readable 401.
 app.add_middleware(BasicAuthMiddleware)
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+_background_tasks=set() # strong refs so asyncio doesn't GC in-flight background tasks (autosync loop)
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
  while start<len(s):
@@ -57,6 +60,7 @@ def init():
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
   cleanup_stale_auto_write_jobs(d)
+ _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
 MAX_PAGE_SIZE=500
@@ -128,10 +132,57 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
  for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
  db.commit();db.refresh(row)
  return _system_settings_out(db)
+def _snippets(text,query,case_sensitive,max_snippets=3,context=24):
+ hay=text if case_sensitive else text.lower()
+ needle=query if case_sensitive else query.lower()
+ out=[];start=0
+ while len(out)<max_snippets:
+  i=hay.find(needle,start)
+  if i<0:break
+  s=max(0,i-context);e=min(len(text),i+len(query)+context)
+  out.append(('…' if s>0 else '')+text[s:e]+('…' if e<len(text) else ''))
+  start=i+len(needle)
+ return out
+def _count(text,query,case_sensitive):
+ return (text if case_sensitive else text.lower()).count(query if case_sensitive else query.lower())
+@app.get('/api/v1/projects/{pid}/text-search',response_model=TextSearchResult)
+def project_text_search(pid:int,query:str,case_sensitive:bool=True,db:Session=Depends(get_db)):
+ if not query:return TextSearchResult(matches=[],total_matches=0)
+ eps=list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all())
+ matches=[]
+ for e in eps:
+  c=_count(e.content or '',query,case_sensitive)
+  if c:matches.append(TextSearchMatch(episode_id=e.id,number=e.number,title=e.title,count=c,snippets=_snippets(e.content or '',query,case_sensitive)))
+ return TextSearchResult(matches=matches,total_matches=sum(m.count for m in matches))
+@app.post('/api/v1/projects/{pid}/text-replace',response_model=TextReplaceResult)
+async def project_text_replace(pid:int,x:TextReplaceRequest,db:Session=Depends(get_db)):
+ if not x.query:raise HTTPException(400,'query must not be empty')
+ q=select(Episode).where(Episode.project_id==pid)
+ if x.episode_ids is not None:q=q.where(Episode.id.in_(x.episode_ids))
+ eps=list(db.scalars(q.order_by(Episode.number)).all())
+ results=[]
+ for e in eps:
+  content=e.content or ''
+  n=_count(content,x.query,x.case_sensitive)
+  if not n:continue
+  snapshot_revision(db,e)
+  if x.case_sensitive:
+   e.content=content.replace(x.query,x.replacement)
+  else:
+   e.content=re.sub(re.escape(x.query),lambda m:x.replacement,content,flags=re.IGNORECASE)
+  db.commit();db.refresh(e)
+  file_sync.write_episode_file(e.project,e)
+  try:await index(chunks(e))
+  except Exception:logger.exception('RAG indexing failed for episode %s after text-replace',e.id)
+  results.append(TextReplaceEpisodeResult(episode_id=e.id,number=e.number,title=e.title,replaced_count=n))
+ return TextReplaceResult(episodes=results,total_replaced=sum(r.replaced_count for r in results))
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
-def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e);return e
+def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):
+ e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e)
+ file_sync.write_episode_file(e.project,e)
+ return e
 MAX_REVISIONS_PER_EPISODE=20
 def snapshot_revision(db,e):
  db.add(EpisodeRevision(episode_id=e.id,project_id=e.project_id,title=e.title,summary=e.summary,content=e.content))
@@ -147,6 +198,7 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  if 'content' in updates and updates['content']!=e.content:snapshot_revision(db,e)
  for k,v in updates.items():setattr(e,k,v)
  db.commit();db.refresh(e)
+ file_sync.write_episode_file(e.project,e)
  warnings=[]
  try:
   await index(chunks(e))
@@ -160,7 +212,11 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
   warnings.append('キャラクター状態の自動更新に失敗しました。AIサービスの状態を確認してください。')
  return EpisodeSaveOut(**EpisodeOut.model_validate(e).model_dump(),warnings=warnings)
 @app.delete('/api/v1/episodes/{eid}',status_code=204)
-def episode_delete(eid:int,db:Session=Depends(get_db)):crud_delete(db,Episode,eid,'Episode')
+def episode_delete(eid:int,db:Session=Depends(get_db)):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ project=e.project
+ file_sync.delete_episode_file(project,e)
+ db.delete(e);db.commit()
 @app.get('/api/v1/episodes/{eid}/revisions',response_model=list[EpisodeRevisionListOut])
 def episode_revisions(eid:int,db:Session=Depends(get_db)):
  crud_get_or_404(db,Episode,eid,'Episode')
@@ -178,6 +234,7 @@ def episode_revision_restore(eid:int,rid:int,db:Session=Depends(get_db)):
  snapshot_revision(db,e)
  e.title=r.title;e.summary=r.summary;e.content=r.content
  db.commit();db.refresh(e)
+ file_sync.write_episode_file(e.project,e)
  return e
 @app.get('/api/v1/projects/{pid}/characters',response_model=list[CharacterOut])
 def chars(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return crud_list(db,Character,pid,limit,offset)

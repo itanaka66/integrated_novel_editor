@@ -11,6 +11,14 @@ from app import auth as auth_module
 
 
 @pytest.fixture(autouse=True)
+def isolate_novel_storage_dir(tmp_path, monkeypatch):
+    # Episode add/update/delete now mirror to settings.novel_storage_dir on
+    # every call — without this, every test in the suite would write real
+    # files under the repo's default "./novel_storage".
+    monkeypatch.setattr(settings, "novel_storage_dir", str(tmp_path / "novel_storage"))
+
+
+@pytest.fixture(autouse=True)
 def reset_login_rate_limit():
     # The brute-force guard in app.auth keeps its failure counts in a
     # module-level dict, keyed by client IP — Starlette's TestClient always
