@@ -52,6 +52,13 @@ export async function post(p: string, b: unknown) {
 export async function put(p: string, b: unknown) {
   return api(p, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
 }
+export async function postFile(p: string, file: File) {
+  // No Content-Type header here on purpose — the browser sets the
+  // multipart boundary itself; overriding it breaks the upload.
+  const form = new FormData();
+  form.append("file", file);
+  return api(p, { method: "POST", body: form });
+}
 export async function del(p: string) {
   return api(p, { method: "DELETE" });
 }

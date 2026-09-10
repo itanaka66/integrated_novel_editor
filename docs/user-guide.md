@@ -29,6 +29,17 @@ Fields: name (required), genre, synopsis (あらすじ), free-text "rules" (詳�
 
 The landing screen after opening a project: header with name/genre/synopsis and progress, a 3×3 icon grid to every other screen, and a "最近の更新" (recent activity) list of the 5 highest-numbered episodes.
 
+## Importing from a text file
+
+Two ways in, both from a plain `.txt` file in the "なろう" (Shosetsuka ni Naro) bracket-section export format:
+
+- **Dashboard → "ファイルからインポート"**: creates a brand-new project from a full novel export — a metadata header (title/synopsis/genre) followed by episodes delimited by `------- エピソードN開始 -------` separators. The parsed title/synopsis/genre become the new project's fields, and every episode is created.
+- **Settings → "インポート" tab, inside an existing project**: adds or updates episodes in *that* project from either the same full-export format or a headerless draft-episodes file (episodes delimited by `-------第N話「タイトル」-------`, title embedded in the separator itself). An episode number that already exists gets its content overwritten (the prior content is snapshotted to that episode's revision history first, same as any other edit); a new number is created.
+
+Both run as a background job you can watch progress on (`GET /api/v1/import-jobs/{id}`, polled every 2 seconds) rather than a single blocking request, because importing tens of episodes then triggers real AI work for each one: RAG re-indexing, then the same character-state extraction a normal save does, and — once every episode is in — one whole-project continuity audit. A large import can take several minutes; the progress bar shows episodes processed / total, and you can close the dialog without cancelling the job (Dashboard's importer; the Settings tab's importer keeps polling as long as you stay on the tab).
+
+The parser auto-detects which of the two formats a file is — you don't pick a mode. A file matching neither (no recognizable episode separators) is rejected up front with a 400, before any job is created.
+
 ## Write
 
 The core writing screen, three columns:
