@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, post, streamSSE } from "../lib/api";
 import { loadModelDefaults } from "../lib/modelDefaults";
+import { ensureNotificationPermission, notify } from "../lib/notify";
 
 const PHASE_LABEL: any = {
   queued: "待機中", series_planner: "Series Planner（全体構成）", arc_planner: "Arc / Mini Arc / Episode Planner",
@@ -9,6 +10,7 @@ const PHASE_LABEL: any = {
   completed: "完了", stopped: "停止", error: "エラー",
 };
 const ACTIVE_STATUSES = ["queued", "running", "stopping"];
+const TERMINAL_STATUSES = ["completed", "stopped", "error"];
 
 export default function AutoWritePanel({ projectId }: { projectId: number }) {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -21,6 +23,7 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   const [overwrite, setOverwrite] = useState(false);
   const [writerModel, setWriterModel] = useState(defaults.writer);
   const [controllerModel, setControllerModel] = useState(defaults.controller);
+  const notifiedJobIds = useRef<Set<number>>(new Set());
 
   async function loadJobs() {
     const list = await api(`/projects/${projectId}/auto-write/jobs`);
@@ -38,12 +41,20 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
       if (data.error) return;
       setJob(data);
       setJobs((js) => js.map((j) => (j.id === data.id ? data : j)));
+      if (TERMINAL_STATUSES.includes(data.status) && !notifiedJobIds.current.has(data.id)) {
+        notifiedJobIds.current.add(data.id);
+        notify(
+          data.status === "completed" ? "自動執筆が完了しました" : data.status === "error" ? "自動執筆でエラーが発生しました" : "自動執筆を停止しました",
+          `EP.${data.start_episode}–${data.end_episode}（${data.episodes_written}話 完了）`,
+        );
+      }
     });
     return stop;
   }, [job?.id]);
 
   async function start() {
     setBusy(true);
+    ensureNotificationPermission();
     try {
       const x = await post("/auto-write/start", {
         project_id: projectId, start_episode: startEpisode, end_episode: endEpisode, premise, overwrite,
