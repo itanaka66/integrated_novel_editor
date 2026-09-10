@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Project } from "../lib/types";
 import NewProjectForm from "./NewProjectForm";
+import ImportPanel from "./ImportPanel";
 
 type Twin = { metrics: { episodes: number; continuity_open: number }; health: { score: number; label: string } };
 
@@ -10,6 +11,7 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
   const [projects, setProjects] = useState<Project[]>([]);
   const [twins, setTwins] = useState<Record<number, Twin>>({});
   const [showNew, setShowNew] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [busy, setBusy] = useState(true);
 
   async function load() {
@@ -30,7 +32,10 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
     <div className="dashboard">
       <header className="dashboardHeader">
         <div><small>DASHBOARD</small><h1>こんにちは、ユーザーさん</h1></div>
-        <button className="add" onClick={() => setShowNew(true)}>＋ 新規作品作成</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowImport(true)}>ファイルからインポート</button>
+          <button className="add" onClick={() => setShowNew(true)}>＋ 新規作品作成</button>
+        </div>
       </header>
       {busy && projects.length === 0 ? <p className="loading">読み込み中...</p> : null}
       <div className="dashboardGrid">
@@ -66,6 +71,7 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
         )}
       </div>
       {showNew && <NewProjectForm onCancel={() => setShowNew(false)} onCreated={(p) => { setShowNew(false); onOpen(p); }} />}
+      {showImport && <ImportPanel onCancel={() => setShowImport(false)} onImported={(p) => { setShowImport(false); onOpen(p); }} />}
     </div>
   );
 }

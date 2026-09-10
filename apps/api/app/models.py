@@ -95,6 +95,24 @@ class AutoWriteJob(Base):
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 
+class ImportJob(Base):
+    __tablename__='import_jobs'
+    id:Mapped[int]=mapped_column(primary_key=True)
+    # project_id starts NULL for a 'novel' import (the project doesn't exist
+    # yet — the job creates it) and is filled in once that happens; an
+    # 'episodes' import into an existing project has it set from the start.
+    project_id:Mapped[int|None]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True,nullable=True)
+    mode:Mapped[str]=mapped_column(String(20)) # 'novel' | 'episodes'
+    source_filename:Mapped[str]=mapped_column(String(300),default='')
+    status:Mapped[str]=mapped_column(String(30),default='queued') # queued|running|completed|error
+    total_episodes:Mapped[int]=mapped_column(Integer,default=0)
+    processed_episodes:Mapped[int]=mapped_column(Integer,default=0)
+    created_episodes:Mapped[int]=mapped_column(Integer,default=0)
+    updated_episodes:Mapped[int]=mapped_column(Integer,default=0)
+    last_message:Mapped[str]=mapped_column(Text,default='')
+    created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+    updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
+
 class SeriesPlan(Base):
     __tablename__='series_plans'
     id:Mapped[int]=mapped_column(primary_key=True)

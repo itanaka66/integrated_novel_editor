@@ -102,6 +102,13 @@ class ChatMessageOut(BaseModel):
     id:int; project_id:int; role:str; content:str; created_at:object
     model_config=ConfigDict(from_attributes=True)
 
+class ImportJobOut(BaseModel):
+    id:int; project_id:int|None; mode:str; source_filename:str; status:str
+    total_episodes:int; processed_episodes:int; created_episodes:int; updated_episodes:int
+    last_message:str; created_at:object; updated_at:object
+    progress_percent:float=0
+    model_config=ConfigDict(from_attributes=True)
+
 class SystemSettingsOut(BaseModel):
     database_url_masked:str
     qdrant_url:str; qdrant_url_is_override:bool

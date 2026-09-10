@@ -1,8 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { api, downloadFile, put } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, downloadFile, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
+
+type ImportJob = {
+  id: number; mode: "novel" | "episodes"; source_filename: string;
+  status: "queued" | "running" | "completed" | "error";
+  total_episodes: number; processed_episodes: number; created_episodes: number; updated_episodes: number;
+  last_message: string; progress_percent: number;
+};
 
 type SystemSettings = {
   database_url_masked: string;
@@ -15,7 +22,11 @@ type SystemSettings = {
 };
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "export">("basic");
+  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "export">("basic");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importJob, setImportJob] = useState<ImportJob | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const importTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500 });
   const [busy, setBusy] = useState(false);
@@ -69,6 +80,24 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
     } finally { setSysBusy(false); }
   }
 
+  useEffect(() => () => { if (importTimer.current) clearInterval(importTimer.current); }, []);
+
+  async function startImport() {
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const j: ImportJob = await postFile(`/projects/${project.id}/import/episodes`, importFile);
+      setImportJob(j);
+      importTimer.current = setInterval(async () => {
+        const latest: ImportJob = await api(`/import-jobs/${j.id}`);
+        setImportJob(latest);
+        if ((latest.status === "completed" || latest.status === "error") && importTimer.current) {
+          clearInterval(importTimer.current);
+        }
+      }, 2000);
+    } finally { setImportBusy(false); }
+  }
+
   async function exportAs(format: "txt" | "md" | "epub") {
     setExporting(format);
     try {
@@ -93,6 +122,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>基本設定</button>
         <button className={tab === "ai" ? "on" : ""} onClick={() => setTab("ai")}>AI設定</button>
         <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>接続設定</button>
+        <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>インポート</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>エクスポート</button>
       </div>
       {tab === "basic" && (
@@ -177,6 +207,36 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 {sysSaved && <span className="savedNote">保存しました</span>}
               </div>
             </>
+          )}
+        </div>
+      )}
+      {tab === "import" && (
+        <div className="entityForm" style={{ marginTop: 14 }}>
+          <p style={{ gridColumn: "1/-1" }}>
+            なろう形式のテキストファイル（本編・下書きのどちらでも可）から、この作品「{project.name}」にエピソードを追加インポートします。既存の話数と重複する場合は本文を上書きし、上書き前の内容は改訂履歴に保存されます。
+          </p>
+          {(!importJob || importJob.status === "completed" || importJob.status === "error") && (
+            <>
+              <label>
+                ファイル *
+                <input type="file" accept=".txt" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+              </label>
+              <div className="entityFormActions">
+                <button onClick={startImport} disabled={importBusy || !importFile}>{importBusy ? "開始中..." : "インポート開始"}</button>
+              </div>
+            </>
+          )}
+          {importJob && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <p><b>{importJob.source_filename}</b></p>
+              <div className="progress"><i style={{ width: `${importJob.progress_percent}%` }} /></div>
+              <p className="searchSource">
+                {importJob.status === "queued" && "キューに追加しました…"}
+                {importJob.status === "running" && `${importJob.processed_episodes}/${importJob.total_episodes}話 処理中… ${importJob.last_message}`}
+                {importJob.status === "completed" && importJob.last_message}
+                {importJob.status === "error" && `エラー: ${importJob.last_message}`}
+              </p>
+            </div>
           )}
         </div>
       )}

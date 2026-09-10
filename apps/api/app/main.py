@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from fastapi import FastAPI,Depends,HTTPException,Response
+from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -18,8 +18,11 @@ from .auth import BasicAuthMiddleware
 from . import export as export_mod
 from . import runtime_config as rc
 from . import file_sync
+from .revisions import snapshot_revision
 import asyncio
 from .auto_writer import run_job, running as auto_write_running
+from .importer import run_import_job, running as import_running
+from . import narou_import as ni
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -46,6 +49,12 @@ def cleanup_stale_auto_write_jobs(d):
   job.status='error'; job.last_message='サーバー再起動により中断されました。再度開始してください。'
  if stale: d.commit()
  return len(stale)
+def cleanup_stale_import_jobs(d):
+ stale=d.scalars(select(ImportJob).where(ImportJob.status.in_(['queued','running']))).all()
+ for job in stale:
+  job.status='error'; job.last_message='サーバー再起動により中断されました。再度インポートしてください。'
+ if stale: d.commit()
+ return len(stale)
 @app.on_event('startup')
 def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
@@ -60,6 +69,7 @@ def init():
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
   cleanup_stale_auto_write_jobs(d)
+  cleanup_stale_import_jobs(d)
  _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
@@ -176,6 +186,44 @@ async def project_text_replace(pid:int,x:TextReplaceRequest,db:Session=Depends(g
   except Exception:logger.exception('RAG indexing failed for episode %s after text-replace',e.id)
   results.append(TextReplaceEpisodeResult(episode_id=e.id,number=e.number,title=e.title,replaced_count=n))
  return TextReplaceResult(episodes=results,total_replaced=sum(r.replaced_count for r in results))
+def _import_job_out(job):
+ pct=round(job.processed_episodes/job.total_episodes*100,1) if job.total_episodes else 0.0
+ return ImportJobOut(**{c.name:getattr(job,c.name) for c in ImportJob.__table__.columns},progress_percent=pct)
+async def _decode_upload(f:UploadFile)->str:
+ raw=await f.read()
+ for enc in ('utf-8-sig','cp932'):
+  try:return raw.decode(enc)
+  except UnicodeDecodeError:continue
+ raise HTTPException(400,'テキストファイルの文字コードを認識できませんでした（UTF-8 / Shift-JISのみ対応）。')
+@app.post('/api/v1/import/novel',response_model=ImportJobOut)
+async def import_novel(file:UploadFile=File(...),db:Session=Depends(get_db)):
+ text=await _decode_upload(file)
+ if not ni.is_novel_export(text) and not ni.is_draft_episodes(text):
+  raise HTTPException(400,'なろう形式のエピソード区切りが見つかりませんでした。')
+ job=ImportJob(mode='novel',source_filename=file.filename or '',status='queued',last_message='キューに追加しました')
+ db.add(job);db.commit();db.refresh(job)
+ task=asyncio.create_task(run_import_job(job.id,text))
+ import_running[job.id]=task
+ return _import_job_out(job)
+@app.post('/api/v1/projects/{pid}/import/episodes',response_model=ImportJobOut)
+async def import_episodes(pid:int,file:UploadFile=File(...),db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ text=await _decode_upload(file)
+ if not ni.is_novel_export(text) and not ni.is_draft_episodes(text):
+  raise HTTPException(400,'なろう形式のエピソード区切りが見つかりませんでした。')
+ job=ImportJob(project_id=pid,mode='episodes',source_filename=file.filename or '',status='queued',last_message='キューに追加しました')
+ db.add(job);db.commit();db.refresh(job)
+ task=asyncio.create_task(run_import_job(job.id,text))
+ import_running[job.id]=task
+ return _import_job_out(job)
+@app.get('/api/v1/import-jobs/{job_id}',response_model=ImportJobOut)
+def import_job_get(job_id:int,db:Session=Depends(get_db)):
+ job=crud_get_or_404(db,ImportJob,job_id,'Import job')
+ return _import_job_out(job)
+@app.get('/api/v1/projects/{pid}/import-jobs',response_model=list[ImportJobOut])
+def import_jobs_for_project(pid:int,db:Session=Depends(get_db)):
+ jobs=db.scalars(select(ImportJob).where(ImportJob.project_id==pid).order_by(ImportJob.id.desc()).limit(20)).all()
+ return [_import_job_out(j) for j in jobs]
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
@@ -183,13 +231,6 @@ def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):
  e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e)
  file_sync.write_episode_file(e.project,e)
  return e
-MAX_REVISIONS_PER_EPISODE=20
-def snapshot_revision(db,e):
- db.add(EpisodeRevision(episode_id=e.id,project_id=e.project_id,title=e.title,summary=e.summary,content=e.content))
- db.commit()
- old=db.scalars(select(EpisodeRevision).where(EpisodeRevision.episode_id==e.id).order_by(EpisodeRevision.id.desc()).offset(MAX_REVISIONS_PER_EPISODE)).all()
- for o in old:db.delete(o)
- if old:db.commit()
 @app.put('/api/v1/episodes/{eid}',response_model=EpisodeSaveOut)
 async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
  e=db.get(Episode,eid)
