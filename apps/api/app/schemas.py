@@ -109,6 +109,14 @@ class ImportJobOut(BaseModel):
     progress_percent:float=0
     model_config=ConfigDict(from_attributes=True)
 
+class ConnectionTestRequest(BaseModel):
+    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama'
+    url:str|None=None # ignored for 'database'; tests whatever value the form currently holds, saved or not
+    model:str|None=None # 'ollama' / 'controller_ollama' only — checks the model is pulled, not just reachable
+
+class ConnectionTestResult(BaseModel):
+    ok:bool; message:str; latency_ms:int
+
 class SystemSettingsOut(BaseModel):
     database_url_masked:str
     qdrant_url:str; qdrant_url_is_override:bool

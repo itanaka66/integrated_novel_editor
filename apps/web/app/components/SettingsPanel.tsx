@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, downloadFile, postFile, put } from "../lib/api";
+import { api, downloadFile, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
 
@@ -39,6 +39,35 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
+  type TestResult = { ok: boolean; message: string; latency_ms: number };
+  const [testResults, setTestResults] = useState<Record<string, TestResult | "testing" | undefined>>({});
+
+  async function testConnection(resultKey: string, target: string, url?: string, model?: string) {
+    setTestResults((prev) => ({ ...prev, [resultKey]: "testing" }));
+    try {
+      const r: TestResult = await post("/system-settings/test-connection", { target, url, model });
+      setTestResults((prev) => ({ ...prev, [resultKey]: r }));
+    } catch {
+      setTestResults((prev) => ({ ...prev, [resultKey]: { ok: false, message: "テストに失敗しました（通信エラー）。", latency_ms: 0 } }));
+    }
+  }
+
+  function TestButton({ target, resultKey, url, model }: { target: string; resultKey?: string; url?: string; model?: string }) {
+    const key = resultKey ?? target;
+    const result = testResults[key];
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <button type="button" onClick={() => testConnection(key, target, url, model)} disabled={result === "testing"}>
+          {result === "testing" ? "テスト中..." : "接続テスト"}
+        </button>
+        {result && result !== "testing" && (
+          <span className={result.ok ? "savedNote" : "errorNote"}>
+            {result.ok ? "✓" : "✗"} {result.message}（{result.latency_ms}ms）
+          </span>
+        )}
+      </span>
+    );
+  }
 
   useEffect(() => {
     if (tab !== "connection") return;
@@ -159,6 +188,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               <label>
                 SQL（データベース）<input value={sys.database_url_masked} readOnly disabled />
               </label>
+              <div><TestButton target="database" /></div>
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
                 データベース接続先は稼働中のアプリから安全に切り替えられないため、読み取り専用です。変更するにはサーバーの環境変数 <code>DATABASE_URL</code> を編集して再起動してください。
               </p>
@@ -167,13 +197,19 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 Qdrant URL {sys.qdrant_url_is_override && <span className="savedNote">（上書き中）</span>}
                 <input value={sysForm.qdrant_url} onChange={(e) => setSysForm({ ...sysForm, qdrant_url: e.target.value })} placeholder="http://qdrant:6333" />
               </label>
-              {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>既定値に戻す</button>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="qdrant" url={sysForm.qdrant_url} />
+                {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>既定値に戻す</button>}
+              </div>
 
               <label>
                 Ollama 1（Writer）URL {sys.ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
                 <input value={sysForm.ollama_url} onChange={(e) => setSysForm({ ...sysForm, ollama_url: e.target.value })} placeholder="http://ollama:11434" />
               </label>
-              {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="ollama" url={sysForm.ollama_url} model={sysForm.ollama_model} />
+                {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+              </div>
 
               <label>
                 Ollama 1（Writer）モデル {sys.ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
@@ -185,13 +221,19 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 Ollama 1（Writer）埋め込みモデル {sys.ollama_embed_model_is_override && <span className="savedNote">（上書き中）</span>}
                 <input value={sysForm.ollama_embed_model} onChange={(e) => setSysForm({ ...sysForm, ollama_embed_model: e.target.value })} />
               </label>
-              {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} />
+                {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>既定値に戻す</button>}
+              </div>
 
               <label>
                 Ollama 2（Controller）URL {sys.controller_ollama_url_is_override && <span className="savedNote">（上書き中）</span>}
                 <input value={sysForm.controller_ollama_url} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_url: e.target.value })} placeholder="http://ollama:11434" />
               </label>
-              {sys.controller_ollama_url_is_override && <button type="button" onClick={() => resetField("controller_ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <TestButton target="controller_ollama" url={sysForm.controller_ollama_url} model={sysForm.controller_ollama_model} />
+                {sys.controller_ollama_url_is_override && <button type="button" onClick={() => resetField("controller_ollama_url")} disabled={sysBusy}>既定値に戻す</button>}
+              </div>
 
               <label>
                 Ollama 2（Controller）モデル {sys.controller_ollama_model_is_override && <span className="savedNote">（上書き中）</span>}
