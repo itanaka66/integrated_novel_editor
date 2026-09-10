@@ -1,4 +1,4 @@
-# AI Novel Studio
+# Integrated Novel Editor (INE)
 
 English version → [README.md](README.md)
 

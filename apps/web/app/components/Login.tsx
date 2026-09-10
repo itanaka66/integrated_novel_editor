@@ -23,7 +23,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
-        <b>✦ Novel Studio</b>
+        <b>✦ Integrated Novel Editor</b>
         <p>AIと創る、あなただけの物語</p>
         <input placeholder="ユーザー名" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
         <input placeholder="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />

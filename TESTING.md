@@ -1,4 +1,4 @@
-# AI Novel Studio v0.10 — Testing
+# Integrated Novel Editor (INE) v0.10 — Testing
 
 ## Backend
 

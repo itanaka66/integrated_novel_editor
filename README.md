@@ -1,4 +1,4 @@
-# AI Novel Studio
+# Integrated Novel Editor (INE)
 
 日本語版はこちら → [README.ja.md](README.ja.md)
 

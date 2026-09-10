@@ -4,7 +4,7 @@ This guide is for readers who aren't necessarily comfortable with Docker or comm
 
 ## What this app does
 
-AI Novel Studio is a writing environment for long-form novels (from a handful of episodes up to ~500). It combines:
+Integrated Novel Editor (INE) is a writing environment for long-form novels (from a handful of episodes up to ~500). It combines:
 
 - A writing screen with an AI assistant that can continue your prose, summarize, proofread, or check for contradictions.
 - A structured story database (characters, world entities, plot, foreshadowing, timeline) that the AI reads before generating text, so it stays consistent with what you've already established.

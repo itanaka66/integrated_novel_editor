@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
  logger.warning('ADMIN_PASSWORD is not set; using the insecure default. Set ADMIN_USERNAME/ADMIN_PASSWORD before exposing this service.')
-app=FastAPI(title='AI Novel Studio API',version='0.5.0')
+app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 # Starlette wraps middleware in reverse of add order (last added = outermost),
 # so BasicAuthMiddleware is added first: CORS must stay outermost or a 401
 # response never gets CORS headers and the browser reports an opaque network
