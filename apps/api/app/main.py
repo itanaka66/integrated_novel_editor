@@ -23,6 +23,7 @@ import asyncio
 from .auto_writer import run_job, running as auto_write_running
 from .importer import run_import_job, running as import_running
 from . import narou_import as ni
+from . import connection_test
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -142,6 +143,19 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
  for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
  db.commit();db.refresh(row)
  return _system_settings_out(db)
+@app.post('/api/v1/system-settings/test-connection',response_model=ConnectionTestResult)
+def system_settings_test_connection(x:ConnectionTestRequest):
+ if x.target=='database':
+  ok,msg,ms=connection_test.test_database()
+ elif x.target=='qdrant':
+  if not x.url:raise HTTPException(400,'url is required')
+  ok,msg,ms=connection_test.test_qdrant(x.url)
+ elif x.target in ('ollama','controller_ollama'):
+  if not x.url:raise HTTPException(400,'url is required')
+  ok,msg,ms=connection_test.test_ollama(x.url,x.model)
+ else:
+  raise HTTPException(400,f'unknown target: {x.target}')
+ return ConnectionTestResult(ok=ok,message=msg,latency_ms=ms)
 def _snippets(text,query,case_sensitive,max_snippets=3,context=24):
  hay=text if case_sensitive else text.lower()
  needle=query if case_sensitive else query.lower()

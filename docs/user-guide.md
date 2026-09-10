@@ -130,6 +130,8 @@ Every 5th episode written also triggers a full continuity audit automatically.
 
 The database connection (`DATABASE_URL`) is deliberately **not** editable from here — the app would have to swap the very connection it's using to read this settings screen out from under itself mid-request, which isn't safe to do live. Change it via the `DATABASE_URL` environment variable and restart the server instead.
 
+Every row (including the read-only SQL one) has a "接続テスト" (test connection) button — `POST /api/v1/system-settings/test-connection`. It probes the *value currently in that field*, whether or not it's been saved yet, so you can check a new URL before committing to it: a real `SELECT 1` for the database, `get_collections()` for Qdrant, and `GET /api/tags` for either Ollama endpoint (the two model fields additionally check that the named model is actually pulled, not just that the server answers). Each probe times out after 8 seconds and reports round-trip latency alongside success/failure — it never touches what's saved, only what you're about to save.
+
 ## Local-disk mirror and GitHub auto-save
 
 Every episode save also writes a plain Markdown copy to disk (`NOVEL_STORAGE_DIR`, one folder per project, one `.md` file per episode — filenames are keyed by episode number and id, so renaming a title never orphans a file). The database stays authoritative for everything the app reads; this is a write-through mirror, kept for readability outside the app and as the basis for GitHub sync.
