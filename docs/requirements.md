@@ -1,3 +1,10 @@
+---
+title: Software Requirements
+layout: default
+---
+
+[← Manual home](index.md) | [日本語](requirements.ja.md)
+
 # Software Requirements
 
 ## Option A — Docker (recommended)

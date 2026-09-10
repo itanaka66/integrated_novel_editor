@@ -1,3 +1,10 @@
+---
+title: 操作マニュアル
+layout: default
+---
+
+[← マニュアルトップ](index.md) | [English](user-guide.md)
+
 # 操作マニュアル
 
 画面ごとの詳細リファレンスです。導入方法は[インストールマニュアル](installation.ja.md)、初めての方向けの流れは[はじめての方向けガイド](getting-started.ja.md)を参照してください。

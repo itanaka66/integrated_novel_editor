@@ -1,3 +1,10 @@
+---
+title: 動作要件
+layout: default
+---
+
+[← マニュアルトップ](index.md) | [English](requirements.md)
+
 # 動作要件
 
 ## 方式A — Docker（推奨）

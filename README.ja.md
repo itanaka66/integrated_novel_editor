@@ -6,6 +6,8 @@ English version → [README.md](README.md)
 
 ## ドキュメント
 
+オンラインマニュアル: **https://itanaka66.github.io/integrated_novel_editor/** — もしくは[`docs/`](docs/)配下のファイルを直接どうぞ。
+
 | | English | 日本語 |
 |---|---|---|
 | 動作要件 | [docs/requirements.md](docs/requirements.md) | [docs/requirements.ja.md](docs/requirements.ja.md) |
