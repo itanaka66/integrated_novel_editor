@@ -15,6 +15,7 @@ from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import BasicAuthMiddleware
 from . import export as export_mod
+from . import runtime_config as rc
 import asyncio
 from .auto_writer import run_job, running as auto_write_running
 logging.basicConfig(level=logging.INFO)
@@ -102,6 +103,31 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  if format=='epub':
   return Response(export_mod.build_epub(p,eps),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
  raise HTTPException(400,'format must be one of: txt, md, epub')
+
+def _system_settings_out(db):
+ row=db.get(RuntimeConfig,rc.SINGLETON_ID)
+ cfg=rc.get_effective_config(db)
+ def override(v):return bool(v)
+ return SystemSettingsOut(
+  database_url_masked=rc.mask_database_url(settings.database_url),
+  qdrant_url=cfg.qdrant_url,qdrant_url_is_override=override(row.qdrant_url if row else None),
+  ollama_url=cfg.ollama_url,ollama_url_is_override=override(row.ollama_url if row else None),
+  ollama_model=cfg.ollama_model,ollama_model_is_override=override(row.ollama_model if row else None),
+  ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
+  controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
+  controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
+  updated_at=row.updated_at if row else None,
+ )
+@app.get('/api/v1/system-settings',response_model=SystemSettingsOut)
+def system_settings_get(db:Session=Depends(get_db)):return _system_settings_out(db)
+@app.put('/api/v1/system-settings',response_model=SystemSettingsOut)
+def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
+ row=db.get(RuntimeConfig,rc.SINGLETON_ID)
+ if not row:
+  row=RuntimeConfig(id=rc.SINGLETON_ID);db.add(row)
+ for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
+ db.commit();db.refresh(row)
+ return _system_settings_out(db)
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)

@@ -1,10 +1,10 @@
 import logging
 from qdrant_client import QdrantClient,models
-from .config import settings
 from .ollama import embed
+from .runtime_config import get_effective_config
 logger=logging.getLogger(__name__)
 COL='novel_story_memory'
-def client(): return QdrantClient(url=settings.qdrant_url)
+def client(): return QdrantClient(url=get_effective_config().qdrant_url)
 def ensure(size):
  c=client()
  names=[x.name for x in c.get_collections().collections]

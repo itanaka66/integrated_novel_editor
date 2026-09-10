@@ -160,3 +160,22 @@ class ChatMessage(Base):
     role:Mapped[str]=mapped_column(String(20))
     content:Mapped[str]=mapped_column(Text,default='')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
+
+class RuntimeConfig(Base):
+    """A single-row table of live-editable connection settings.
+
+    NULL means "no override; use the ADMIN_* / OLLAMA_* / QDRANT_*
+    environment variable". DATABASE_URL deliberately has no column here —
+    hot-swapping the connection an already-running process uses to read
+    this very table is unsafe, so it stays env/restart-only. See
+    docs/user-guide.md#connection-settings.
+    """
+    __tablename__='runtime_config'
+    id:Mapped[int]=mapped_column(primary_key=True,default=1)
+    qdrant_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
+    ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
+    ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    ollama_embed_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    controller_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
+    controller_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)

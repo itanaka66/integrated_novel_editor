@@ -4,6 +4,21 @@ import httpx
 import pytest
 
 from app import ollama
+from app.runtime_config import EffectiveConfig
+
+# generate()/embed() resolve their defaults via get_effective_config(), which
+# (with no `db` passed) opens its own session against the app's configured
+# database — real Postgres in a normal deployment, unreachable in this test
+# environment. These are unit tests of the HTTP retry logic only, so stub it
+# out rather than needing a real database up.
+_FAKE_CONFIG = EffectiveConfig(
+    qdrant_url="http://qdrant:6333",
+    ollama_url="http://ollama:11434",
+    ollama_model="stub-writer-model",
+    ollama_embed_model="stub-embed-model",
+    controller_ollama_url="http://ollama:11434",
+    controller_ollama_model="stub-controller-model",
+)
 
 
 class _FakeResponse:
@@ -42,6 +57,7 @@ class _FlakyClient:
 def test_generate_retries_transient_failures_then_succeeds(monkeypatch):
     _FlakyClient.calls["count"] = 0
     monkeypatch.setattr(ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
     monkeypatch.setattr(ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=1, payload={"response": "ok"}, **kw))
 
     text, model = asyncio.run(ollama.generate("hello", model="test-model"))
@@ -53,6 +69,7 @@ def test_generate_retries_transient_failures_then_succeeds(monkeypatch):
 def test_generate_gives_up_after_max_attempts(monkeypatch):
     _FlakyClient.calls["count"] = 0
     monkeypatch.setattr(ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
     monkeypatch.setattr(ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=99, payload={}, **kw))
 
     with pytest.raises(httpx.ConnectError):

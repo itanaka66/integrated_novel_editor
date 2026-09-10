@@ -101,3 +101,23 @@ class ChatMessageCreate(BaseModel): content:str
 class ChatMessageOut(BaseModel):
     id:int; project_id:int; role:str; content:str; created_at:object
     model_config=ConfigDict(from_attributes=True)
+
+class SystemSettingsOut(BaseModel):
+    database_url_masked:str
+    qdrant_url:str; qdrant_url_is_override:bool
+    ollama_url:str; ollama_url_is_override:bool
+    ollama_model:str; ollama_model_is_override:bool
+    ollama_embed_model:str; ollama_embed_model_is_override:bool
+    controller_ollama_url:str; controller_ollama_url_is_override:bool
+    controller_ollama_model:str; controller_ollama_model_is_override:bool
+    updated_at:object|None=None
+
+class SystemSettingsUpdate(BaseModel):
+    # Empty string clears the override (reverts to the env var). Omitted
+    # (unset) fields are left untouched.
+    qdrant_url:str|None=None
+    ollama_url:str|None=None
+    ollama_model:str|None=None
+    ollama_embed_model:str|None=None
+    controller_ollama_url:str|None=None
+    controller_ollama_model:str|None=None
