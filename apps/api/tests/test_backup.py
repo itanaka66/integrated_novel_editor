@@ -2,6 +2,20 @@ import asyncio
 from pathlib import Path
 
 from app import backup
+from app.runtime_config import EffectiveConfig
+
+# _snapshot_qdrant resolves its URL via get_effective_config(), which (with
+# no `db` passed) opens its own session against the app's configured
+# database — real Postgres in CI, not up in this test environment. These
+# tests are about the backup logic only, so stub it out.
+_FAKE_CONFIG = EffectiveConfig(
+    qdrant_url="http://qdrant:6333",
+    ollama_url="http://ollama:11434",
+    ollama_model="stub-writer-model",
+    ollama_embed_model="stub-embed-model",
+    controller_ollama_url="http://ollama:11434",
+    controller_ollama_model="stub-controller-model",
+)
 
 
 def test_dump_postgres_reports_failure_when_pg_dump_is_missing(tmp_path, monkeypatch):
@@ -28,6 +42,7 @@ def test_snapshot_qdrant_skips_when_collection_missing(monkeypatch):
         def get(self, url, **kw):
             return _FakeResponse()
 
+    monkeypatch.setattr(backup, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
     monkeypatch.setattr(backup.httpx, "Client", lambda **kw: _FakeClient())
     ok, msg = backup._snapshot_qdrant(Path("/tmp/unused.snapshot"))
     assert ok is False
