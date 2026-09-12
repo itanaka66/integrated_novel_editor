@@ -32,7 +32,7 @@ cd integrated_novel_editor
 cp .env.example .env
 ```
 
-Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`.
+Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`. If you'll open the web app from anywhere other than `http://localhost:3000` (a LAN IP, a different port, a custom domain), also set `CORS_ORIGINS` to that origin — the browser will otherwise block the web app's API calls.
 
 ```bash
 docker compose up --build
