@@ -25,6 +25,15 @@ Everything runs on your own machine (or your own server) — no external cloud A
 - Docker (recommended). See [Software Requirements](requirements.md) for details.
 - Follow the [Installation Manual](installation.md) to actually get it running. This guide picks up from "it's installed, now what?"
 
+Not sure which install path applies to you? Pick based on your OS/environment:
+
+| You're on... | Use... |
+|---|---|
+| Windows or macOS, don't want a terminal | [Desktop installer](installation.md#2b-option-a2--desktop-installer-windows--macos) (`.exe`/`.pkg` from [Releases](https://github.com/itanaka66/integrated_novel_editor/releases)) |
+| Linux | [`./scripts/install-linux.sh`](installation.md#linux-guided-install-script) — installs Docker/Ollama if missing and walks through setup |
+| Any OS, comfortable with a terminal | [Docker Compose](installation.md#2-option-a--docker-compose) directly |
+| A cloud VM / remote server, for multi-user or remote access | [Cloud / remote server guide](installation.md#2c-option-a3--cloud--remote-server) |
+
 ## Your first steps
 
 ### 1. Log in

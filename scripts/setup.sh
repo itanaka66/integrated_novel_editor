@@ -98,6 +98,21 @@ else
   set_var CONTROLLER_OLLAMA_URL "$controller_url"
 fi
 
+# --- Access address (LAN/cloud) -----------------------------------------
+echo ""
+echo "このWebアプリにブラウザでアクセスするアドレスを入力してください（このマシン上のブラウザだけなら localhost のままで構いません）。"
+echo "Enter the address you'll open the web app from in a browser (leave as localhost if that's always this same machine)."
+access_host=$(ask "アクセス用ホスト名／IP / Access hostname or IP" "localhost")
+if [ "$access_host" = "localhost" ]; then
+  set_var CORS_ORIGINS "http://localhost:3000"
+  set_var NEXT_PUBLIC_API_URL "http://localhost:8000/api/v1"
+else
+  set_var CORS_ORIGINS "http://${access_host}:3000"
+  set_var NEXT_PUBLIC_API_URL "http://${access_host}:8000/api/v1"
+  echo "→ CORS_ORIGINS / NEXT_PUBLIC_API_URL を http://${access_host} 用に設定しました。"
+  echo "  (HTTPS・独自ドメインを使う場合は .env を直接編集してください)"
+fi
+
 # --- Admin password ------------------------------------------------------
 echo ""
 current_password=$(grep '^ADMIN_PASSWORD=' .env | cut -d= -f2- || true)

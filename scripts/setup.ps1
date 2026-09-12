@@ -94,6 +94,21 @@ try {
         Set-EnvVar "CONTROLLER_OLLAMA_URL" $controllerUrl
     }
 
+    # --- Access address (LAN/cloud) ---
+    Write-Host ""
+    Write-Host "このWebアプリにブラウザでアクセスするアドレスを入力してください（このマシン上のブラウザだけなら localhost のままで構いません）。"
+    Write-Host "Enter the address you'll open the web app from in a browser (leave as localhost if that's always this same machine)."
+    $accessHost = Ask "アクセス用ホスト名／IP / Access hostname or IP" "localhost"
+    if ($accessHost -eq "localhost") {
+        Set-EnvVar "CORS_ORIGINS" "http://localhost:3000"
+        Set-EnvVar "NEXT_PUBLIC_API_URL" "http://localhost:8000/api/v1"
+    } else {
+        Set-EnvVar "CORS_ORIGINS" "http://${accessHost}:3000"
+        Set-EnvVar "NEXT_PUBLIC_API_URL" "http://${accessHost}:8000/api/v1"
+        Write-Host "→ CORS_ORIGINS / NEXT_PUBLIC_API_URL を http://${accessHost} 用に設定しました。"
+        Write-Host "  (HTTPS・独自ドメインを使う場合は .env を直接編集してください)"
+    }
+
     # --- Admin password ---
     Write-Host ""
     $currentPassword = Get-EnvVar "ADMIN_PASSWORD"

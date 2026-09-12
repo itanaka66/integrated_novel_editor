@@ -49,6 +49,18 @@ Log in with the username `admin` and the `ADMIN_PASSWORD` you set.
 
 To stop: `docker compose down`. To stop **and delete all data** (Postgres + Qdrant volumes): `docker compose down -v`.
 
+### Linux: guided install script
+
+On Linux there's no separate desktop installer, but `./scripts/install-linux.sh` covers the same ground as Option A above in one guided pass: it checks for Docker and offers to install it via the [official convenience script](https://docs.docker.com/engine/install/) (confirms before running anything that needs `sudo`), checks for Ollama and offers to install it via the [official install script](https://ollama.com), then runs `scripts/setup.sh` for you and offers to start the stack immediately.
+
+```bash
+git clone <this repository's URL>
+cd integrated_novel_editor
+./scripts/install-linux.sh
+```
+
+Safe to re-run any time.
+
 ## 2b. Option A2 — Desktop installer (Windows / macOS)
 
 For a machine that shouldn't need `git clone` or a terminal, download the installer from the [Releases page](https://github.com/itanaka66/integrated_novel_editor/releases):
@@ -59,6 +71,22 @@ For a machine that shouldn't need `git clone` or a terminal, download the instal
 Either way, [Docker Desktop](https://www.docker.com/products/docker-desktop/) is still a separate prerequisite — install it first. The launcher shortcut checks for Docker, starts it if it's not already running, brings up the same four containers as Option A (pulling prebuilt images from GHCR instead of building them locally, so there's no build step), and opens http://localhost:3000. First launch generates a random `ADMIN_PASSWORD` into an `.env` file next to the installed files and shows it once in a dialog — write it down. Ollama is **not** installed by this installer; do step 1 above regardless of which option you use.
 
 This installer path is a thin convenience layer over Option A, not a different deployment: it writes the same `docker-compose.yml`/`.env` shape into the install folder and drives `docker compose` under the hood, so anything in this manual or in [requirements.md](requirements.md) about environment variables, ports, or troubleshooting still applies verbatim — the settings screen's [connection settings](user-guide.md#connection-settings) work exactly the same way.
+
+## 2c. Option A3 — Cloud / remote server
+
+This is Option A (Docker Compose) run on a remote machine instead of your own — a cloud VM (AWS/GCP/Azure/DigitalOcean/etc.) or any server you can SSH into, so you and others can reach the app from more than one computer. The extra steps beyond Option A are all about the app being reachable from *another* machine at all.
+
+1. **Provision a Linux VM.** Ubuntu 22.04/24.04 is the most tested choice. 8 GB RAM / 10 GB disk minimum (see [requirements.md](requirements.md)) — more if Ollama also runs on this same VM.
+2. **Install and start INE** using the Linux guided installer above (`./scripts/install-linux.sh`), or Option A's manual steps. When `scripts/setup.sh` asks for the "access hostname or IP", answer with the VM's public IP or domain name — **not** `localhost`. This sets both `CORS_ORIGINS` and `NEXT_PUBLIC_API_URL` correctly; getting this step wrong is the most common cloud-deployment mistake (see the note below).
+3. **Open the firewall.** Allow inbound TCP on port `3000` (web app) and `8000` (API) from wherever you'll connect — your own IP, or `0.0.0.0/0` if it truly needs to be public. Most cloud providers also require a separate "security group" / firewall rule in their console in addition to any OS-level firewall (`ufw`, etc.). Do **not** open port `11434` (Ollama) to the internet — see the security note below.
+4. **Where should Ollama run?** Either on the same VM (needs a GPU-equipped instance type to be usable for anything beyond the smallest models) or on a GPU machine you already own, reachable from the VM over a private network/VPN. Point `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL` at wherever it actually runs.
+5. Open `http://<vm-ip-or-domain>:3000` from any machine and log in as usual.
+
+**Why `NEXT_PUBLIC_API_URL` matters here specifically:** it's baked into the web app's JavaScript and read by *your browser*, not the server — so "localhost" in that value always means the visitor's own laptop, not the VM, and every API call would silently fail to connect for anyone except someone opening a browser directly on the VM itself. `scripts/setup.sh` sets it for you from the hostname you give it; if you skip that script, set it by hand in `.env` before running `docker compose up --build` (changing it later requires recreating the `web` container, e.g. `docker compose up -d --build web`, since it only takes effect for a fresh container).
+
+**Security note — Ollama has no built-in authentication.** Anyone who can reach its port can use your GPU and pull whatever text out of it your models will produce. Never expose port `11434` directly to the public internet; keep it on a private network, restrict it with firewall rules to only the INE server's IP, or reach it over an SSH tunnel / VPN.
+
+**Optional — a real domain with HTTPS:** the setup above serves plain HTTP on custom ports, which is fine for testing or a trusted small team. For a public deployment on a real domain, put a reverse proxy such as [Caddy](https://caddyserver.com/) in front of ports 3000/8000 — Caddy issues and renews a TLS certificate automatically for a domain you own, letting you drop the `:3000`/`:8000` ports entirely and access everything over `https://your-domain`. Remember to update `CORS_ORIGINS`/`NEXT_PUBLIC_API_URL` to the `https://` domain once you do.
 
 ## 3. Option B — Running natively
 
