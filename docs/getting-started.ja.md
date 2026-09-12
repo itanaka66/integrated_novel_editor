@@ -25,6 +25,15 @@ Integrated Novel Editor（INE）は、長編小説（1話〜500話規模）を�
 - Docker（推奨）。詳細は[動作要件](requirements.ja.md)を参照。
 - 導入自体は[インストールマニュアル](installation.ja.md)の手順に従ってください。このガイドは「導入が終わった後、何をすればいいか」を説明します。
 
+どの方式を選べばいいか迷ったら、お使いの環境で選んでください：
+
+| お使いの環境 | 使うもの |
+|---|---|
+| Windows・macOSで、ターミナル操作をしたくない | [デスクトップインストーラ](installation.ja.md#2b-方式a2--デスクトップインストーラwindows--macos)（[Releases](https://github.com/itanaka66/integrated_novel_editor/releases)の`.exe`／`.pkg`） |
+| Linux | [`./scripts/install-linux.sh`](installation.ja.md#linux-ガイド付きインストールスクリプト) — Docker/Ollamaが無ければインストールし、セットアップまで案内します |
+| どのOSでも、ターミナル操作は問題ない | [Docker Compose](installation.ja.md#2-方式a--docker-compose)を直接使用 |
+| クラウドVM／リモートサーバーで、複数人・リモートからアクセスしたい | [クラウド／リモートサーバー向けガイド](installation.ja.md#2c-方式a3--クラウドリモートサーバー) |
+
 ## 最初の一歩
 
 ### 1. ログインする

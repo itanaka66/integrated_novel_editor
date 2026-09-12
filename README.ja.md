@@ -50,6 +50,8 @@ Webアプリは `http://localhost:3000`（ユーザー名`admin`と設定した`
 
 ターミナル操作をしたくない場合は、[Releasesページ](https://github.com/itanaka66/integrated_novel_editor/releases)から**Windows（`.exe`）**または**macOS（`.pkg`）**のデスクトップインストーラをどうぞ。Docker Desktopは別途必要ですが、それ以外はインストーラが行い、「起動」「停止」ショートカットが作成されます。詳しくは[installer/](installer/)とインストールマニュアルのデスクトップインストーラの項目を参照してください。
 
+**Linux**では`./scripts/install-linux.sh`が同等のガイド付き手順です。Docker/Ollamaが無ければインストールを提案し（`sudo`が必要な操作の前には必ず確認します）、セットアップまで案内します。複数マシンからアクセスできるように**クラウドVM**へデプロイしたい場合は[クラウド／リモートサーバー向けガイド](docs/installation.ja.md#2c-方式a3--クラウドリモートサーバー)を参照してください。中身は同じDocker Compose構成に、リモートから到達できるようにするためのファイアウォール・ホスト名設定を加えたものです。
+
 ローカルOllamaのモデル取得：
 ```bash
 ollama pull qwen3:8b        # 手動AI支援（執筆画面・チャット）

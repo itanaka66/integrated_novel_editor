@@ -50,6 +50,8 @@ Open the web app at `http://localhost:3000` (log in with `admin` and your `ADMIN
 
 Prefer not to touch a terminal? Grab the **Windows (`.exe`)** or **macOS (`.pkg`)** desktop installer from the [Releases page](https://github.com/itanaka66/integrated_novel_editor/releases) — Docker Desktop is still required, but the installer handles everything else and gives you "Launch"/"Stop" shortcuts. See [installer/](installer/) and the Installation Manual's desktop-installer section for details.
 
+On **Linux**, `./scripts/install-linux.sh` is the equivalent guided path — it installs Docker/Ollama if missing (with confirmation before anything needs `sudo`) and walks through the same setup. Deploying to a **cloud VM** so it's reachable from more than one machine? See the [Cloud / remote server guide](docs/installation.md#2c-option-a3--cloud--remote-server) — it's the same Docker Compose setup plus the firewall/hostname steps that make it reachable remotely.
+
 For local Ollama:
 ```bash
 ollama pull qwen3:8b        # manual AI-assist (write screen, chat)

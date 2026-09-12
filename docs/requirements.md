@@ -71,6 +71,14 @@ Restoring is a manual, command-line-only step (`scripts/restore.sh`) — see [Us
 
 Set this to whatever origin you actually open the web app from — a LAN IP, a different port, a custom domain — or the browser blocks the web app's requests to the API even though both are reachable. Multiple origins are comma-separated (e.g. `http://localhost:3000,http://192.168.1.10:3000`).
 
+## The API address the browser uses (NEXT_PUBLIC_API_URL)
+
+| Config | Default | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api/v1` | The API URL baked into the web app's JavaScript at build/container-start time |
+
+Unlike most settings here, this one is read by the **browser**, not the server — "localhost" in this value always means the visitor's own machine, not wherever the app is hosted. If you access the web app from anywhere other than the Docker host itself (a LAN IP, a cloud VM's address, a domain), this must be set to that address's `:8000/api/v1`, or every API call will silently fail to connect for anyone but someone opening a browser directly on the host. `scripts/setup.sh`/`setup.ps1` set this for you from the hostname you give it. Changing it later requires recreating the `web` container (e.g. `docker compose up -d --build web`) — restarting the same container does not pick up the new value.
+
 ## Ports used
 
 | Port | Service |
