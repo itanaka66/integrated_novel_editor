@@ -17,6 +17,8 @@ layout: default
 
 Windows/macOSはDocker Desktop、LinuxはDocker Engine + Composeプラグインのどちらでも動作します。
 
+`db`（PostgreSQL）と`qdrant`は常時起動サービスではなくComposeの「プロファイル」です。すでに自前のPostgreSQL・Qdrantをお持ちの場合は、内蔵版を使わずに`DATABASE_URL`／`QDRANT_URL`を自前のインスタンスに向けられます。`scripts/setup.sh`／`setup.ps1`で対話的に選ぶか、`.env`の`COMPOSE_PROFILES`を直接編集してください。具体的なコマンドは[インストールマニュアル](installation.ja.md)の「方式A」を参照してください。
+
 ## 方式B — Dockerを使わずネイティブに構築する場合
 
 | コンポーネント | 要件 |

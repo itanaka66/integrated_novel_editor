@@ -7,8 +7,15 @@
 ## Images are built and pushed by .github/workflows/docker-publish.yml on
 ## every version tag. Override the tag with IMAGE_TAG (defaults to "latest").
 services:
+  # db and qdrant are "profiles" — opt out of either (or both) with
+  # COMPOSE_PROFILES in .env (scripts/setup.sh writes this for you) or
+  # `docker compose --profile ... up` on the command line, and point
+  # DATABASE_URL/QDRANT_URL at your own external instance instead. Default
+  # COMPOSE_PROFILES=db,qdrant in .env.example starts both, matching the
+  # all-bundled behavior this file always had.
   db:
     image: postgres:17-alpine
+    profiles: ["db"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-novel}
       POSTGRES_USER: ${POSTGRES_USER:-novel}
@@ -25,6 +32,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
+    profiles: ["qdrant"]
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -34,8 +42,8 @@ services:
   api:
     image: ghcr.io/${GHCR_OWNER:-itanaka66}/ine-api:${IMAGE_TAG:-latest}
     environment:
-      DATABASE_URL: postgresql+psycopg2://novel:novel@db:5432/novel
-      QDRANT_URL: http://qdrant:6333
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://novel:novel@db:5432/novel}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
       CONTROLLER_OLLAMA_URL: ${CONTROLLER_OLLAMA_URL:-http://host.docker.internal:11434}
@@ -58,8 +66,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false
       qdrant:
         condition: service_started
+        required: false
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

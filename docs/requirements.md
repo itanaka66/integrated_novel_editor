@@ -17,6 +17,8 @@ layout: default
 
 Docker Desktop (Windows/macOS) or Docker Engine + the Compose plugin (Linux) both work.
 
+`db` (PostgreSQL) and `qdrant` are Compose profiles rather than always-on services — already have your own PostgreSQL and/or Qdrant? Skip the bundled one(s) and point `DATABASE_URL`/`QDRANT_URL` at your own instance instead, either interactively via `scripts/setup.sh`/`setup.ps1` or by editing `COMPOSE_PROFILES` in `.env` yourself. See the [Installation Manual](installation.md#2-option-a--docker-compose) for the exact commands.
+
 ## Option B — Running services natively (no Docker)
 
 | Component | Requirement |

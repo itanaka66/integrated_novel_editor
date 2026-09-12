@@ -34,11 +34,13 @@ cp .env.example .env
 
 `.env`を編集し、実際の`ADMIN_PASSWORD`を設定してください（未設定だとComposeが起動を拒否します。各変数の意味は[requirements.ja.md](requirements.ja.md)を参照）。Ollamaを別マシンで動かす場合は`OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`も変更してください。`http://localhost:3000`以外（LAN内のIP、別のポート、独自ドメインなど）からWebアプリを開く場合は、`CORS_ORIGINS`もそのオリジンに設定してください。設定しないとブラウザがWebアプリからのAPI呼び出しをブロックします。
 
+`.env`を手動で編集する代わりに、`./scripts/setup.sh`（Windowsでは`.\scripts\setup.ps1`）が同じ内容を対話形式で質問してくれます。以下の内蔵PostgreSQL/Qdrantコンテナを使うか外部の自前インスタンスに接続するか、Ollamaをどこで動かすかも含めて質問し、`.env`を自動生成します。何度でも再実行して答えを変更できます。
+
 ```bash
 docker compose up --build
 ```
 
-4つのコンテナがビルド・起動します：`db`（Postgres）、`qdrant`、`api`（起動時に自動で`alembic upgrade head`を実行し、初回起動時にデモ作品を1件投入）、`web`。ログが落ち着いたら以下を開きます。
+既定では4つのコンテナがビルド・起動します：`db`（Postgres）、`qdrant`、`api`（起動時に自動で`alembic upgrade head`を実行し、初回起動時にデモ作品を1件投入）、`web`。`db`と`qdrant`はComposeの*プロファイル*です。すでに自前のPostgreSQL・Qdrantを運用している場合は、内蔵版を使わずに済ませられます：`.env`の`COMPOSE_PROFILES`から`db`／`qdrant`を外し（または`scripts/setup.sh`／`setup.ps1`を実行して該当の質問に「いいえ」と答える）、`DATABASE_URL`／`QDRANT_URL`を自前のインスタンスに向けてください。この場合`api`と`web`だけが起動します。`COMPOSE_PROFILES`はコマンドライン一回限りの上書きにも使えます。例えば`docker compose --profile qdrant up --build`は、`.env`の内容に関わらず内蔵Qdrantだけを起動し（PostgreSQLは`DATABASE_URL`で指定した外部のものを使用）ます。ログが落ち着いたら以下を開きます。
 
 - Webアプリ：http://localhost:3000
 - APIインタラクティブドキュメント：http://localhost:8000/docs
