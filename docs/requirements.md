@@ -61,6 +61,14 @@ Qdrant URL and both Ollama endpoints/models above can also be changed live from 
 
 Restoring is a manual, command-line-only step (`scripts/restore.sh`) — see [User Guide](user-guide.md#backup-and-restore) for why.
 
+## Cross-origin access (CORS_ORIGINS)
+
+| Config | Default | Purpose |
+|---|---|---|
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of origins the browser is allowed to call the API from |
+
+Set this to whatever origin you actually open the web app from — a LAN IP, a different port, a custom domain — or the browser blocks the web app's requests to the API even though both are reachable. Multiple origins are comma-separated (e.g. `http://localhost:3000,http://192.168.1.10:3000`).
+
 ## Ports used
 
 | Port | Service |

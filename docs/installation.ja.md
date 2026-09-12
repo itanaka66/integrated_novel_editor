@@ -32,7 +32,7 @@ cd integrated_novel_editor
 cp .env.example .env
 ```
 
-`.env`を編集し、実際の`ADMIN_PASSWORD`を設定してください（未設定だとComposeが起動を拒否します。各変数の意味は[requirements.ja.md](requirements.ja.md)を参照）。Ollamaを別マシンで動かす場合は`OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`も変更してください。
+`.env`を編集し、実際の`ADMIN_PASSWORD`を設定してください（未設定だとComposeが起動を拒否します。各変数の意味は[requirements.ja.md](requirements.ja.md)を参照）。Ollamaを別マシンで動かす場合は`OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`も変更してください。`http://localhost:3000`以外（LAN内のIP、別のポート、独自ドメインなど）からWebアプリを開く場合は、`CORS_ORIGINS`もそのオリジンに設定してください。設定しないとブラウザがWebアプリからのAPI呼び出しをブロックします。
 
 ```bash
 docker compose up --build
