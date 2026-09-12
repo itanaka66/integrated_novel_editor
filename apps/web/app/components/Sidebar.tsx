@@ -21,8 +21,8 @@ const NAV: { key: Section; label: string }[] = [
   { key: "settings", label: "⚙ 設定" },
 ];
 
-export default function Sidebar({ project, section, onSection, onDashboard }: {
-  project: Project; section: Section; onSection: (s: Section) => void; onDashboard: () => void;
+export default function Sidebar({ project, section, onSection, onDashboard, onLogout }: {
+  project: Project; section: Section; onSection: (s: Section) => void; onDashboard: () => void; onLogout: () => void;
 }) {
   return (
     <aside className="appSidebar">
@@ -34,6 +34,7 @@ export default function Sidebar({ project, section, onSection, onDashboard }: {
           <button key={n.key} className={section === n.key ? "nav active" : "nav"} onClick={() => onSection(n.key)}>{n.label}</button>
         ))}
       </div>
+      <button className="appSidebarLogout" onClick={onLogout}>⏻ ログアウト</button>
     </aside>
   );
 }

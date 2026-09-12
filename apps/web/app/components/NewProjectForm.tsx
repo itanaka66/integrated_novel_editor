@@ -10,13 +10,17 @@ export default function NewProjectForm({ onCreated, onCancel }: { onCreated: (p:
   const [rules, setRules] = useState("");
   const [episodeGoal, setEpisodeGoal] = useState(500);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function create() {
     if (!name.trim()) return;
     setBusy(true);
+    setError("");
     try {
       const p = await post("/projects", { name, genre, description, rules, episode_goal: episodeGoal });
       onCreated(p);
+    } catch {
+      setError("作品の作成に失敗しました。APIに接続できているか確認してください。");
     } finally { setBusy(false); }
   }
 
@@ -29,6 +33,7 @@ export default function NewProjectForm({ onCreated, onCancel }: { onCreated: (p:
         <label>あらすじ<textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="作品のあらすじを入力してください。" /></label>
         <label>詳細設定（任意）<textarea value={rules} onChange={(e) => setRules(e.target.value)} placeholder="文体・想定読者・外せない設定ルールなど" /></label>
         <label>総話数目標<input type="number" value={episodeGoal} min={1} onChange={(e) => setEpisodeGoal(Number(e.target.value))} /></label>
+        {error && <p className="errorNote">{error}</p>}
         <div className="modalActions">
           <button onClick={onCancel}>キャンセル</button>
           <button onClick={create} disabled={busy || !name.trim()}>{busy ? "作成中..." : "作成する"}</button>

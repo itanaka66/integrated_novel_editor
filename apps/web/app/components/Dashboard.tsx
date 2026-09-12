@@ -7,20 +7,24 @@ import ImportPanel from "./ImportPanel";
 
 type Twin = { metrics: { episodes: number; continuity_open: number }; health: { score: number; label: string } };
 
-export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) {
+export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) => void; onLogout: () => void }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [twins, setTwins] = useState<Record<number, Twin>>({});
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
 
   async function load() {
     setBusy(true);
+    setError("");
     try {
       const list: Project[] = await api("/projects");
       setProjects(list);
       const entries = await Promise.all(list.map(async (p) => [p.id, await api(`/projects/${p.id}/story-twin`)] as const));
       setTwins(Object.fromEntries(entries));
+    } catch {
+      setError("作品一覧の読み込みに失敗しました。APIに接続できているか確認してください。");
     } finally { setBusy(false); }
   }
   useEffect(() => { load(); }, []);
@@ -35,8 +39,10 @@ export default function Dashboard({ onOpen }: { onOpen: (p: Project) => void }) 
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowImport(true)}>ファイルからインポート</button>
           <button className="add" onClick={() => setShowNew(true)}>＋ 新規作品作成</button>
+          <button onClick={onLogout}>⏻ ログアウト</button>
         </div>
       </header>
+      {error && <p className="errorNote">{error}</p>}
       {busy && projects.length === 0 ? <p className="loading">読み込み中...</p> : null}
       <div className="dashboardGrid">
         <div className="dashboardWorks">
