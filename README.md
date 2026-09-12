@@ -15,6 +15,28 @@ Browse the online manual: **https://itanaka66.github.io/integrated_novel_editor/
 | Beginner's guide | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
 | User guide (operation manual) | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
 
+## Requirements
+
+Full details (native-install versions, Ollama model roles/VRAM notes, all ports, env vars): [Software Requirements](docs/requirements.md).
+
+**Software** (Docker Compose path — recommended):
+
+| Requirement | Version |
+|---|---|
+| Docker Engine | 24+ (with the Compose v2 plugin — `docker compose`, not the old `docker-compose`) |
+| [Ollama](https://ollama.com) | Latest — runs on the host; Docker Compose does not start it |
+| Browser | Any current Chrome, Edge, Firefox, or Safari |
+
+Running natively instead of via Docker: Python 3.13, Node.js 22, PostgreSQL 17, and Qdrant (any recent version) — see the "Option B" section of [Software Requirements](docs/requirements.md).
+
+**Hardware:**
+
+| | Minimum | Notes |
+|---|---|---|
+| RAM | 8 GB | 16 GB+ recommended if Ollama also runs on the same machine |
+| Disk | 10 GB+ free | PostgreSQL/Qdrant volumes plus built images |
+| GPU | None required for the app itself | Needed only to run larger Ollama models at a usable speed — `qwen3:8b` (default manual AI-assist) is modest, but `qwen3.8:27b`/`qwen3:14b` (auto-write's default Writer/Controller) need a GPU with enough VRAM to hold them. Check each model's Ollama listing before pulling it on modest hardware. Writer and Controller can each point at a different Ollama server, so the two roles can run on separate GPUs |
+
 ## Quick start
 
 ```bash

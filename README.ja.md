@@ -15,6 +15,28 @@ English version → [README.md](README.md)
 | はじめての方向けガイド | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
 | 操作マニュアル | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
 
+## 動作要件
+
+詳細（ネイティブ構築時のバージョン、Ollamaの役割別モデルとVRAMの目安、使用ポート、環境変数一覧）は[動作要件](docs/requirements.ja.md)を参照してください。
+
+**ソフトウェア**（Docker Compose方式・推奨）：
+
+| 要件 | バージョン |
+|---|---|
+| Docker Engine | 24以上（Compose v2プラグイン付属。`docker compose`コマンド。古い`docker-compose`ではありません） |
+| [Ollama](https://ollama.com) | 最新版。ホスト側で動作させます（Docker Composeでは起動しません） |
+| ブラウザ | 最新のChrome・Edge・Firefox・Safariのいずれか |
+
+Dockerを使わずネイティブに構築する場合：Python 3.13、Node.js 22、PostgreSQL 17、Qdrant（比較的新しいバージョンであれば可）が必要です。詳しくは[動作要件](docs/requirements.ja.md)の「方式B」を参照してください。
+
+**ハードウェア：**
+
+| | 最小要件 | 備考 |
+|---|---|---|
+| RAM | 8GB | 同じマシンでOllamaも動かす場合は16GB以上を推奨 |
+| ディスク | 10GB以上の空き | PostgreSQL/Qdrantのボリューム＋ビルド済みイメージ分 |
+| GPU | アプリ本体には不要 | 大きめのOllamaモデルを実用的な速度で動かす場合にのみ必要です。既定の手動AI支援用モデル`qwen3:8b`は控えめですが、自動執筆の既定Writer/Controllerである`qwen3.8:27b`／`qwen3:14b`は十分なVRAMを持つGPUが必要です。導入前に各モデルのOllama掲載情報でサイズを確認してください。WriterとControllerはそれぞれ別のOllamaサーバーを指定できるため、2つの役割を別々のGPUで分担することもできます |
+
 ## クイックスタート
 
 ```bash
