@@ -25,18 +25,18 @@ export default function Studio() {
 
   if (authed === null) return <div className="center">確認中...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
-  return <Workspace />;
+  return <Workspace onLogout={() => { clearAuth(); setAuthed(false); }} />;
 }
 
-function Workspace() {
+function Workspace({ onLogout }: { onLogout: () => void }) {
   const [project, setProject] = useState<Project | null>(null);
   const [section, setSection] = useState<Section>("home");
 
-  if (!project) return <Dashboard onOpen={(p) => { setProject(p); setSection("home"); }} />;
+  if (!project) return <Dashboard onOpen={(p) => { setProject(p); setSection("home"); }} onLogout={onLogout} />;
 
   return (
     <div className="appShell">
-      <Sidebar project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)} />
+      <Sidebar project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)} onLogout={onLogout} />
       <main className="appMain">
         {section === "home" && <ProjectHome project={project} onSection={setSection} />}
         {section === "write" && <WritePanel project={project} />}
