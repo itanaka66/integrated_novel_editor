@@ -34,7 +34,10 @@ fi
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  password="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20)"
+  # `head -c 20` closing its stdin partway through `tr`'s output makes `tr`
+  # exit on SIGPIPE — with `pipefail` that reads as this whole line failing
+  # (exit 141) even though $password came out fine, so swallow it.
+  password="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20)" || true
   # BSD sed (macOS) requires an explicit (here, empty) backup suffix for -i.
   sed -i '' "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=${password}/" .env
   notify "初回起動です。管理者パスワードを生成しました:\n\n${password}\n\nこのパスワードは $DIR/.env に保存されています。後で変更できます。\n\nFirst run: generated an admin password:\n\n${password}\n\nSaved to $DIR/.env — you can change it later."

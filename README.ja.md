@@ -27,7 +27,7 @@ English version → [README.md](README.md)
 | [Ollama](https://ollama.com) | 最新版。ホスト側で動作させます（Docker Composeでは起動しません） |
 | ブラウザ | 最新のChrome・Edge・Firefox・Safariのいずれか |
 
-Dockerを使わずネイティブに構築する場合：Python 3.13、Node.js 22、PostgreSQL 17、Qdrant（比較的新しいバージョンであれば可）が必要です。詳しくは[動作要件](docs/requirements.ja.md)の「方式B」を参照してください。
+Dockerを使わずネイティブに構築する場合：Python 3.13、Node.js 22、PostgreSQL 17、Qdrant（比較的新しいバージョンであれば可）が必要です。詳しくは[動作要件](docs/requirements.ja.md)の「方式B」を参照してください。Docker方式でも、すでに自前のPostgreSQL・Qdrantを運用している場合は内蔵コンテナを使わずに済ませられます（Composeの「プロファイル」機能）。`scripts/setup.sh`／`setup.ps1`が対話形式で選べます。
 
 **ハードウェア：**
 
@@ -43,6 +43,8 @@ Dockerを使わずネイティブに構築する場合：Python 3.13、Node.js 2
 cp .env.example .env   # ADMIN_PASSWORD（必須）とOllamaのURLを必要に応じて編集
 docker compose up --build
 ```
+
+`.env`を手動で編集する代わりに`./scripts/setup.sh`（Windowsでは`.\scripts\setup.ps1`）を実行することもできます。内蔵PostgreSQL/Qdrantコンテナを使うか自前のインスタンスを使うか（下記の[動作要件](#動作要件)参照）を対話形式で質問し、`.env`を自動生成します。
 
 Webアプリは `http://localhost:3000`（ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログイン）、APIのインタラクティブドキュメントは `http://localhost:8000/docs` で開けます。Dockerを使わない構築方法も含めた詳細は[インストールマニュアル](docs/installation.ja.md)を参照してください。
 

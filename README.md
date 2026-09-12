@@ -27,7 +27,7 @@ Full details (native-install versions, Ollama model roles/VRAM notes, all ports,
 | [Ollama](https://ollama.com) | Latest — runs on the host; Docker Compose does not start it |
 | Browser | Any current Chrome, Edge, Firefox, or Safari |
 
-Running natively instead of via Docker: Python 3.13, Node.js 22, PostgreSQL 17, and Qdrant (any recent version) — see the "Option B" section of [Software Requirements](docs/requirements.md).
+Running natively instead of via Docker: Python 3.13, Node.js 22, PostgreSQL 17, and Qdrant (any recent version) — see the "Option B" section of [Software Requirements](docs/requirements.md). Already running your own PostgreSQL and/or Qdrant even with the Docker path? Both are Compose profiles, so you can skip either bundled container and point at your own instance instead — `scripts/setup.sh`/`setup.ps1` ask this interactively.
 
 **Hardware:**
 
@@ -43,6 +43,8 @@ Running natively instead of via Docker: Python 3.13, Node.js 22, PostgreSQL 17, 
 cp .env.example .env   # then edit ADMIN_PASSWORD (required) and Ollama URLs if needed
 docker compose up --build
 ```
+
+Or run `./scripts/setup.sh` (`.\scripts\setup.ps1` on Windows) instead of editing `.env` by hand — it interactively asks whether to use the bundled PostgreSQL/Qdrant containers or your own external instances (see [Requirements](#requirements) below) and writes `.env` for you.
 
 Open the web app at `http://localhost:3000` (log in with `admin` and your `ADMIN_PASSWORD`) and the API's interactive docs at `http://localhost:8000/docs`. See the [Installation Manual](docs/installation.md) for the full walkthrough, including running without Docker.
 

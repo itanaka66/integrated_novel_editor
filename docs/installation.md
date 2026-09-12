@@ -34,11 +34,13 @@ cp .env.example .env
 
 Edit `.env` and set a real `ADMIN_PASSWORD` (Compose refuses to start without one — see [requirements.md](requirements.md) for what each variable does). If Ollama runs on a different machine, also change `OLLAMA_URL` / `CONTROLLER_OLLAMA_URL`. If you'll open the web app from anywhere other than `http://localhost:3000` (a LAN IP, a different port, a custom domain), also set `CORS_ORIGINS` to that origin — the browser will otherwise block the web app's API calls.
 
+Instead of editing `.env` by hand, `./scripts/setup.sh` (`.\scripts\setup.ps1` on Windows) walks through the same questions interactively — including whether to use the bundled PostgreSQL/Qdrant containers below or point at your own external instances, and where Ollama runs — and writes `.env` for you. Safe to re-run any time to change your answers.
+
 ```bash
 docker compose up --build
 ```
 
-This builds and starts four containers: `db` (Postgres), `qdrant`, `api` (runs `alembic upgrade head` automatically before starting, then seeds one demo project on first launch), and `web`. Wait for the logs to settle, then open:
+By default this builds and starts four containers: `db` (Postgres), `qdrant`, `api` (runs `alembic upgrade head` automatically before starting, then seeds one demo project on first launch), and `web`. `db` and `qdrant` are Compose *profiles* — if you already run your own PostgreSQL and/or Qdrant, skip the bundled one(s) instead: remove `db`/`qdrant` from `COMPOSE_PROFILES` in `.env` (or run `scripts/setup.sh`/`setup.ps1` and answer "no" to the relevant question), point `DATABASE_URL`/`QDRANT_URL` at your own instance, and only `api`+`web` start. `COMPOSE_PROFILES` also works as a one-off command-line override, e.g. `docker compose --profile qdrant up --build` starts only the bundled Qdrant (using an external Postgres from `DATABASE_URL`) regardless of what's in `.env`. Wait for the logs to settle, then open:
 
 - Web app: http://localhost:3000
 - API interactive docs: http://localhost:8000/docs
