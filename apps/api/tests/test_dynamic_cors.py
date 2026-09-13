@@ -43,6 +43,17 @@ def test_wildcard_cors_origins_allows_any_origin(client):
     assert r.headers.get("access-control-allow-origin") == "http://anything.example"
 
 
+def test_trailing_slash_in_configured_origin_is_ignored(client):
+    # A trailing slash typed into CORS_ORIGINS/the Settings screen is an easy
+    # mistake — the browser's Origin header never has one, so it must not
+    # cause every request from that origin to be silently rejected.
+    r = client.put("/api/v1/system-settings", json={"cors_origins": "https://example.com/"})
+    assert r.status_code == 200
+
+    r = client.get("/api/v1/health", headers={"Origin": "https://example.com"})
+    assert r.headers.get("access-control-allow-origin") == "https://example.com"
+
+
 def test_preflight_request_for_allowed_origin_succeeds(client):
     r = client.options(
         "/api/v1/projects",
