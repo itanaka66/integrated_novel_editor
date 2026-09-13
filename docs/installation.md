@@ -125,6 +125,12 @@ npm run dev
 
 Open http://localhost:3000.
 
+Accessing this dev server (`npm run dev`, not the production build) through anything other than `localhost` — a LAN IP, a reverse-proxied custom domain — makes Next.js log a warning and block its own dev-only assets (HMR/websocket; this is unrelated to `CORS_ORIGINS`/the API). Set `NEXT_DEV_ALLOWED_ORIGINS` before starting it to allow that host:
+
+```bash
+NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
+```
+
 ## 4. First login
 
 There is a single shared admin account, not per-user accounts — see [requirements.md](requirements.md) and the [user guide](user-guide.md#login) for why. Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured. The Google/GitHub buttons on the login screen are intentionally disabled; there is no OAuth support.
