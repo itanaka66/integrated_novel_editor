@@ -15,8 +15,18 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     try {
       await api("/projects");
       onLoggedIn();
-    } catch {
-      setError("ユーザー名またはパスワードが違います。");
+    } catch (err) {
+      // api() throws a specifically-worded Error only for a real 401 —
+      // anything else here (a network error, a CORS rejection) is not a
+      // credentials problem, and telling the user their password is wrong
+      // sends them on a wild goose chase re-typing a password that was
+      // never the issue. See docs/requirements.md's CORS_ORIGINS section if
+      // this keeps happening after double-checking the password.
+      if (err instanceof Error && err.message === "unauthorized") {
+        setError("ユーザー名またはパスワードが違います。");
+      } else {
+        setError("APIに接続できませんでした。サーバーが起動しているか、CORS_ORIGINS の設定（設定＞接続設定）にこのページのアドレスが含まれているかを確認してください。");
+      }
     } finally { setBusy(false); }
   }
 
