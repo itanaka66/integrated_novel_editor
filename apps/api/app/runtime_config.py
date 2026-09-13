@@ -61,6 +61,15 @@ def get_effective_config(db=None) -> EffectiveConfig:
     )
 
 
+def _parse_origins(raw: str) -> list[str]:
+    # A trailing slash is an easy, easy-to-miss mistake when typing an
+    # origin into the Settings screen or .env (e.g. "https://example.com/"
+    # instead of "https://example.com") — the browser's Origin header never
+    # has one, so an un-normalized value would silently never match and
+    # every request would look like a CORS failure with no obvious cause.
+    return [o.strip().rstrip('/') for o in raw.split(',') if o.strip()]
+
+
 # CORSMiddleware (see app/cors.py) checks the allowed-origins list on every
 # request, so it reads this in-memory cache rather than hitting the database
 # each time — refreshed at app startup and whenever the Settings screen
@@ -71,7 +80,7 @@ _cors_cache: list[str] | None = None
 def refresh_cors_cache(db=None) -> list[str]:
     global _cors_cache
     cfg = get_effective_config(db)
-    _cors_cache = [o.strip() for o in cfg.cors_origins.split(',') if o.strip()]
+    _cors_cache = _parse_origins(cfg.cors_origins)
     return _cors_cache
 
 
@@ -82,7 +91,7 @@ def get_cors_origins() -> list[str]:
     # database is briefly unreachable, since it's unrelated to this app's
     # actual data.
     if _cors_cache is None:
-        return [o.strip() for o in env_settings.cors_origins.split(',') if o.strip()]
+        return _parse_origins(env_settings.cors_origins)
     return _cors_cache
 
 
