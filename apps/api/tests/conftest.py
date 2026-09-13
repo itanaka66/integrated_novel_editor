@@ -8,6 +8,7 @@ from app.config import settings
 from app.db import Base, get_db
 from app.main import app
 from app import auth as auth_module
+from app import runtime_config as rc_module
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +17,19 @@ def isolate_novel_storage_dir(tmp_path, monkeypatch):
     # every call — without this, every test in the suite would write real
     # files under the repo's default "./novel_storage".
     monkeypatch.setattr(settings, "novel_storage_dir", str(tmp_path / "novel_storage"))
+
+
+@pytest.fixture(autouse=True)
+def reset_cors_cache():
+    # DynamicCORSMiddleware reads this module-level cache (see
+    # runtime_config.get_cors_origins) instead of the database on every
+    # request. It's normally primed at app startup, which the `client`
+    # fixture below deliberately skips — and a PUT /system-settings in one
+    # test would otherwise leak its CORS_ORIGINS override into the next
+    # test's in-memory database, which knows nothing about it.
+    rc_module._cors_cache = None
+    yield
+    rc_module._cors_cache = None
 
 
 @pytest.fixture(autouse=True)

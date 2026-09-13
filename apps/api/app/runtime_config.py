@@ -76,8 +76,13 @@ def refresh_cors_cache(db=None) -> list[str]:
 
 
 def get_cors_origins() -> list[str]:
+    # Falls back to the env var directly, without touching the database, if
+    # the cache was never primed (startup's refresh_cors_cache() failed or
+    # hasn't run yet, e.g. in tests) — CORS must keep working even when the
+    # database is briefly unreachable, since it's unrelated to this app's
+    # actual data.
     if _cors_cache is None:
-        return refresh_cors_cache()
+        return [o.strip() for o in env_settings.cors_origins.split(',') if o.strip()]
     return _cors_cache
 
 
