@@ -123,12 +123,12 @@ Clicking "▶ 自動執筆を開始" also asks the browser for notification perm
 
 - **基本設定 (Basic)**: edit the project's name, genre, synopsis, rules, and episode target. Saves immediately via the API.
 - **AI設定 (AI settings)**: sets *this browser's* default Writer/Controller model names, which prefill the Auto-write start form.
-- **接続設定 (Connection settings)**: Qdrant URL, and both Ollama endpoints/models (Writer and Controller) can be changed here and take effect immediately, no restart needed — see [Connection settings](#connection-settings) below. SQL (the database itself) is shown masked, read-only.
+- **接続設定 (Connection settings)**: Qdrant URL, both Ollama endpoints/models (Writer and Controller), and the CORS allowed-origins list can all be changed here and take effect immediately, no restart needed — see [Connection settings](#connection-settings) below. SQL (the database itself) is shown masked, read-only.
 - **エクスポート (Export)**: downloads every episode's prose (title + summary + body only — no characters/world/plot/foreshadowing data) as a single file in one of three formats: plain text (`.txt`), Markdown (`.md`), or a minimal but valid EPUB3 (`.epub`) you can open in any e-reader. `GET /api/v1/projects/{id}/export?format=txt|md|epub`.
 
 ### Connection settings
 
-`GET`/`PUT /api/v1/system-settings`. Each of Qdrant URL, Ollama 1 (Writer) URL/model/embedding-model, and Ollama 2 (Controller) URL/model can be overridden from this screen; a field shows "（上書き中）" when it's currently an override rather than the server's environment-variable default. Saving an empty value for a field reverts it to that default. These overrides are stored in the database and take effect on the very next AI/search call — Qdrant and Ollama clients are constructed fresh per call, so there's nothing to restart.
+`GET`/`PUT /api/v1/system-settings`. Each of Qdrant URL, Ollama 1 (Writer) URL/model/embedding-model, Ollama 2 (Controller) URL/model, and the CORS allowed-origins list (`CORS_ORIGINS`) can be overridden from this screen; a field shows "（上書き中）" when it's currently an override rather than the server's environment-variable default. Saving an empty value for a field reverts it to that default. These overrides are stored in the database and take effect on the very next request — Qdrant and Ollama clients are constructed fresh per call, and the CORS middleware re-reads its in-memory allow-list (refreshed on every save) rather than the fixed list Starlette's CORS middleware would otherwise freeze at startup — so there's nothing to restart.
 
 The database connection (`DATABASE_URL`) is deliberately **not** editable from here — the app would have to swap the very connection it's using to read this settings screen out from under itself mid-request, which isn't safe to do live. Change it via the `DATABASE_URL` environment variable and restart the server instead.
 

@@ -2,7 +2,6 @@ import logging
 import json
 import re
 from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -15,6 +14,7 @@ from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import BasicAuthMiddleware
+from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import runtime_config as rc
 from . import file_sync
@@ -35,7 +35,7 @@ app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 # response never gets CORS headers and the browser reports an opaque network
 # error instead of a readable 401.
 app.add_middleware(BasicAuthMiddleware)
-app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(',')],allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+app.add_middleware(DynamicCORSMiddleware,allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
 _background_tasks=set() # strong refs so asyncio doesn't GC in-flight background tasks (autosync loop)
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
@@ -62,6 +62,7 @@ def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
  # `alembic upgrade head` before starting the app. We only seed demo data
  # here, on top of whatever schema migrations have already applied.
+ rc.refresh_cors_cache()
  with SessionLocal() as d:
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
@@ -133,6 +134,7 @@ def _system_settings_out(db):
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
   controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
+  cors_origins=cfg.cors_origins,cors_origins_is_override=override(row.cors_origins if row else None),
   updated_at=row.updated_at if row else None,
  )
 @app.get('/api/v1/system-settings',response_model=SystemSettingsOut)
@@ -144,6 +146,7 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
   row=RuntimeConfig(id=rc.SINGLETON_ID);db.add(row)
  for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
  db.commit();db.refresh(row)
+ rc.refresh_cors_cache(db)
  return _system_settings_out(db)
 @app.get('/api/v1/backups',response_model=BackupStatusOut)
 def backups_status():

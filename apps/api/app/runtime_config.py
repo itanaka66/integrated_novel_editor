@@ -25,6 +25,7 @@ class EffectiveConfig:
     ollama_embed_model: str
     controller_ollama_url: str
     controller_ollama_model: str
+    cors_origins: str
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -56,7 +57,28 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
         controller_ollama_url=_pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url),
         controller_ollama_model=_pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model),
+        cors_origins=_pick(row.cors_origins if row else None, env_settings.cors_origins),
     )
+
+
+# CORSMiddleware (see app/cors.py) checks the allowed-origins list on every
+# request, so it reads this in-memory cache rather than hitting the database
+# each time — refreshed at app startup and whenever the Settings screen
+# changes the CORS_ORIGINS override (system_settings_put in main.py).
+_cors_cache: list[str] | None = None
+
+
+def refresh_cors_cache(db=None) -> list[str]:
+    global _cors_cache
+    cfg = get_effective_config(db)
+    _cors_cache = [o.strip() for o in cfg.cors_origins.split(',') if o.strip()]
+    return _cors_cache
+
+
+def get_cors_origins() -> list[str]:
+    if _cors_cache is None:
+        return refresh_cors_cache()
+    return _cors_cache
 
 
 def mask_database_url(url: str) -> str:

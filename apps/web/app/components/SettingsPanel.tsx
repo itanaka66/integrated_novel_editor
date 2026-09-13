@@ -24,6 +24,7 @@ type SystemSettings = {
   ollama_embed_model: string; ollama_embed_model_is_override: boolean;
   controller_ollama_url: string; controller_ollama_url_is_override: boolean;
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
+  cors_origins: string; cors_origins_is_override: boolean;
 };
 
 export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
@@ -40,7 +41,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [sys, setSys] = useState<SystemSettings | null>(null);
   const [sysForm, setSysForm] = useState({
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
-    controller_ollama_url: "", controller_ollama_model: "",
+    controller_ollama_url: "", controller_ollama_model: "", cors_origins: "",
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -97,7 +98,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSysForm({
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
+        controller_ollama_model: s.controller_ollama_model, cors_origins: s.cors_origins,
       });
     });
   }, [tab]);
@@ -115,7 +116,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSysForm({
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
+        controller_ollama_model: s.controller_ollama_model, cors_origins: s.cors_origins,
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -129,7 +130,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       setSysForm({
         qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
+        controller_ollama_model: s.controller_ollama_model, cors_origins: s.cors_origins,
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -273,8 +274,17 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               </label>
               {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
 
+              <label>
+                CORS許可オリジン {sys.cors_origins_is_override && <span className="savedNote">（上書き中）</span>}
+                <input value={sysForm.cors_origins} onChange={(e) => setSysForm({ ...sysForm, cors_origins: e.target.value })} placeholder="http://localhost:3000" />
+              </label>
+              {sys.cors_origins_is_override && <button type="button" onClick={() => resetField("cors_origins")} disabled={sysBusy}>既定値に戻す</button>}
+              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
+                このWebアプリを開くブラウザ側のオリジン（例：<code>http://192.168.1.10:3000</code>や独自ドメイン）をここで設定すると、APIがそこからのリクエストを許可します。設定していないオリジンからアクセスすると、ログインやプロジェクト作成が原因不明のまま失敗します。複数指定する場合はカンマ区切りです。ポート番号・httpとhttpsの違いも含めて、実際にブラウザのアドレスバーに表示される値と完全に一致させてください（末尾のスラッシュは不要です）。
+              </p>
+
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはステートレスなクライアントのため、保存すると次回の呼び出しから即座に反映されます（再起動不要）。
+                各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollama・CORS許可オリジンはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。
               </p>
               <div className="entityFormActions">
                 <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? "保存中..." : "保存"}</button>

@@ -71,6 +71,8 @@ Restoring is a manual, command-line-only step (`scripts/restore.sh`) — see [Us
 
 Set this to whatever origin you actually open the web app from — a LAN IP, a different port, a custom domain — or the browser blocks the web app's requests to the API even though both are reachable. Multiple origins are comma-separated (e.g. `http://localhost:3000,http://192.168.1.10:3000`).
 
+This can also be changed live from the app itself — 設定 > 接続設定 (Settings > Connection settings) — the same way the Qdrant/Ollama URLs can, with no restart required (see [User Guide](user-guide.md#connection-settings)). That's the easier path if you've already deployed and just discovered logins/API calls are failing from the wrong origin; editing `.env` is still useful for a fresh install since it's the default new browsers see before anyone opens Settings.
+
 ## The API address the browser uses (NEXT_PUBLIC_API_URL)
 
 | Config | Default | Purpose |
