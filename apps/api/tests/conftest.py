@@ -1,3 +1,12 @@
+import os
+
+# Must run before the first `from app...` import below — app.config builds
+# its module-level `settings` singleton at import time, and if a developer
+# has their own apps/api/.env for native `uvicorn` runs (real LAN addresses,
+# CORS_ORIGINS=*, etc. — see .env.example), it would otherwise silently
+# leak into every test in this suite.
+os.environ["NOVEL_SKIP_DOTENV"] = "1"
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

@@ -280,7 +280,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               </label>
               {sys.cors_origins_is_override && <button type="button" onClick={() => resetField("cors_origins")} disabled={sysBusy}>既定値に戻す</button>}
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                このWebアプリを開くブラウザ側のオリジン（例：<code>http://192.168.1.10:3000</code>や独自ドメイン）をここで設定すると、APIがそこからのリクエストを許可します。設定していないオリジンからアクセスすると、ログインやプロジェクト作成が原因不明のまま失敗します。複数指定する場合はカンマ区切りです。ポート番号・httpとhttpsの違いも含めて、実際にブラウザのアドレスバーに表示される値と完全に一致させてください（末尾のスラッシュは不要です）。
+                このWebアプリを開くブラウザ側のオリジン（例：<code>http://192.168.1.10:3000</code>や独自ドメイン）をここで設定すると、APIがそこからのリクエストを許可します。設定していないオリジンからアクセスすると、ログインやプロジェクト作成が原因不明のまま失敗します。複数指定する場合はカンマ区切りです。ポート番号・httpとhttpsの違いも含めて、実際にブラウザのアドレスバーに表示される値と完全に一致させてください（末尾のスラッシュは不要です）。<code>*</code>を指定すると全オリジンを許可します（デバッグ用途向け。信頼できないネットワークに公開する環境では避けてください）。
               </p>
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>

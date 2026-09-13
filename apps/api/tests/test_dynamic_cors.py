@@ -32,6 +32,17 @@ def test_overriding_cors_origins_takes_effect_without_restart(client):
     assert "access-control-allow-origin" not in r.headers
 
 
+def test_wildcard_cors_origins_allows_any_origin(client):
+    r = client.put("/api/v1/system-settings", json={"cors_origins": "*"})
+    assert r.status_code == 200
+
+    r = client.get("/api/v1/health", headers={"Origin": "http://anything.example"})
+    # The actual Origin is echoed back, not a literal "*" — required since
+    # this app always sends Access-Control-Allow-Credentials: true, and the
+    # fetch spec forbids combining a literal wildcard origin with credentials.
+    assert r.headers.get("access-control-allow-origin") == "http://anything.example"
+
+
 def test_preflight_request_for_allowed_origin_succeeds(client):
     r = client.options(
         "/api/v1/projects",
