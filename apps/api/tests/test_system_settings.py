@@ -51,6 +51,24 @@ def test_mask_database_url():
     assert rc.mask_database_url("sqlite:///./dev.db") == "sqlite:///./dev.db"
 
 
+def test_cors_origins_defaults_reflect_env_setting(client):
+    r = client.get("/api/v1/system-settings")
+    body = r.json()
+    assert body["cors_origins_is_override"] is False
+    assert body["cors_origins"]
+
+
+def test_cors_origins_override_is_saved_and_returned(client):
+    r = client.put("/api/v1/system-settings", json={"cors_origins": "http://example.com:3000"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cors_origins"] == "http://example.com:3000"
+    assert body["cors_origins_is_override"] is True
+
+    r = client.get("/api/v1/system-settings")
+    assert r.json()["cors_origins"] == "http://example.com:3000"
+
+
 def test_get_effective_config_falls_back_to_env_with_no_row(db_session_factory):
     # Exercises the self-managed-session branch (no `db` passed in) against
     # an empty runtime_config table, without touching the real configured

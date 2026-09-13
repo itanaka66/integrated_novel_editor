@@ -62,7 +62,10 @@ def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
  # `alembic upgrade head` before starting the app. We only seed demo data
  # here, on top of whatever schema migrations have already applied.
- rc.refresh_cors_cache()
+ try:
+  rc.refresh_cors_cache()
+ except Exception:
+  logger.warning('Could not read the CORS_ORIGINS override from the database at startup; falling back to the environment-variable value until the Settings screen is saved.')
  with SessionLocal() as d:
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
