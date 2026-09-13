@@ -99,13 +99,13 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt   # or requirements.txt if you don't need the test suite
 ```
 
-Set environment variables (or create a `.env` your shell sources) pointing at a running Postgres and Qdrant instance — see [requirements.md](requirements.md) for the full list; at minimum:
+Point it at a running Postgres and Qdrant instance — see [requirements.md](requirements.md) for the full list. Easiest: copy `apps/api/.env.example` to `apps/api/.env` and edit it; the app loads that file automatically on startup (this is separate from the repo-root `.env` docker-compose reads — the two are never mixed).
 
 ```bash
-export DATABASE_URL=postgresql+psycopg2://novel:novel@localhost:5432/novel
-export QDRANT_URL=http://localhost:6333
-export ADMIN_PASSWORD=change-me
+cp .env.example .env   # then edit DATABASE_URL / QDRANT_URL / ADMIN_PASSWORD etc.
 ```
+
+A plain `export DATABASE_URL=...` in your shell works too and always overrides whatever's in `.env`, if you prefer that instead.
 
 Run migrations, then start the server:
 

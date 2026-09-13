@@ -99,13 +99,13 @@ source .venv/bin/activate   # Windowsの場合: .venv\Scripts\activate
 pip install -r requirements-dev.txt   # テストが不要ならrequirements.txtでも可
 ```
 
-起動中のPostgres・Qdrantを指す環境変数を設定します（シェルが読み込む`.env`を作っても構いません。全項目は[requirements.ja.md](requirements.ja.md)参照）。最低限：
+起動中のPostgres・Qdrantを指すよう設定します（全項目は[requirements.ja.md](requirements.ja.md)参照）。一番簡単なのは`apps/api/.env.example`を`apps/api/.env`にコピーして編集する方法です。起動時にこのファイルが自動的に読み込まれます（Docker Composeが読むリポジトリルートの`.env`とは別物で、混ざることはありません）。
 
 ```bash
-export DATABASE_URL=postgresql+psycopg2://novel:novel@localhost:5432/novel
-export QDRANT_URL=http://localhost:6333
-export ADMIN_PASSWORD=change-me
+cp .env.example .env   # DATABASE_URL / QDRANT_URL / ADMIN_PASSWORD などを編集
 ```
+
+シェルで`export DATABASE_URL=...`する方法でも構いません。その場合は`.env`の値より優先されます。
 
 マイグレーションを実行してからサーバーを起動します。
 
