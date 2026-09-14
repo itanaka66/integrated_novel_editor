@@ -25,6 +25,7 @@ from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
+from editor_common.users import ensure_bootstrap_user
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -67,6 +68,12 @@ def init():
  except Exception:
   logger.warning('Could not read the CORS_ORIGINS override from the database at startup; falling back to the environment-variable value until the Settings screen is saved.')
  with SessionLocal() as d:
+  # Multi-user login (see app/auth.py) checks a User table instead of a
+  # single fixed ADMIN_USERNAME/ADMIN_PASSWORD pair — on a fresh database
+  # with no accounts yet, create one from those settings so a new
+  # deployment isn't locked out before anyone has run a user-management
+  # command. No-op once at least one account exists.
+  ensure_bootstrap_user(d,User,settings.admin_username,settings.admin_password)
   if not d.scalar(select(Project).limit(1)):
    p=Project(name='恐竜時代文明開拓記 DEMO',description='現代知識で恐竜時代に文明を築く',genre='SF / 文明開拓',rules='魔法なし。現代知識は実験と失敗を経て再現する。');d.add(p);d.flush()
    d.add_all([Character(project_id=p.id,name='田中',role='主人公',personality='慎重だが好奇心旺盛',speech_style='現代日本語',goal='文明を安全に発展させる'),Character(project_id=p.id,name='リナ',role='仲間',personality='行動派',speech_style='短く率直',goal='集落を守る')])
