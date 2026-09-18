@@ -25,7 +25,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       if (err instanceof Error && err.message === "unauthorized") {
         setError("ユーザー名またはパスワードが違います。");
       } else {
-        setError("APIに接続できませんでした。サーバーが起動しているか、CORS_ORIGINS の設定（設定＞接続設定）にこのページのアドレスが含まれているかを確認してください。");
+        setError("APIに接続できませんでした。サーバーが起動しているか、環境変数 CORS_ORIGINS にこのページのアドレスが含まれているかを確認してください。");
       }
     } finally { setBusy(false); }
   }

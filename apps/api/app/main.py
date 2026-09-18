@@ -63,10 +63,6 @@ def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
  # `alembic upgrade head` before starting the app. We only seed demo data
  # here, on top of whatever schema migrations have already applied.
- try:
-  rc.refresh_cors_cache()
- except Exception:
-  logger.warning('Could not read the CORS_ORIGINS override from the database at startup; falling back to the environment-variable value until the Settings screen is saved.')
  with SessionLocal() as d:
   # Multi-user login (see app/auth.py) checks a User table instead of a
   # single fixed ADMIN_USERNAME/ADMIN_PASSWORD pair — on a fresh database
@@ -144,7 +140,7 @@ def _system_settings_out(db):
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
   controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
-  cors_origins=cfg.cors_origins,cors_origins_is_override=override(row.cors_origins if row else None),
+  cors_origins=','.join(rc.get_cors_origins()),
   updated_at=row.updated_at if row else None,
  )
 @app.get('/api/v1/system-settings',response_model=SystemSettingsOut)
@@ -156,7 +152,6 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
   row=RuntimeConfig(id=rc.SINGLETON_ID);db.add(row)
  for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
  db.commit();db.refresh(row)
- rc.refresh_cors_cache(db)
  return _system_settings_out(db)
 @app.get('/api/v1/backups',response_model=BackupStatusOut)
 def backups_status():

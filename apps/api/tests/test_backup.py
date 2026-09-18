@@ -19,7 +19,6 @@ _FAKE_CONFIG = EffectiveConfig(
     ollama_embed_model="stub-embed-model",
     controller_ollama_url="http://ollama:11434",
     controller_ollama_model="stub-controller-model",
-    cors_origins="http://localhost:3000",
 )
 
 

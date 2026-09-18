@@ -25,7 +25,6 @@ class EffectiveConfig:
     ollama_embed_model: str
     controller_ollama_url: str
     controller_ollama_model: str
-    cors_origins: str
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -57,42 +56,25 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
         controller_ollama_url=_pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url),
         controller_ollama_model=_pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model),
-        cors_origins=_pick(row.cors_origins if row else None, env_settings.cors_origins),
     )
 
 
 def _parse_origins(raw: str) -> list[str]:
     # A trailing slash is an easy, easy-to-miss mistake when typing an
-    # origin into the Settings screen or .env (e.g. "https://example.com/"
-    # instead of "https://example.com") — the browser's Origin header never
-    # has one, so an un-normalized value would silently never match and
-    # every request would look like a CORS failure with no obvious cause.
+    # origin into CORS_ORIGINS (e.g. "https://example.com/" instead of
+    # "https://example.com") — the browser's Origin header never has one,
+    # so an un-normalized value would silently never match and every
+    # request would look like a CORS failure with no obvious cause.
     return [o.strip().rstrip('/') for o in raw.split(',') if o.strip()]
 
 
-# CORSMiddleware (see app/cors.py) checks the allowed-origins list on every
-# request, so it reads this in-memory cache rather than hitting the database
-# each time — refreshed at app startup and whenever the Settings screen
-# changes the CORS_ORIGINS override (system_settings_put in main.py).
-_cors_cache: list[str] | None = None
-
-
-def refresh_cors_cache(db=None) -> list[str]:
-    global _cors_cache
-    cfg = get_effective_config(db)
-    _cors_cache = _parse_origins(cfg.cors_origins)
-    return _cors_cache
-
-
 def get_cors_origins() -> list[str]:
-    # Falls back to the env var directly, without touching the database, if
-    # the cache was never primed (startup's refresh_cors_cache() failed or
-    # hasn't run yet, e.g. in tests) — CORS must keep working even when the
-    # database is briefly unreachable, since it's unrelated to this app's
-    # actual data.
-    if _cors_cache is None:
-        return _parse_origins(env_settings.cors_origins)
-    return _cors_cache
+    # CORS_ORIGINS is intentionally env/.env-only, unlike Qdrant/Ollama —
+    # see models.RuntimeConfig's docstring for why. It's a plain function
+    # of the env var, so there's nothing to cache or refresh: no DB access
+    # here means the CORS check can never itself depend on the database
+    # being reachable.
+    return _parse_origins(env_settings.cors_origins)
 
 
 def mask_database_url(url: str) -> str:
