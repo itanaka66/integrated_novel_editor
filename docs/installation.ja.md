@@ -142,12 +142,46 @@ NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
 - バックエンドのテスト：`cd apps/api && pytest -q`（執筆時点で52件）。
 - フロントエンドのビルド/lint：`cd apps/web && npm run lint && npm run build`。
 
+## API仕様書
+
+サーバー起動中は、常に`http://localhost:8000/docs`でインタラクティブなAPIドキュメント（Swagger UI）を確認できます。Postman/Insomniaへのインポートやクライアントコード生成、オフラインでの確認用に、静的ファイルとして書き出したものは[docs/openapi.json](openapi.json)にあります（プレーンなOpenAPI 3.1形式）。エンドポイントを変更した後は再生成してください：
+
+```bash
+cd apps/api
+python scripts/export_openapi.py
+```
+
+## CORS_ORIGINSの設定方法
+
+`CORS_ORIGINS`は、ブラウザからこのAPIを呼び出すことを許可するオリジン（`スキーム://ホスト:ポート`）のカンマ区切りリストです。実際にWebアプリを開いているアドレスと一致していないと、ログインを含む全てのAPI呼び出しが、分かりやすいエラーも出さずに失敗します（ブラウザがサーバーに届く前にリクエストをブロックするため）。設定できる場所は3つあり、以下の順に優先されます：
+
+1. **設定＞接続設定画面での上書き** — 保存すると、以下のどの設定よりも優先されます。空欄で保存すると上書きを解除し、`.env`の値に戻ります。
+2. **`.env`**（Docker Compose・リポジトリルート）または **`apps/api/.env`**（ネイティブ実行時。[方式B](#3-方式b--dockerを使わずネイティブに構築する場合)参照）— 両方同時に読まれることはなく、それぞれの構成が自分のファイルのみを見ます。
+3. どちらも設定していない場合のコード上のデフォルト値`http://localhost:3000`。
+
+**設定画面から変更する場合（おすすめ・再起動不要）：** ログイン → 設定＞接続設定 →「CORS許可オリジン」を設定 → 保存。次のリクエストから即座に反映されます。
+
+**`.env`で設定する場合：**
+```
+CORS_ORIGINS=http://localhost:3000,http://192.168.1.10:3000
+```
+Docker Composeの場合は編集後に`api`コンテナを作り直してください（`docker compose up -d`。単なる再起動では`.env`は再読み込みされません）。ネイティブ実行の場合、`uvicorn --reload`が編集済みの`apps/api/.env`を検知して自動的に再起動時に反映します。
+
+**値の書き方：** ブラウザのアドレスバーに表示される値と完全に一致させてください（スキーム・ホスト・ポート全て。`http`と`https`は別オリジンです）。末尾に`/`は付けません。複数指定はカンマ区切りです。`*`を指定すると全オリジンを許可します（デバッグ用途。信頼できないネットワークに公開する環境では避けてください。詳しくは[requirements.ja.md](requirements.ja.md#クロスオリジンアクセスcors_origins)参照）。
+
+**実際に有効な値を確認する方法：**
+```bash
+curl -u admin:パスワード http://localhost:8000/api/v1/system-settings
+```
+`cors_origins`（現在有効な値）と`cors_origins_is_override`（`true`なら設定画面の上書きが有効で、`.env`の値は無視されています）を確認してください。
+
 ## トラブルシューティング
 
 | 症状 | 想定される原因 |
 |---|---|
 | `docker compose up`が`ADMIN_PASSWORD`エラーで即失敗する | `.env.example`から`.env`を作成していない、または`ADMIN_PASSWORD`が未設定 |
 | ダッシュボードが「確認中...」「起動中...」のまま固まる | `NEXT_PUBLIC_API_URL`にAPIが到達できていない、またはログインできていない（ブラウザのネットワークタブで401か接続エラーかを確認） |
+| ログインが「APIに接続できませんでした」で失敗する／`OPTIONS`リクエストが`400`を返す | `CORS_ORIGINS`がページの実際のアドレスと一致していません。上記の[CORS_ORIGINSの設定方法](#cors_originsの設定方法)を参照してください。設定画面の上書き値にタイプミス（末尾の`/`など）があると、`.env`側が正しくても優先されてしまうため、`cors_origins_is_override`も確認してください |
 | 自動執筆ジョブがすぐに`error`になり接続エラーが表示される | Ollamaが起動していない、または`OLLAMA_URL`/`CONTROLLER_OLLAMA_URL`が誤っている（`http://host.docker.internal:11434`はWindows/macOSのDocker内からのみ解決可能。Linuxではホストのアドレスを別途指定するか、Ollamaを同じComposeネットワークで動かしてください） |
 | `api`コンテナ起動時に`relation "projects" already exists`エラー | このプロジェクトがAlembic導入前に作られた古いPostgresボリュームが残っています。`docker compose down -v`でリセット（**全データ削除**）するか、データを残したい場合はそのDBに対して手動で`alembic stamp head`を実行してください |
 | 検索が常に「全文一致 (PostgreSQL フォールバック)」になる | `QDRANT_URL`にQdrantが到達できていません。セマンティック検索は失敗時に単純な`ILIKE`一致検索へ自動的に切り替わります |
