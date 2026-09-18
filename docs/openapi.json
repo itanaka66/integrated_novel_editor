@@ -4843,10 +4843,6 @@
             "type": "string",
             "title": "Cors Origins"
           },
-          "cors_origins_is_override": {
-            "type": "boolean",
-            "title": "Cors Origins Is Override"
-          },
           "updated_at": {
             "anyOf": [
               {},
@@ -4872,8 +4868,7 @@
           "controller_ollama_url_is_override",
           "controller_ollama_model",
           "controller_ollama_model_is_override",
-          "cors_origins",
-          "cors_origins_is_override"
+          "cors_origins"
         ],
         "title": "SystemSettingsOut"
       },
@@ -4944,17 +4939,6 @@
               }
             ],
             "title": "Controller Ollama Model"
-          },
-          "cors_origins": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cors Origins"
           }
         },
         "type": "object",

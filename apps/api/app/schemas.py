@@ -138,7 +138,7 @@ class SystemSettingsOut(BaseModel):
     ollama_embed_model:str; ollama_embed_model_is_override:bool
     controller_ollama_url:str; controller_ollama_url_is_override:bool
     controller_ollama_model:str; controller_ollama_model_is_override:bool
-    cors_origins:str; cors_origins_is_override:bool
+    cors_origins:str # read-only — env/.env only, see models.RuntimeConfig
     updated_at:object|None=None
 
 class TextSearchMatch(BaseModel):
@@ -166,4 +166,6 @@ class SystemSettingsUpdate(BaseModel):
     ollama_embed_model:str|None=None
     controller_ollama_url:str|None=None
     controller_ollama_model:str|None=None
-    cors_origins:str|None=None
+    # cors_origins is intentionally NOT a field here — CORS_ORIGINS can only
+    # be set via env/.env, not from this endpoint. See
+    # models.RuntimeConfig's docstring for why.

@@ -73,7 +73,7 @@ Set this to whatever origin you actually open the web app from — a LAN IP, a d
 
 Setting it to `*` allows **any** origin — effectively disabling this check. This is occasionally useful while debugging where a request is actually coming from, but it means any website a logged-in user's browser visits could call this API on their behalf (the shared admin/password login is still required, but a browser that's already cached HTTP Basic Auth credentials for this origin — e.g. from opening the API's URL directly and typing them into the browser's native login prompt — sends them automatically on a credentialed cross-origin request once CORS allows it). Don't leave `*` set on anything reachable from an untrusted network.
 
-This can also be changed live from the app itself — 設定 > 接続設定 (Settings > Connection settings) — the same way the Qdrant/Ollama URLs can, with no restart required (see [User Guide](user-guide.md#connection-settings)). That's the easier path if you've already deployed and just discovered logins/API calls are failing from the wrong origin; editing `.env` is still useful for a fresh install since it's the default new browsers see before anyone opens Settings.
+Unlike Qdrant/Ollama, this is **not** editable from 設定 > 接続設定 (Settings > Connection settings) — it's a security control (which origins may talk to this API at all), not a connectivity convenience, so it's deliberately env/`.env`-only. Editing `.env` requires recreating the `api` container (`docker compose up -d`); a plain restart doesn't re-read it.
 
 ## The API address the browser uses (NEXT_PUBLIC_API_URL)
 

@@ -196,27 +196,20 @@ python scripts/export_openapi.py
 
 ## Setting CORS_ORIGINS
 
-`CORS_ORIGINS` is a comma-separated list of origins (`scheme://host:port`) the browser is allowed to call the API from. If it doesn't match the address you actually open the web app from, every API call — including login — fails with no obvious error (the browser blocks the request before it reaches the server). Three places can set it, checked in this order:
+`CORS_ORIGINS` is a comma-separated list of origins (`scheme://host:port`) the browser is allowed to call the API from. If it doesn't match the address you actually open the web app from, every API call — including login — fails with no obvious error (the browser blocks the request before it reaches the server). This is set via **environment variable only** — deliberately not editable from 設定 > 接続設定 (Settings > Connection settings) the way Qdrant/Ollama are, since it's a security control over which origins may talk to this API at all, not a connectivity convenience (see [requirements.md](requirements.md#cross-origin-access-cors_origins)).
 
-1. **The 設定 > 接続設定 (Settings > Connection settings) screen** — an override saved here beats everything else below. Blank the field and save to clear it and fall back to `.env`.
-2. **`.env`** (Docker Compose, repo root) or **`apps/api/.env`** (native run — see [Option B](#3-option-b--running-natively)) — never both at once; each setup only reads its own file.
-3. The code default, `http://localhost:3000`, if neither of the above set anything.
+**Setting it:**
+- Docker Compose: edit `CORS_ORIGINS` in the repo-root `.env`, then recreate the `api` container (`docker compose up -d` — a plain restart does not re-read `.env`).
+- Native run: edit `CORS_ORIGINS` in `apps/api/.env` (see [Option B](#3-option-b--running-natively)) — `uvicorn --reload` picks it up on its own restart.
+- Falls back to the code default `http://localhost:3000` if unset in either place.
 
-**Via Settings (recommended, no restart):** log in → 設定 > 接続設定 → set "CORS許可オリジン" → save. Takes effect on the very next request.
-
-**Via `.env`:**
-```
-CORS_ORIGINS=http://localhost:3000,http://192.168.1.10:3000
-```
-For Docker Compose, recreate the `api` container after editing (`docker compose up -d` — a plain restart does not re-read `.env`). For a native run, `uvicorn --reload` picks up the edited `apps/api/.env` on its own restart.
-
-**Writing the value:** it must exactly match what's in the browser's address bar — scheme, host, and port all included (`http` and `https` are different origins), no trailing slash. Multiple origins are comma-separated. `*` allows any origin (useful for debugging; don't leave it set on anything reachable from an untrusted network — see [requirements.md](requirements.md#cross-origin-access-cors_origins)).
+**Writing the value:** it must exactly match what's in the browser's address bar — scheme, host, and port all included (`http` and `https` are different origins), no trailing slash. Multiple origins are comma-separated. `*` allows any origin (useful for debugging; don't leave it set on anything reachable from an untrusted network).
 
 **Checking what's actually in effect:**
 ```bash
 curl -u admin:<password> http://localhost:8000/api/v1/system-settings
 ```
-Look at `cors_origins` (the value currently used) and `cors_origins_is_override` (`true` means the Settings-screen override is active and `.env` is being ignored).
+The `cors_origins` field in the response shows the value currently in effect (read-only — a `PUT` to this endpoint can't change it, even if you send it).
 
 ## Troubleshooting
 
@@ -224,7 +217,7 @@ Look at `cors_origins` (the value currently used) and `cors_origins_is_override`
 |---|---|
 | `docker compose up` fails immediately with an `ADMIN_PASSWORD` error | You didn't create `.env` from `.env.example`, or left `ADMIN_PASSWORD` unset |
 | Dashboard stuck on "確認中..." / "起動中..." forever | The API isn't reachable at `NEXT_PUBLIC_API_URL`, or you're not logged in — check the browser's network tab for 401s vs connection errors |
-| Login fails with "APIに接続できませんでした" / an `OPTIONS` request returns `400` | `CORS_ORIGINS` doesn't match the page's actual address — see [Setting CORS_ORIGINS](#setting-cors_origins) above. A Settings-screen override with a typo (e.g. a trailing `/`) beats a correct `.env` value, so check `cors_origins_is_override` too |
+| Login fails with "APIに接続できませんでした" / an `OPTIONS` request returns `400` | `CORS_ORIGINS` doesn't match the page's actual address — see [Setting CORS_ORIGINS](#setting-cors_origins) above |
 | Auto-write jobs immediately go to `error` with a connection message | Ollama isn't running, or `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL` don't point at it (`http://host.docker.internal:11434` only resolves from inside Docker on Windows/macOS; on Linux use the host's LAN IP or run Ollama in the same Compose network) |
 | `relation "projects" already exists` on `api` container startup | You have an old Postgres volume created before this project adopted Alembic migrations. Run `docker compose down -v` to reset it (**destroys all data**) or manually `alembic stamp head` against that database if you need to keep it |
 | Search always falls back to "全文一致 (PostgreSQL フォールバック)" | Qdrant isn't reachable at `QDRANT_URL` — semantic search silently degrades to a plain `ILIKE` match instead of failing |

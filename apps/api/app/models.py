@@ -184,10 +184,14 @@ class RuntimeConfig(Base):
     """A single-row table of live-editable connection settings.
 
     NULL means "no override; use the ADMIN_* / OLLAMA_* / QDRANT_*
-    environment variable". DATABASE_URL deliberately has no column here —
-    hot-swapping the connection an already-running process uses to read
-    this very table is unsafe, so it stays env/restart-only. See
-    docs/user-guide.md#connection-settings.
+    environment variable". DATABASE_URL and CORS_ORIGINS deliberately have
+    no column here: DATABASE_URL because hot-swapping the connection an
+    already-running process uses to read this very table is unsafe, so it
+    stays env/restart-only; CORS_ORIGINS because it's a security control
+    (which origins may talk to this API at all) rather than a connectivity
+    convenience, and letting it be flipped to "*" from the Settings screen
+    by anyone signed in was a bigger blast radius than a wrong Ollama URL.
+    See docs/user-guide.md#connection-settings.
     """
     __tablename__='runtime_config'
     id:Mapped[int]=mapped_column(primary_key=True,default=1)
@@ -197,7 +201,6 @@ class RuntimeConfig(Base):
     ollama_embed_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     controller_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
     controller_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
-    cors_origins:Mapped[str|None]=mapped_column(String(1000),nullable=True)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 
 class User(Base, UserMixin):
