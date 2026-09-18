@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { api, post, put, del } from "../lib/api";
+import { parseCSV, toCSV, downloadTextFile } from "../lib/csv";
 
 type Field = { key: string; label: string; type?: "text" | "textarea" | "number" | "select"; options?: string[] };
 type EntityConfig = {
@@ -9,8 +10,6 @@ type EntityConfig = {
   listPath: (pid: number) => string;
   itemPath: (id: number) => string;
   titleField: string;
-  subtitleField?: string;
-  bodyField?: string;
   fields: Field[];
   defaults: Record<string, unknown>;
   // Optional client-side filter over the fetched list (used to split World
@@ -27,11 +26,37 @@ function emptyForm(cfg: EntityConfig) {
   return f;
 }
 
+function Cell({ field, value, onChange, onCommit }: {
+  field: Field; value: unknown; onChange: (v: unknown) => void; onCommit?: () => void;
+}) {
+  if (field.type === "textarea") {
+    return <textarea rows={2} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} onBlur={onCommit} />;
+  }
+  if (field.type === "select") {
+    return (
+      <select value={String(value ?? "")} onChange={(e) => { onChange(e.target.value); onCommit?.(); }}>
+        {(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+  return (
+    <input
+      type={field.type === "number" ? "number" : "text"}
+      value={String(value ?? "")}
+      onChange={(e) => onChange(field.type === "number" ? Number(e.target.value) : e.target.value)}
+      onBlur={onCommit}
+    />
+  );
+}
+
 export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: EntityConfig }) {
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState<number | "new" | null>(null);
-  const [form, setForm] = useState<Record<string, unknown>>(emptyForm(cfg));
+  const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const [newRows, setNewRows] = useState<Record<string, unknown>[]>([]);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvResult, setCsvResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setBusy(true);
@@ -44,15 +69,18 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   }
   useEffect(() => { load(); }, [projectId]);
 
-  function startCreate() { setForm(emptyForm(cfg)); setEditing("new"); }
-  function startEdit(item: Record<string, unknown>) { setForm({ ...item }); setEditing(item.id as number); }
-  function cancel() { setEditing(null); }
-
-  async function save() {
-    if (editing === "new") await post(cfg.listPath(projectId), form);
-    else if (editing !== null) await put(cfg.itemPath(editing), form);
-    setEditing(null);
-    await load();
+  function updateField(id: number, key: string, value: unknown) {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
+  }
+  async function commitRow(id: number) {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+    setSavingIds((prev) => new Set(prev).add(id));
+    try {
+      await put(cfg.itemPath(id), item);
+    } finally {
+      setSavingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    }
   }
   async function remove(id: number) {
     if (!confirm("削除しますか？")) return;
@@ -60,51 +88,117 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     await load();
   }
 
+  function addRow() { setNewRows((prev) => [...prev, emptyForm(cfg)]); }
+  function updateNewField(idx: number, key: string, value: unknown) {
+    setNewRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [key]: value } : r)));
+  }
+  function cancelNewRow(idx: number) { setNewRows((prev) => prev.filter((_, i) => i !== idx)); }
+  async function commitNewRow(idx: number) {
+    const draft = newRows[idx];
+    if (!String(draft[cfg.titleField] ?? "").trim()) return; // nothing to save yet
+    await post(cfg.listPath(projectId), draft);
+    setNewRows((prev) => prev.filter((_, i) => i !== idx));
+    await load();
+  }
+
+  function downloadTemplate() {
+    downloadTextFile(`${cfg.title}_template.csv`, toCSV([cfg.fields.map((f) => f.key)]));
+  }
+
+  async function handleCsvFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setCsvBusy(true); setCsvResult(null);
+    try {
+      const rows = parseCSV(await file.text());
+      if (rows.length < 2) { setCsvResult("データ行が見つかりませんでした。ヘッダー行＋1行以上のデータが必要です。"); return; }
+      const [header, ...dataRows] = rows;
+      const keys = header.map((h) => h.trim());
+      let created = 0, failed = 0;
+      for (const row of dataRows) {
+        if (row.every((c) => c.trim() === "")) continue;
+        const obj: Record<string, unknown> = { ...cfg.defaults };
+        keys.forEach((key, i) => {
+          const field = cfg.fields.find((f) => f.key === key);
+          if (!field) return; // unrecognized column header — ignore it
+          const raw = (row[i] ?? "").trim();
+          obj[key] = field.type === "number" ? Number(raw) : raw;
+        });
+        if (!String(obj[cfg.titleField] ?? "").trim()) { failed++; continue; }
+        try {
+          const createdItem = await post(cfg.listPath(projectId), obj);
+          if (createdItem && createdItem.id) created++; else failed++;
+        } catch {
+          failed++;
+        }
+      }
+      setCsvResult(`${created}件を作成しました。${failed ? `（${failed}件は失敗またはスキップされました）` : ""}`);
+      await load();
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
   return (
     <div className="panel">
       <small>STORY KNOWLEDGE</small>
       <h1>{cfg.title}</h1>
       <p>{cfg.hint}</p>
-      <button className="add" onClick={startCreate}>＋ 追加</button>
-      {editing !== null && (
-        <div className="entityForm">
-          {cfg.fields.map((f) => (
-            <label key={f.key}>
-              {f.label}
-              {f.type === "textarea" ? (
-                <textarea value={String(form[f.key] ?? "")} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
-              ) : f.type === "select" ? (
-                <select value={String(form[f.key] ?? "")} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}>
-                  {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              ) : (
-                <input
-                  type={f.type === "number" ? "number" : "text"}
-                  value={String(form[f.key] ?? "")}
-                  onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value })}
-                />
-              )}
-            </label>
-          ))}
-          <div className="entityFormActions">
-            <button onClick={save}>{editing === "new" ? "作成" : "保存"}</button>
-            <button onClick={cancel}>キャンセル</button>
-          </div>
-        </div>
-      )}
-      <div className="cards">
-        {busy && items.length === 0 ? <p className="loading">読み込み中...</p> : null}
-        {items.map((x) => (
-          <div className="card" key={x.id as number}>
-            <b>{String(x[cfg.titleField] ?? "")}</b>
-            {cfg.subtitleField && <span>{String(x[cfg.subtitleField] ?? "")}</span>}
-            {cfg.bodyField && <p>{String(x[cfg.bodyField] ?? "") || "設定未入力"}</p>}
-            <div className="cardActions">
-              <button onClick={() => startEdit(x)}>編集</button>
-              <button onClick={() => remove(x.id as number)}>削除</button>
-            </div>
-          </div>
-        ))}
+      <div className="entityToolbar">
+        <button className="add" onClick={addRow}>＋ 行を追加</button>
+        <button type="button" onClick={downloadTemplate}>CSVテンプレート</button>
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={csvBusy}>
+          {csvBusy ? "取り込み中..." : "CSVインポート"}
+        </button>
+        <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleCsvFile} />
+      </div>
+      {csvResult && <p className="searchSource">{csvResult}</p>}
+      <div className="entityTableScroll">
+        <table className="entityTable">
+          <thead>
+            <tr>
+              {cfg.fields.map((f) => <th key={f.key}>{f.label}</th>)}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy && items.length === 0 && newRows.length === 0 && (
+              <tr><td colSpan={cfg.fields.length + 1} className="loading">読み込み中...</td></tr>
+            )}
+            {!busy && items.length === 0 && newRows.length === 0 && (
+              <tr><td colSpan={cfg.fields.length + 1} className="loading">まだデータがありません。「＋ 行を追加」またはCSVインポートで登録してください。</td></tr>
+            )}
+            {items.map((item) => {
+              const id = item.id as number;
+              return (
+                <tr key={id}>
+                  {cfg.fields.map((f) => (
+                    <td key={f.key}>
+                      <Cell field={f} value={item[f.key]} onChange={(v) => updateField(id, f.key, v)} onCommit={() => commitRow(id)} />
+                    </td>
+                  ))}
+                  <td className="entityRowActions">
+                    {savingIds.has(id) ? <span className="savedNote">保存中...</span> : <button onClick={() => remove(id)}>削除</button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {newRows.map((draft, idx) => (
+              <tr key={`new-${idx}`} className="entityNewRow">
+                {cfg.fields.map((f) => (
+                  <td key={f.key}>
+                    <Cell field={f} value={draft[f.key]} onChange={(v) => updateNewField(idx, f.key, v)} />
+                  </td>
+                ))}
+                <td className="entityRowActions">
+                  <button onClick={() => commitNewRow(idx)}>作成</button>
+                  <button onClick={() => cancelNewRow(idx)}>取消</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -114,7 +208,7 @@ export function CharacterPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "キャラクター", hint: "作品の正本情報。AI Context Builderが生成時に参照します。",
     listPath: (pid) => `/projects/${pid}/characters`, itemPath: (id) => `/characters/${id}`,
-    titleField: "name", subtitleField: "role", bodyField: "personality",
+    titleField: "name",
     fields: [
       { key: "name", label: "名前" }, { key: "role", label: "役割" },
       { key: "personality", label: "性格", type: "textarea" }, { key: "speech_style", label: "口調", type: "textarea" },
@@ -130,7 +224,7 @@ export function WorldPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "世界観", hint: "場所・組織・技術・魔法などの世界設定。",
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
-    titleField: "name", subtitleField: "entity_type", bodyField: "description",
+    titleField: "name",
     filter: (x) => x.entity_type !== "glossary",
     fields: [
       { key: "name", label: "名称" },
@@ -146,7 +240,7 @@ export function GlossaryPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "用語集", hint: "作品固有の用語。世界観データベースに entity_type=\"glossary\" として保存されます。",
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
-    titleField: "name", subtitleField: "location", bodyField: "description",
+    titleField: "name",
     filter: (x) => x.entity_type === "glossary",
     fields: [{ key: "name", label: "用語" }, { key: "description", label: "説明", type: "textarea" }, { key: "location", label: "カテゴリ" }],
     defaults: { entity_type: "glossary" },
@@ -157,7 +251,7 @@ export function PlotPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "プロット", hint: "作品全体および各アークの構成。",
     listPath: (pid) => `/projects/${pid}/plots`, itemPath: (id) => `/plots/${id}`,
-    titleField: "title", subtitleField: "status", bodyField: "objective",
+    titleField: "title",
     fields: [
       { key: "title", label: "タイトル" },
       { key: "plot_type", label: "種類", type: "select", options: ["main_arc", "arc", "subplot"] },
@@ -174,7 +268,7 @@ export function ForeshadowPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "伏線", hint: "設置・回収の状態を管理します。",
     listPath: (pid) => `/projects/${pid}/foreshadowings`, itemPath: (id) => `/foreshadowings/${id}`,
-    titleField: "title", subtitleField: "status", bodyField: "description",
+    titleField: "title",
     fields: [
       { key: "title", label: "タイトル" }, { key: "description", label: "説明", type: "textarea" },
       { key: "setup_episode", label: "設置話数", type: "number" }, { key: "payoff_episode", label: "回収話数", type: "number" },
@@ -188,7 +282,7 @@ export function TimelinePanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: "年表", hint: "エピソード番号に紐づく出来事の年表。",
     listPath: (pid) => `/projects/${pid}/timeline`, itemPath: (id) => `/timeline/${id}`,
-    titleField: "title", subtitleField: "world_time", bodyField: "description",
+    titleField: "title",
     fields: [
       { key: "episode_number", label: "話数", type: "number" }, { key: "title", label: "出来事" },
       { key: "world_time", label: "世界内時間" }, { key: "description", label: "説明", type: "textarea" },
