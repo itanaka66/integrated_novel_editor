@@ -88,6 +88,49 @@ cd integrated_novel_editor
 
 **任意 — 独自ドメイン＋HTTPS化：** 上記の構成はカスタムポートでの平文HTTP配信であり、テストや信頼できる小規模チームでの利用には十分です。本格的に一般公開する場合は、[Caddy](https://caddyserver.com/)などのリバースプロキシをポート3000/8000の前段に置くことをお勧めします。Caddyは自分が所有するドメインに対して自動的にTLS証明書を取得・更新してくれるため、`:3000`／`:8000`のポート指定なしで`https://your-domain`だけでアクセスできるようになります。切り替えた際は`CORS_ORIGINS`／`NEXT_PUBLIC_API_URL`も`https://`のドメインに合わせて更新してください。
 
+### 任意 — ポート開放の代わりにCloudflare Tunnelを使う
+
+[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)（`cloudflared`）は、上記のファイアウォール開放の手間を避けたい場合、特に自宅サーバーやNAT配下・動的IPのマシン（固定の公開アドレスを持たない「サーバー」）に向いた代替手段です。サーバー上で常駐する小さなプロセスがCloudflareへ**アウトバウンド**接続を張るだけで済むため、**インバウンドのポートを一切開放する必要がありません**（上記の手順3自体が不要になります）。HTTPS終端もCloudflareのエッジ側で行われるため、オリジン証明書の管理も不要です。
+
+1. **ドメインをCloudflareに追加**します（Freeプランで構いません）。まだの場合はネームサーバーをCloudflareに向けてください。
+2. **`cloudflared`をインストール**します。`docker compose`を動かしている同じマシンに入れ、ログインしてトンネルを作成します：
+   ```bash
+   cloudflared tunnel login
+   cloudflared tunnel create ine
+   ```
+3. **1つのホスト名でWebアプリとAPIの両方をルーティング**します。パスによる振り分けにすることで、ブラウザから見て両者が常に同一オリジンになるようにできます。`~/.cloudflared/config.yml`を作成：
+   ```yaml
+   tunnel: ine
+   credentials-file: /home/<user>/.cloudflared/<TUNNEL_ID>.json
+
+   ingress:
+     - hostname: novel.your-domain.com
+       path: ^/api/.*
+       service: http://localhost:8000
+     - hostname: novel.your-domain.com
+       service: http://localhost:3000
+     - service: http_status:404
+   ```
+   `cloudflared`は上から順にingressルールを評価し、最初に一致したものを使うため、同じホスト名に対する`path`指定ルールは、それを持たないルールより**必ず上**に書いてください。
+4. **DNSレコードを作成し、サービスとして常駐させます：**
+   ```bash
+   cloudflared tunnel route dns ine novel.your-domain.com
+   sudo cloudflared service install
+   sudo systemctl enable --now cloudflared
+   ```
+5. **`.env`をこの1つのホスト名に合わせて更新**し、`NEXT_PUBLIC_API_URL`を焼き込み直すためコンテナを作り直します（`docker compose up -d --build`）：
+   ```
+   CORS_ORIGINS=https://novel.your-domain.com
+   NEXT_PUBLIC_API_URL=https://novel.your-domain.com/api/v1
+   ```
+   WebアプリとAPIが同じホスト名（パスの`/api/...`部分だけが違う）を共有するため、ブラウザからは同一オリジンとして見えます。別ポート・別サブドメイン構成のときによくある失敗点である`CORS_ORIGINS`の不一致は、この構成ではほぼ気にする必要がなくなります。
+6. どこからでも`https://novel.your-domain.com`を開いてログインしてください。
+
+**Cloudflare配下（Tunnelに限らず）での既知の制限：**
+- **自動執筆の進捗を表すSSEのような長時間接続は、Cloudflareの無料／Proプランでは約100秒でエッジ側から切断されることがあります。** これはこのアプリとは無関係な、Cloudflareのプロキシ自体が持つHTTP接続のタイムアウトです。自動執筆ジョブ自体はサーバー側のバックグラウンドタスクとして動作し続けるため（そのブラウザ接続に紐づいてはいません）、切れるのはブラウザへの**リアルタイム進捗表示**だけです。自動執筆画面を開き直せばジョブの現在の状態を再取得するので、データ消失ではなく単なる不便さです。
+- **`apps/api/app/auth.py`のIPごとのログイン失敗回数制限は、訪問者の本当のIPではなくトンネル側のローカル接続を見ています。** Cloudflareは`CF-Connecting-IP`ヘッダーで元のIPを転送してきますが、このアプリはまだそれを読んでいないため、Cloudflare（に限らずリバースプロキシ全般）配下では、直接接続時と比べてIPベースの総当たり対策の精度が落ちます。リバースプロキシを使わない理由にはなりませんが、知っておく価値はあります。
+- 1つのホスト名＋パス分割の代わりに、サブドメインで振り分ける構成（`web.your-domain.com`／`api.your-domain.com`）でも構いません。その場合は`CORS_ORIGINS`／`NEXT_PUBLIC_API_URL`を実際の別々のホスト名に設定してください——この構成はブラウザから見て**クロスオリジン**になるためです。
+
 ## 3. 方式B — ネイティブ構築
 
 ### バックエンド

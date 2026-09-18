@@ -88,6 +88,49 @@ This is Option A (Docker Compose) run on a remote machine instead of your own �
 
 **Optional — a real domain with HTTPS:** the setup above serves plain HTTP on custom ports, which is fine for testing or a trusted small team. For a public deployment on a real domain, put a reverse proxy such as [Caddy](https://caddyserver.com/) in front of ports 3000/8000 — Caddy issues and renews a TLS certificate automatically for a domain you own, letting you drop the `:3000`/`:8000` ports entirely and access everything over `https://your-domain`. Remember to update `CORS_ORIGINS`/`NEXT_PUBLIC_API_URL` to the `https://` domain once you do.
 
+### Optional — Cloudflare Tunnel instead of opening ports
+
+[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) (`cloudflared`) is the easier alternative to the firewall step above for a home server or a machine behind NAT/a dynamic IP (a "サーバー" with no stable public address) — a small always-running process on the server opens an *outbound* connection to Cloudflare, so **no inbound port needs to be opened at all** (skip step 3 above entirely). Cloudflare's edge terminates HTTPS for you, so there's no origin certificate to manage either.
+
+1. **Add your domain to Cloudflare** (free plan is fine) and point its nameservers there, if you haven't already.
+2. **Install `cloudflared`** on the same machine running `docker compose`, then authenticate and create a tunnel:
+   ```bash
+   cloudflared tunnel login
+   cloudflared tunnel create ine
+   ```
+3. **Route one hostname to both the web app and the API**, using a path rule so the browser never needs to cross origins at all — create `~/.cloudflared/config.yml`:
+   ```yaml
+   tunnel: ine
+   credentials-file: /home/<user>/.cloudflared/<TUNNEL_ID>.json
+
+   ingress:
+     - hostname: novel.your-domain.com
+       path: ^/api/.*
+       service: http://localhost:8000
+     - hostname: novel.your-domain.com
+       service: http://localhost:3000
+     - service: http_status:404
+   ```
+   The `path` rule **must** come before the catch-all rule for the same hostname — `cloudflared` checks ingress rules top to bottom and uses the first match.
+4. **Create the DNS record and run it as a service:**
+   ```bash
+   cloudflared tunnel route dns ine novel.your-domain.com
+   sudo cloudflared service install
+   sudo systemctl enable --now cloudflared
+   ```
+5. **Update `.env`** to match this single hostname, then recreate the containers so `NEXT_PUBLIC_API_URL` gets baked in (`docker compose up -d --build`):
+   ```
+   CORS_ORIGINS=https://novel.your-domain.com
+   NEXT_PUBLIC_API_URL=https://novel.your-domain.com/api/v1
+   ```
+   Because the web app and the API now share one hostname (only the `/api/...` path differs), the browser sees them as the same origin — `CORS_ORIGINS` above is mostly a formality here, not the everyday failure point it is with a separate API port/subdomain.
+6. Open `https://novel.your-domain.com` from anywhere and log in as usual.
+
+**Known limitations behind Cloudflare (Tunnel or otherwise):**
+- **Long-running SSE progress streams (自動執筆) can be cut off around 100 seconds** on Cloudflare's Free/Pro plans — that's an edge-side timeout on the proxied HTTP connection itself, unrelated to this app. The auto-write job keeps running server-side either way (it's a background task, not tied to that connection); only the *live* progress updates in the browser stop arriving. Reopening the 自動執筆 screen re-fetches the job's current status, so this is an inconvenience, not data loss.
+- **The per-IP login lockout in `apps/api/app/auth.py` sees the tunnel's local connection, not the visitor's real IP** — Cloudflare forwards the original IP via a `CF-Connecting-IP` header, but this app doesn't read it yet, so behind a reverse proxy of any kind (Cloudflare included) the brute-force guard's IP-based bucketing is less precise than on a direct connection. Not a reason to avoid a reverse proxy, just worth knowing.
+- If you'd rather use routed subdomains (`web.your-domain.com` / `api.your-domain.com`) instead of one hostname with a path split, that works too — just set `CORS_ORIGINS`/`NEXT_PUBLIC_API_URL` to the actual separate hostnames, since that setup *is* cross-origin from the browser's perspective.
+
 ## 3. Option B — Running natively
 
 ### Backend
