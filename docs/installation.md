@@ -259,6 +259,26 @@ curl -u admin:<password> http://localhost:8000/api/v1/system-settings
 ```
 The `cors_origins` field in the response shows the value currently in effect (read-only — a `PUT` to this endpoint can't change it, even if you send it).
 
+## Upgrading
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+This is usually enough — Docker rebuilds any container whose files actually changed. There's one exception: **`apps/api/requirements.txt` pins the shared `editor_common` package to a moving `git+...@main` reference, not a version number** (`editor-common @ git+https://github.com/itanaka66/editor-common-module.git@main`). When only *that upstream repo* gained new commits — `requirements.txt`'s own text is unchanged — Docker's layer cache sees the `COPY requirements.txt` step as unchanged too and skips re-running `pip install`, so the `api` container keeps running whatever `editor_common` version it happened to build with, silently missing whatever changed upstream. A symptom of this is a `TypeError: ... got an unexpected keyword argument '...'` from code that otherwise looks correct — that's this app's own code calling a newer `editor_common` API than the container actually has installed. Force it explicitly when you suspect this:
+
+```bash
+docker compose build --no-cache api
+docker compose up -d api
+```
+
+To confirm which version actually made it into the running container:
+
+```bash
+docker compose exec api pip show editor-common
+```
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
@@ -269,3 +289,4 @@ The `cors_origins` field in the response shows the value currently in effect (re
 | Auto-write jobs immediately go to `error` with a connection message | Ollama isn't running, or `OLLAMA_URL`/`CONTROLLER_OLLAMA_URL` don't point at it (`http://host.docker.internal:11434` only resolves from inside Docker on Windows/macOS; on Linux use the host's LAN IP or run Ollama in the same Compose network) |
 | `relation "projects" already exists` on `api` container startup | You have an old Postgres volume created before this project adopted Alembic migrations. Run `docker compose down -v` to reset it (**destroys all data**) or manually `alembic stamp head` against that database if you need to keep it |
 | Search always falls back to "全文一致 (PostgreSQL フォールバック)" | Qdrant isn't reachable at `QDRANT_URL` — semantic search silently degrades to a plain `ILIKE` match instead of failing |
+| `TypeError: ... got an unexpected keyword argument '...'` after pulling new code | The `api` container has a stale `editor_common` build — see [Upgrading](#upgrading) above, `docker compose build --no-cache api` |
