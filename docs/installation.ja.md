@@ -176,7 +176,20 @@ NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
 
 ## 4. 初回ログイン
 
-ユーザーごとのアカウントではなく、共有の管理者アカウントが1つだけ存在します（理由は[requirements.ja.md](requirements.ja.md)と[操作マニュアルのログイン項目](user-guide.ja.md#ログイン)を参照）。ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログインしてください。ログイン画面のGoogle/GitHubボタンは意図的に無効化されています。OAuthには対応していません。
+ユーザー名`admin`と設定した`ADMIN_PASSWORD`でログインしてください。`users`テーブルが空の状態で初回起動すると、このアカウントが自動的に作成されます。Basic認証の追加アカウントを手動で作るUIはまだありませんが、Google/GitHubログイン（下記）は初回利用時に自動でアカウントを作成します。
+
+### 任意 — OAuth2ログイン（Google／GitHub）
+
+ログイン画面のGoogle/GitHubボタンは、該当プロバイダーの`_CLIENT_ID`／`_CLIENT_SECRET`を設定すると有効になります（全項目は[requirements.ja.md](requirements.ja.md#oauth2ログインgooglegithub)参照）。両方とも空欄のままなら、これまで通り無効化されたプレースホルダーのままです。設定手順：
+
+1. **プロバイダー側でOAuthアプリを作成：**
+   - Google：[Google Cloud Console](https://console.cloud.google.com/apis/credentials) →「認証情報を作成」→「OAuthクライアントID」→「ウェブアプリケーション」
+   - GitHub：[github.com/settings/developers](https://github.com/settings/developers) →「New OAuth App」
+2. **リダイレクトURIを正確に**`<OAUTH_REDIRECT_BASE_URL>/auth/callback/google`（または`/github`）**に設定**してください——これはWebアプリではなく**API**の外部到達可能なアドレスです。ローカルのDocker Compose構成であれば`http://localhost:8000/auth/callback/google`になります。ここが1文字でもズレる（末尾のスラッシュ、ポート番号、`http`と`https`の違いなど）と、プロバイダー側の独自エラー画面が出るだけで分かりにくいので、最もよくある失敗ポイントです。
+3. **発行されたクライアントID/シークレット、`OAUTH_REDIRECT_BASE_URL`、`OAUTH_LOGIN_REDIRECT_URL`を`.env`に設定**し、`SESSION_SECRET`もプレースホルダーから変更してください——ログインクッキーの署名に使われる値で、`ADMIN_PASSWORD`と同じ考え方です。
+4. `api`コンテナを作り直してください（`docker compose up -d --build api`）——これらは起動時に一度だけ読み込まれる設定で、設定画面から実行時に変更することはできません。
+
+Google/GitHubで初めてログインすると、メールアドレスのローカル部をユーザー名としてアカウントが自動作成されます（パスワードなし——そのプロバイダー経由でのみログイン可能）。別途「招待」の手順は不要です。
 
 ## 5. 動作確認
 

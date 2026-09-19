@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { clearAuth, getAuth, setUnauthorizedHandler } from "./lib/api";
+import { checkSession, clearAuth, getAuth, logout, setUnauthorizedHandler } from "./lib/api";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
 import Sidebar, { Section } from "./components/Sidebar";
@@ -19,13 +19,22 @@ export default function Studio() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => { clearAuth(); setAuthed(false); });
-    setAuthed(!!getAuth());
+    // A stored Basic Auth pair means "probably logged in" without waiting
+    // on a network round-trip — but an OAuth2 login (Google/GitHub) leaves
+    // no trace in localStorage at all, only an httpOnly session cookie
+    // that JavaScript can't read, so its presence has to be asked of the
+    // server instead.
+    if (getAuth()) {
+      setAuthed(true);
+    } else {
+      checkSession().then(setAuthed);
+    }
     return () => setUnauthorizedHandler(null);
   }, []);
 
   if (authed === null) return <div className="center">確認中...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
-  return <Workspace onLogout={() => { clearAuth(); setAuthed(false); }} />;
+  return <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />;
 }
 
 function Workspace({ onLogout }: { onLogout: () => void }) {

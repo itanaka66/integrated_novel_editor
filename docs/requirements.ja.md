@@ -83,6 +83,18 @@ Qdrant・OllamaのURLと異なり、この値は「設定＞接続設定」画�
 
 ここに載っている他のほとんどの設定と異なり、この値はサーバーではなく**ブラウザ**が読みます——値が「localhost」だと、常に「訪問者自身のマシン」を指してしまい、アプリが実際にホストされている場所ではありません。Dockerを動かしているホスト自身以外（LAN内のIP、クラウドVMのアドレス、独自ドメインなど）からWebアプリにアクセスする場合は、そのアドレスの`:8000/api/v1`に設定する必要があります。設定しないと、ホスト上で直接ブラウザを開いた場合を除き、すべてのAPI呼び出しが静かに失敗します。`scripts/setup.sh`／`setup.ps1`は、入力したホスト名からこの値を自動設定します。後で変更する場合は`web`コンテナの作り直しが必要です（例：`docker compose up -d --build web`）——同じコンテナを再起動しただけでは新しい値は反映されません。
 
+## OAuth2ログイン（Google／GitHub）
+
+| 設定項目 | デフォルト | 用途 |
+|---|---|---|
+| `SESSION_SECRET` | `change-me-session-secret` | OAuth2ログイン成功時に発行されるログインクッキーの署名鍵。`ADMIN_PASSWORD`と同じく、外部公開前にプレースホルダーから変更してください |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | （未設定） | Google Cloud ConsoleのOAuthクライアントから取得 |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | （未設定） | GitHub OAuth Appから取得 |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8000` | 外部から到達可能な**API**のアドレス。Google/GitHubが認可後にリダイレクトしてくる先で、各プロバイダーに登録する「Authorized redirect URI」（`<この値>/auth/callback/google`または`/github`）と完全に一致させる必要があります |
+| `OAUTH_LOGIN_REDIRECT_URL` | `http://localhost:3000` | Webアプリ自体のアドレス。ログイン成功後にブラウザが遷移する先 |
+
+各プロバイダーのログインボタンは、クライアントIDと**両方**のシークレットが設定されて初めて表示されます。両方空欄のままなら、これまで通りユーザー名・パスワードのみがログイン手段になります（デフォルト）。具体的なプロバイダー側の設定手順は[インストールマニュアル](installation.ja.md#任意--oauth2ログインgooglegithub)を参照してください。5つとも env／`.env`専用の設定で、起動時に一度だけ読み込まれます（変更後は`api`コンテナの作り直しが必要です）。
+
 ## 使用ポート
 
 | ポート | サービス |

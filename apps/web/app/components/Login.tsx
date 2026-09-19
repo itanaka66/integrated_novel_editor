@@ -1,12 +1,21 @@
 "use client";
-import { FormEvent, useState } from "react";
-import { api, setAuth } from "../lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import { api, API_ROOT, setAuth } from "../lib/api";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthProviders, setOauthProviders] = useState<string[]>([]);
+
+  useEffect(() => {
+    // /health needs no login (see apps/api/app/auth.py's public paths), so
+    // this is safe to call before the user has entered anything — it's
+    // just asking which "Sign in with ..." buttons the server actually has
+    // client_id/secret configured for (see config.py).
+    api("/health").then((h) => setOauthProviders(h.oauth_providers || [])).catch(() => {});
+  }, []);
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
@@ -30,6 +39,8 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     } finally { setBusy(false); }
   }
 
+  const PROVIDER_LABELS: Record<string, string> = { google: "Googleでログイン", github: "GitHubでログイン" };
+
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
@@ -40,8 +51,13 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         {error && <div className="loginError">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
         <div className="loginDivider">または</div>
-        <button type="button" className="loginOAuth" disabled title="現在は管理者パスワードでのログインのみ対応しています">Googleでログイン</button>
-        <button type="button" className="loginOAuth" disabled title="現在は管理者パスワードでのログインのみ対応しています">GitHubでログイン</button>
+        {["google", "github"].map((p) =>
+          oauthProviders.includes(p) ? (
+            <a key={p} className="loginOAuth loginOAuthLink" href={`${API_ROOT}/auth/login/${p}`}>{PROVIDER_LABELS[p]}</a>
+          ) : (
+            <button key={p} type="button" className="loginOAuth" disabled title="サーバー側でこのログイン方法が設定されていません">{PROVIDER_LABELS[p]}</button>
+          ),
+        )}
       </form>
     </div>
   );

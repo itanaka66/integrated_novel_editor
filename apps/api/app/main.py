@@ -13,7 +13,7 @@ from .ollama import generate, generate_stream
 from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
-from .auth import BasicAuthMiddleware
+from .auth import AuthMiddleware
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import runtime_config as rc
@@ -25,18 +25,47 @@ from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
-from editor_common.users import ensure_bootstrap_user
+from editor_common.users import ensure_bootstrap_user, get_or_create_oauth_user
+from editor_common.oauth import google_provider, github_provider, register_oauth_routes
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
  logger.warning('ADMIN_PASSWORD is not set; using the insecure default. Set ADMIN_USERNAME/ADMIN_PASSWORD before exposing this service.')
 app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 # Starlette wraps middleware in reverse of add order (last added = outermost),
-# so BasicAuthMiddleware is added first: CORS must stay outermost or a 401
+# so AuthMiddleware is added first: CORS must stay outermost or a 401
 # response never gets CORS headers and the browser reports an opaque network
 # error instead of a readable 401.
-app.add_middleware(BasicAuthMiddleware)
+app.add_middleware(AuthMiddleware)
 app.add_middleware(DynamicCORSMiddleware,allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+def _oauth_get_or_create_user(email,name):
+ # A fresh short-lived session, same reasoning as auth.py's _authenticate:
+ # this runs from inside editor_common.oauth's own route handler, outside
+ # the normal Depends(get_db) request graph.
+ db=SessionLocal()
+ try:
+  return get_or_create_oauth_user(db,User,email,display_name=name)
+ finally:
+  db.close()
+def _build_oauth_providers():
+ # A provider only appears once BOTH its client_id and client_secret are
+ # set — see config.py's comment. redirect_uri must exactly match what's
+ # registered as the "Authorized redirect URI" in that provider's own app
+ # settings (Google Cloud Console / GitHub OAuth Apps).
+ providers={}
+ if settings.google_client_id and settings.google_client_secret:
+  providers['google']=google_provider(settings.google_client_id,settings.google_client_secret,redirect_uri=f'{settings.oauth_redirect_base_url}/auth/callback/google')
+ if settings.github_client_id and settings.github_client_secret:
+  providers['github']=github_provider(settings.github_client_id,settings.github_client_secret,redirect_uri=f'{settings.oauth_redirect_base_url}/auth/callback/github')
+ return providers
+OAUTH_PROVIDERS=_build_oauth_providers()
+if OAUTH_PROVIDERS:
+ register_oauth_routes(
+  app,providers=OAUTH_PROVIDERS,session_secret=settings.session_secret,
+  get_or_create_user=_oauth_get_or_create_user,session_max_age_seconds=30*24*3600,
+  on_login_redirect=settings.oauth_login_redirect_url,
+  secure_cookies=settings.oauth_login_redirect_url.startswith('https://'),
+ )
 _background_tasks=set() # strong refs so asyncio doesn't GC in-flight background tasks (autosync loop)
 def chunks(e):
  s=e.content or ''; out=[]; start=0;i=0
@@ -82,7 +111,7 @@ def init():
  _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
  _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
 @app.get('/api/v1/health')
-def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin']}
+def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
 MAX_PAGE_SIZE=500
 def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
 def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())

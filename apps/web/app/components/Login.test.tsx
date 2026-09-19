@@ -6,6 +6,7 @@ import { api, setAuth } from "../lib/api";
 vi.mock("../lib/api", () => ({
   api: vi.fn(),
   setAuth: vi.fn(),
+  API_ROOT: "http://localhost:8000",
 }));
 
 describe("Login", () => {
@@ -54,9 +55,22 @@ describe("Login", () => {
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
-  it("disables the OAuth buttons since there is no OAuth integration", () => {
+  it("disables the OAuth buttons when the server has no provider configured", async () => {
+    vi.mocked(api).mockResolvedValue({ oauth_providers: [] });
     render(<Login onLoggedIn={vi.fn()} />);
+
+    await waitFor(() => expect(api).toHaveBeenCalledWith("/health"));
     expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+  });
+
+  it("turns a configured provider into a real link to its login route", async () => {
+    vi.mocked(api).mockResolvedValue({ oauth_providers: ["google"] });
+    render(<Login onLoggedIn={vi.fn()} />);
+
+    const googleLink = await screen.findByRole("link", { name: "Googleでログイン" });
+    expect(googleLink).toHaveAttribute("href", "http://localhost:8000/auth/login/google");
+    // GitHub wasn't in oauth_providers, so it stays a disabled placeholder.
     expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
   });
 });
