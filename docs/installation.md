@@ -176,7 +176,20 @@ NEXT_DEV_ALLOWED_ORIGINS=https://your-dev-domain.example npm run dev
 
 ## 4. First login
 
-There is a single shared admin account, not per-user accounts — see [requirements.md](requirements.md) and the [user guide](user-guide.md#login) for why. Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured. The Google/GitHub buttons on the login screen are intentionally disabled; there is no OAuth support.
+Log in with username `admin` and whatever `ADMIN_PASSWORD` you configured — this account is created automatically on first startup if the `users` table is still empty. There's no UI yet for creating additional Basic Auth accounts by hand; a Google/GitHub login (below) auto-creates its own account on first use instead.
+
+### Optional — OAuth2 login (Google / GitHub)
+
+The login screen's Google/GitHub buttons work once you set that provider's `_CLIENT_ID`/`_CLIENT_SECRET` (see [requirements.md](requirements.md#oauth2-login-google--github) for the full variable list) — leave both blank to keep them disabled placeholders, exactly as before. To set one up:
+
+1. **Create an OAuth app with the provider:**
+   - Google: [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → Create Credentials → OAuth client ID → Web application.
+   - GitHub: [github.com/settings/developers](https://github.com/settings/developers) → New OAuth App.
+2. **Set the Authorized redirect URI to exactly** `<OAUTH_REDIRECT_BASE_URL>/auth/callback/google` (or `/github`) — the *API's* externally-reachable address, not the web app's. For a local Docker Compose setup this is `http://localhost:8000/auth/callback/google`. Getting this one character off (trailing slash, wrong port, `https` vs `http`) is the most common way this silently fails — the provider will show its own error page rather than redirecting back to you.
+3. **Set the resulting client ID/secret, `OAUTH_REDIRECT_BASE_URL`, and `OAUTH_LOGIN_REDIRECT_URL`** in `.env`, and change `SESSION_SECRET` from its placeholder — this signs the login cookie, same idea as `ADMIN_PASSWORD`.
+4. Recreate the `api` container (`docker compose up -d --build api`) — these are read once at startup, not runtime-editable from the Settings screen.
+
+A first login via Google/GitHub auto-creates an account (no password — it can only ever sign in through that same provider) using the email's local-part as the username, so there's no separate "invite" step.
 
 ## 5. Verifying the install
 

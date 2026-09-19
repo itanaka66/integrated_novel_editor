@@ -83,6 +83,18 @@ Unlike Qdrant/Ollama, this is **not** editable from 設定 > 接続設定 (Setti
 
 Unlike most settings here, this one is read by the **browser**, not the server — "localhost" in this value always means the visitor's own machine, not wherever the app is hosted. If you access the web app from anywhere other than the Docker host itself (a LAN IP, a cloud VM's address, a domain), this must be set to that address's `:8000/api/v1`, or every API call will silently fail to connect for anyone but someone opening a browser directly on the host. `scripts/setup.sh`/`setup.ps1` set this for you from the hostname you give it. Changing it later requires recreating the `web` container (e.g. `docker compose up -d --build web`) — restarting the same container does not pick up the new value.
 
+## OAuth2 login (Google / GitHub)
+
+| Config | Default | Purpose |
+|---|---|---|
+| `SESSION_SECRET` | `change-me-session-secret` | Signs the login cookie an OAuth2 sign-in sets — change it before exposing this beyond your own machine, same as `ADMIN_PASSWORD` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | *(unset)* | From a Google Cloud Console OAuth client |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | *(unset)* | From a GitHub OAuth App |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8000` | The externally-reachable **API** address — what Google/GitHub redirect back to after consent, must exactly match the "Authorized redirect URI" registered with each provider (`<this>/auth/callback/google` or `/github`) |
+| `OAUTH_LOGIN_REDIRECT_URL` | `http://localhost:3000` | The web app's own address — where the browser ends up after a successful login |
+
+A provider's login button only appears once **both** its client ID and secret are set; leave both blank to keep username/password as the only sign-in method (the default). See the [Installation Manual](installation.md#optional--oauth2-login-google--github) for the step-by-step provider setup. All five variables are env/`.env`-only — not editable from 設定 > 接続設定, and read once at startup (recreate the `api` container after changing any of them).
+
 ## Ports used
 
 | Port | Service |

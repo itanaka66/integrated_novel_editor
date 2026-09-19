@@ -49,9 +49,9 @@ def reset_login_rate_limit():
     # in a module-level dict, keyed by client IP — Starlette's TestClient
     # always reports the same IP ("testclient"), so failures from one test
     # would otherwise bleed into the next and make unrelated tests flaky.
-    auth_module.BasicAuthMiddleware.reset_rate_limit()
+    auth_module.AuthMiddleware.reset_rate_limit()
     yield
-    auth_module.BasicAuthMiddleware.reset_rate_limit()
+    auth_module.AuthMiddleware.reset_rate_limit()
 
 
 @pytest.fixture()

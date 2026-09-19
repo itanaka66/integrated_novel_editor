@@ -11,9 +11,11 @@ A screen-by-screen reference. For setup, see the [Installation Manual](installat
 
 ## Login
 
-One shared account, configured via the `ADMIN_USERNAME` (default `admin`) / `ADMIN_PASSWORD` environment variables — not per-user accounts. There is no session or token: the browser resends this username/password as HTTP Basic Auth on every request, stored in this browser's `localStorage`. Logging out isn't a feature as such; clearing the browser's site data (or getting a 401, e.g. from a wrong password) drops you back to the login screen.
+Username/password sign-in checks a `users` table (multiple accounts are supported), not a single fixed pair — the account created automatically on first startup (`ADMIN_USERNAME`/`ADMIN_PASSWORD`, default `admin`) is just the first one. The browser resends the username/password as HTTP Basic Auth on every request, stored in this browser's `localStorage`.
 
-The "Googleでログイン" / "GitHubでログイン" buttons are visible but disabled — there's no OAuth integration. Don't wait for them to work.
+The "Googleでログイン" / "GitHubでログイン" buttons are enabled once the server has that provider's client ID/secret configured (see [requirements.md](requirements.md#oauth2-login-google--github)) — otherwise they stay visible but disabled placeholders. A Google/GitHub login sets a signed session cookie instead of using localStorage, and auto-creates its own account (no password — it can only sign in through that same provider) the first time a given email logs in.
+
+The sidebar/dashboard's "⏻ ログアウト" button clears whichever of these applies — the stored Basic Auth pair, the session cookie, or both.
 
 ## Dashboard
 
