@@ -52,6 +52,7 @@ class _FlakyClient:
 
     async def post(self, url, json):
         _FlakyClient.calls["count"] += 1
+        _FlakyClient.last_json = json
         if _FlakyClient.calls["count"] <= self.fail_times:
             raise httpx.ConnectError("connection refused")
         return _FakeResponse(self.payload)
@@ -67,6 +68,9 @@ def test_generate_retries_transient_failures_then_succeeds(monkeypatch):
     assert text == "ok"
     assert model == "test-model"
     assert _FlakyClient.calls["count"] == 2
+    # app.ollama always sends its fixed generation options (num_ctx etc.) —
+    # see GENERATION_OPTIONS.
+    assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS
 
 
 def test_generate_gives_up_after_max_attempts(monkeypatch):
