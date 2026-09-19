@@ -6,6 +6,8 @@ class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:s
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
 class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
+class EpisodeBulkDeleteRequest(BaseModel): episode_ids:list[int]
+class EpisodeBulkDeleteResult(BaseModel): deleted_count:int; renumbered_count:int; episodes:list[EpisodeOut]
 class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
 class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
 class CharacterUpdate(BaseModel): name:str|None=None; role:str|None=None; personality:str|None=None; speech_style:str|None=None; goal:str|None=None; status:str|None=None; description:str|None=None
