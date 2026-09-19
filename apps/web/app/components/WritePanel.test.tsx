@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import WritePanel from "./WritePanel";
-import { api, post } from "../lib/api";
+import { api, post, streamSSE } from "../lib/api";
 import { Project } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
   api: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
+  streamSSE: vi.fn(),
 }));
 
 const project: Project = { id: 1, name: "テスト作品", description: "", genre: "", rules: "" };
@@ -62,5 +63,27 @@ describe("WritePanel — episode management", () => {
 
     expect(screen.getByText(/タイトル中の話数（2）が実際の話数（1）と一致していません/)).toBeInTheDocument();
     expect(screen.getByText(/「第2話 目覚め」が第1話・第2話で重複しています/)).toBeInTheDocument();
+  });
+
+  it("opens the proofread panel and streams diffs from the episode's proofread/stream endpoint", async () => {
+    vi.mocked(api).mockResolvedValue([
+      { id: 1, project_id: 1, number: 1, title: "第1話", summary: "", content: "今日は良い天気です。", updated_at: "" },
+    ]);
+    vi.mocked(streamSSE).mockImplementation((path, onMessage, onDone) => {
+      expect(path).toBe("/episodes/1/proofread/stream");
+      onMessage({ delta: '[{"original": "です。", ' });
+      onMessage({ done: true, diffs: [{ original: "です。", suggested: "である。", reason: "である調に統一" }] });
+      onDone?.();
+      return () => {};
+    });
+
+    render(<WritePanel project={project} />);
+    await screen.findByText("#001 第1話");
+
+    fireEvent.click(screen.getByText("📐 文章校正"));
+
+    await screen.findByText("文章校正");
+    expect(await screen.findByText("- です。")).toBeInTheDocument();
+    expect(screen.getByText("+ である。")).toBeInTheDocument();
   });
 });
