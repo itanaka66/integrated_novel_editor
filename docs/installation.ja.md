@@ -126,6 +126,41 @@ cd integrated_novel_editor
    WebアプリとAPIが同じホスト名（パスの`/api/...`部分だけが違う）を共有するため、ブラウザからは同一オリジンとして見えます。別ポート・別サブドメイン構成のときによくある失敗点である`CORS_ORIGINS`の不一致は、この構成ではほぼ気にする必要がなくなります。
 6. どこからでも`https://novel.your-domain.com`を開いてログインしてください。
 
+#### `cloudflared`をホストに直接インストールせず、Dockerコンテナとして動かす
+
+上記の手順1〜3はそのままです（`cloudflared tunnel login`/`tunnel create`は、認証して`~/.cloudflared/<TUNNEL_ID>.json`を作成するために、やはり一度だけCLIが必要です）。変わるのはトンネルの**動かし方**だけで、`cloudflared service install`の代わりに公式イメージを使います。`docker-compose.yml`に、`db`/`api`/`web`と並べて次のサービスを追加してください：
+
+```yaml
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run ine
+    volumes:
+      - ~/.cloudflared:/etc/cloudflared:ro
+    environment:
+      TUNNEL_CONFIG: /etc/cloudflared/config.yml
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+```
+
+**ホスト直接インストールとの重要な違いが1つあります。** `config.yml`は同じ`~/.cloudflared/`ディレクトリ（上記で読み取り専用マウント）に置いたうえで、`service:`の向き先を`http://localhost:8000`/`:3000`から、Composeの**サービス名**である`http://api:8000`・`http://web:3000`に変更してください。`cloudflared`コンテナの中では`localhost`はそのコンテナ自身を指し、他のコンテナを指しません。`api`/`web`という名前で正しく解決できるのは、同じ`docker-compose.yml`内のサービスがComposeによって自動的に同じDockerネットワークに置かれるためです：
+
+```yaml
+tunnel: ine
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: novel.your-domain.com
+    path: ^/api/.*
+    service: http://api:8000
+  - hostname: novel.your-domain.com
+    service: http://web:3000
+  - service: http_status:404
+```
+
+あとは`docker compose up -d`を実行するだけで、他のサービスと一緒にトンネルも起動します。ホスト側に`systemctl`も個別インストールも一切不要です。`docker compose logs -f cloudflared`で接続状況を確認でき、`config.yml`を編集した際は`docker compose restart cloudflared`で反映されます。
+
 **Cloudflare配下（Tunnelに限らず）での既知の制限：**
 - **自動執筆の進捗を表すSSEのような長時間接続は、Cloudflareの無料／Proプランでは約100秒でエッジ側から切断されることがあります。** これはこのアプリとは無関係な、Cloudflareのプロキシ自体が持つHTTP接続のタイムアウトです。自動執筆ジョブ自体はサーバー側のバックグラウンドタスクとして動作し続けるため（そのブラウザ接続に紐づいてはいません）、切れるのはブラウザへの**リアルタイム進捗表示**だけです。自動執筆画面を開き直せばジョブの現在の状態を再取得するので、データ消失ではなく単なる不便さです。
 - **`apps/api/app/auth.py`のIPごとのログイン失敗回数制限は、訪問者の本当のIPではなくトンネル側のローカル接続を見ています。** Cloudflareは`CF-Connecting-IP`ヘッダーで元のIPを転送してきますが、このアプリはまだそれを読んでいないため、Cloudflare（に限らずリバースプロキシ全般）配下では、直接接続時と比べてIPベースの総当たり対策の精度が落ちます。リバースプロキシを使わない理由にはなりませんが、知っておく価値はあります。

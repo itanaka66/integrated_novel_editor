@@ -126,6 +126,41 @@ This is Option A (Docker Compose) run on a remote machine instead of your own �
    Because the web app and the API now share one hostname (only the `/api/...` path differs), the browser sees them as the same origin — `CORS_ORIGINS` above is mostly a formality here, not the everyday failure point it is with a separate API port/subdomain.
 6. Open `https://novel.your-domain.com` from anywhere and log in as usual.
 
+#### Running `cloudflared` in Docker instead of installing it on the host
+
+Steps 1–3 above are unchanged (`cloudflared tunnel login`/`tunnel create` still need the CLI once, to authenticate and write `~/.cloudflared/<TUNNEL_ID>.json`) — only how the tunnel actually *runs* changes, using the official image instead of `cloudflared service install`. Add it as a service in `docker-compose.yml`, alongside `db`/`api`/`web`:
+
+```yaml
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run ine
+    volumes:
+      - ~/.cloudflared:/etc/cloudflared:ro
+    environment:
+      TUNNEL_CONFIG: /etc/cloudflared/config.yml
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+```
+
+**One important difference from the host-installed setup:** put `config.yml` in that same `~/.cloudflared/` directory (mounted read-only above), and change its `service:` targets from `http://localhost:8000`/`:3000` to the Compose **service names** — `http://api:8000` and `http://web:3000`. Inside the `cloudflared` container, `localhost` means that container itself, not its siblings; `api`/`web` resolve correctly because Compose puts every service in this file on the same Docker network automatically:
+
+```yaml
+tunnel: ine
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: novel.your-domain.com
+    path: ^/api/.*
+    service: http://api:8000
+  - hostname: novel.your-domain.com
+    service: http://web:3000
+  - service: http_status:404
+```
+
+Then `docker compose up -d` starts the tunnel alongside everything else — no `systemctl`, no separate install on the host at all. `docker compose logs -f cloudflared` shows connection status; `docker compose restart cloudflared` picks up a `config.yml` edit.
+
 **Known limitations behind Cloudflare (Tunnel or otherwise):**
 - **Long-running SSE progress streams (自動執筆) can be cut off around 100 seconds** on Cloudflare's Free/Pro plans — that's an edge-side timeout on the proxied HTTP connection itself, unrelated to this app. The auto-write job keeps running server-side either way (it's a background task, not tied to that connection); only the *live* progress updates in the browser stop arriving. Reopening the 自動執筆 screen re-fetches the job's current status, so this is an inconvenience, not data loss.
 - **The per-IP login lockout in `apps/api/app/auth.py` sees the tunnel's local connection, not the visitor's real IP** — Cloudflare forwards the original IP via a `CF-Connecting-IP` header, but this app doesn't read it yet, so behind a reverse proxy of any kind (Cloudflare included) the brute-force guard's IP-based bucketing is less precise than on a direct connection. Not a reason to avoid a reverse proxy, just worth knowing.
