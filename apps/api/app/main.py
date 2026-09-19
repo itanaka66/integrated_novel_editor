@@ -9,7 +9,7 @@ from .db import get_db,SessionLocal
 from .config import settings
 from .models import *
 from .schemas import *
-from .ollama import generate
+from .ollama import generate, generate_stream
 from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
@@ -115,6 +115,83 @@ def content_disposition(filename,ext):
  # the real one as filename* per RFC 5987/6266.
  from urllib.parse import quote
  return f'attachment; filename="export.{ext}"; filename*=UTF-8\'\'{quote(filename)}.{ext}'
+# Broad style-guide categories a user picks from before generating one (see
+# SettingsPanel.tsx's category picker) — each maps to guidance appended to
+# the generation prompt so the result actually fits the intended use case,
+# rather than one generic "readable Japanese" style guide for everyone.
+STYLE_GUIDE_CATEGORY_GUIDANCE={
+ 'translation':'この文書は複数の翻訳者が関わる翻訳文書・ローカライズ文書です。訳語・言い回しを翻訳者間で統一するための用語集的なルール、一貫した文体（です・ます調かである調か）、一貫した敬語レベルを特に重視してください。',
+ 'technical':'この文書はWebサイト・マニュアル・技術文書（テクニカルライティング）です。読者が迷わないよう、専門用語の扱い方の統一、簡潔で明確な表現、見出し・箇条書きなどレイアウトの一貫性を特に重視してください。',
+ 'academic':'この文書は学術論文・研究レポートです。引用の形式や文献リストの書き方は{detail}に統一し、客観的で厳密な文体、専門用語の正確な使用を特に重視してください。',
+ 'pr':'この文書は広報・ニュース・プレスリリースです。企業イメージや媒体としての信頼性を保つため、用字用語のルール（記者ハンドブック的な統一基準）と、簡潔かつ正確に事実を伝える文体を特に重視してください。',
+}
+@app.post('/api/v1/projects/{pid}/style-guide/generate',response_model=StyleGuideOut)
+async def style_guide_generate(pid:int,x:StyleGuideGenerateRequest=StyleGuideGenerateRequest(),db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ sample='\n\n'.join(e.content for e in eps[:5] if e.content).strip()[:6000]
+ guidance=STYLE_GUIDE_CATEGORY_GUIDANCE.get(x.category,'')
+ if guidance:guidance=guidance.format(detail=x.detail or 'APA形式')+'\n'
+ prompt=f'''あなたは日本語の編集者です。以下は小説プロジェクト「{p.name}」の既存本文サンプルです。この文章の文体・表記に沿ったスタイルガイドを、次の観点を含めて箇条書きで作成してください：文体（である調/ですます調）、語彙・言い回しの傾向、句読点の使い方、表記ゆれ（漢字/ひらがな/カタカナの使い分けなど）、避けるべき表現。
+{guidance}スタイルガイド本文のみを出力し、前置きや締めの言葉は不要です。
+
+本文サンプル:
+{sample or "（まだ本文がありません。一般的で読みやすい日本語のスタイルガイドを提案してください。）"}'''
+ try:t,m=await generate(prompt)
+ except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ return StyleGuideOut(style_guide=t.strip())
+def _proofread_prompt(style_guide,content):
+ return f'''あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。
+
+スタイルガイド:
+{style_guide}
+
+本文:
+{content}
+
+出力は必ず次のJSON配列のみとし、他の説明文は一切含めないでください。修正不要なら空配列 [] を返してください。
+[{{"original": "本文中に完全一致する修正対象の原文", "suggested": "修正後の文字列", "reason": "修正理由（簡潔に）"}}]'''
+def _parse_proofread_diffs(t,content):
+ match=re.search(r'\[.*\]',t,re.DOTALL)
+ try:raw=json.loads(match.group(0) if match else t)
+ except Exception:raw=[]
+ return [{'original':d.get('original',''),'suggested':d.get('suggested',''),'reason':d.get('reason','')}
+         for d in raw if isinstance(d,dict) and d.get('original') and d.get('original') in content]
+def _proofread_setup(eid,x,db):
+ e=crud_get_or_404(db,Episode,eid,'Episode')
+ p=db.get(Project,e.project_id)
+ if not (p.style_guide or '').strip():raise HTTPException(400,'スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。')
+ content=x.content if x.content is not None else e.content
+ return e,p,content
+@app.post('/api/v1/episodes/{eid}/proofread',response_model=ProofreadResult)
+async def episode_proofread(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+ e,p,content=_proofread_setup(eid,x,db)
+ try:t,m=await generate(_proofread_prompt(p.style_guide,content))
+ except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ return ProofreadResult(diffs=[ProofreadDiff(**d) for d in _parse_proofread_diffs(t,content)])
+@app.post('/api/v1/episodes/{eid}/proofread/stream')
+async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest(),db:Session=Depends(get_db)):
+ # Proofreading a full episode can take long enough for a slow local LLM
+ # that a single buffered request sits idle past an intermediate proxy's
+ # timeout (observed: Cloudflare Tunnel returning a 504 well before the
+ # model finished) — streaming keeps bytes flowing throughout generation
+ # so nothing in the path ever sees a silent, timeout-worthy gap. The
+ # final event additionally carries the parsed, filtered `diffs`, so the
+ # client never has to parse JSON out of accumulated deltas itself.
+ e,p,content=_proofread_setup(eid,x,db)
+ prompt=_proofread_prompt(p.style_guide,content)
+ async def gen():
+  text=''
+  try:
+   async for event in generate_stream(prompt):
+    if event.get('delta'):
+     text+=event['delta']
+     yield f'data: {json.dumps({"delta":event["delta"]},ensure_ascii=False)}\n\n'
+    if event.get('done'):
+     yield f'data: {json.dumps({"done":True,"diffs":_parse_proofread_diffs(text,content)},ensure_ascii=False)}\n\n'
+  except Exception as ex:
+   yield f'data: {json.dumps({"error":f"Ollama error: {ex}"},ensure_ascii=False)}\n\n'
+ return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 @app.get('/api/v1/projects/{pid}/export')
 def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')

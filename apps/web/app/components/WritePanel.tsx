@@ -4,6 +4,7 @@ import { marked } from "marked";
 import { api, post, put } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { computeQualityIssues } from "../lib/qualityCheck";
+import ProofreadPanel from "./ProofreadPanel";
 
 const CUSTOM_ACTIONS = [
   { label: "⏱ 時系列チェック", prompt: "時系列的に矛盾がないかチェックしてください。エピソード番号、世界内時間、出来事の前後関係、人物の移動・年齢・経過時間を確認し、矛盾があれば根拠となるエピソード番号と修正案を示してください。" },
@@ -29,6 +30,7 @@ export default function WritePanel({ project }: { project: Project }) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showChecks, setShowChecks] = useState(false);
+  const [showProofread, setShowProofread] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const qualityIssues = useMemo(() => computeQualityIssues(es), [es]);
@@ -162,6 +164,7 @@ export default function WritePanel({ project }: { project: Project }) {
           <div><small>EPISODE {e.number}</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
           <div className="writeHeadActions">
             <button className="historyButton" onClick={openHistory}>🕘 履歴</button>
+            <button className="historyButton" onClick={() => setShowProofread(true)} title="スタイルガイドと照合し、差分を1件ずつ確認しながら修正します">📐 文章校正</button>
             <button onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? "保存中" : "保存＋人物状態更新"}</button>
           </div>
         </div>
@@ -221,6 +224,14 @@ export default function WritePanel({ project }: { project: Project }) {
             <div className="modalActions"><button onClick={() => setShowChecks(false)}>閉じる</button></div>
           </div>
         </div>
+      )}
+      {showProofread && e && (
+        <ProofreadPanel
+          episodeId={e.id}
+          content={e.content}
+          onApply={(next) => setE({ ...e, content: next })}
+          onClose={() => setShowProofread(false)}
+        />
       )}
       {showHistory && (
         <div className="modalOverlay" onClick={() => setShowHistory(false)}>
