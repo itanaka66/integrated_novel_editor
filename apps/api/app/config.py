@@ -42,4 +42,13 @@ class Settings(BaseSettings):
  # to disk on a timer. Interval default is once a day; retention keeps the
  # N most recent backups and deletes older ones.
  backup_enabled:bool=False; backup_dir:str='./backups'; backup_interval_seconds:int=86400; backup_retention_count:int=7
+ # Password-reset emails (POST /auth/forgot-password). smtp_host empty
+ # (the default) means "no mail server configured" — the reset link is
+ # logged instead of emailed, so forgot-password still works end-to-end
+ # in dev/CI without any SMTP setup; see app/mailer.py. The reset link
+ # points at oauth_login_redirect_url (the web app's own address) + a
+ # /reset-password route, since that's already the externally-reachable
+ # frontend address this app knows about.
+ smtp_host:str=''; smtp_port:int=587; smtp_username:str=''; smtp_password:str=''; smtp_from:str='noreply@example.com'; smtp_use_tls:bool=True
+ password_reset_max_age_seconds:int=3600
 settings=Settings()

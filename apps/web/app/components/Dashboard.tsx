@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, getCurrentUser } from "../lib/api";
+import { api, CurrentUser, getCurrentUser } from "../lib/api";
 import { Project } from "../lib/types";
 import NewProjectForm from "./NewProjectForm";
 import ImportPanel from "./ImportPanel";
+import AccountPanel from "./AccountPanel";
 
 type Twin = { metrics: { episodes: number; continuity_open: number }; health: { score: number; label: string } };
 
@@ -12,11 +13,12 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   const [twins, setTwins] = useState<Record<number, Twin>>({});
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
-  const [username, setUsername] = useState<string | null>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
 
-  useEffect(() => { getCurrentUser().then(setUsername); }, []);
+  useEffect(() => { getCurrentUser().then(setUser); }, []);
 
   async function load() {
     setBusy(true);
@@ -38,10 +40,11 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   return (
     <div className="dashboard">
       <header className="dashboardHeader">
-        <div><small>DASHBOARD</small><h1>こんにちは、{username ?? "ユーザー"}さん</h1></div>
+        <div><small>DASHBOARD</small><h1>こんにちは、{user?.username ?? "ユーザー"}さん</h1></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowImport(true)}>ファイルからインポート</button>
           <button className="add" onClick={() => setShowNew(true)}>＋ 新規作品作成</button>
+          <button onClick={() => setShowAccount(true)}>⚙ アカウント設定</button>
           <button onClick={onLogout}>⏻ ログアウト</button>
         </div>
       </header>
@@ -81,6 +84,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       </div>
       {showNew && <NewProjectForm onCancel={() => setShowNew(false)} onCreated={(p) => { setShowNew(false); onOpen(p); }} />}
       {showImport && <ImportPanel onCancel={() => setShowImport(false)} onImported={(p) => { setShowImport(false); onOpen(p); }} />}
+      {showAccount && <AccountPanel isAdmin={!!user?.isAdmin} onCancel={() => setShowAccount(false)} />}
     </div>
   );
 }
