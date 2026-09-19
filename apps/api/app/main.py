@@ -292,6 +292,38 @@ def episode_delete(eid:int,db:Session=Depends(get_db)):
  project=e.project
  file_sync.delete_episode_file(project,e)
  db.delete(e);db.commit()
+@app.post('/api/v1/projects/{pid}/episodes/bulk-delete',response_model=EpisodeBulkDeleteResult)
+def episodes_bulk_delete(pid:int,x:EpisodeBulkDeleteRequest,db:Session=Depends(get_db)):
+ # Deletes the given episodes, then closes any resulting gaps in the
+ # remaining episodes' numbering (e.g. 1,2,4,5 -> 1,2,3,4) so removing
+ # unwanted episodes doesn't leave the series with skipped episode numbers.
+ project=crud_get_or_404(db,Project,pid,'Project')
+ to_delete=db.scalars(select(Episode).where(Episode.project_id==pid,Episode.id.in_(x.episode_ids))).all()
+ deleted_count=len(to_delete)
+ for e in to_delete:
+  file_sync.delete_episode_file(project,e)
+  db.delete(e)
+ db.commit()
+ remaining=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number,Episode.id)).all()
+ renumbered_count=0
+ for i,e in enumerate(remaining,start=1):
+  if e.number!=i:
+   # episode_file_path names files by number ("0004_<id>.md"), so a plain
+   # write after renumbering would leave the old-numbered file orphaned —
+   # capture that path before mutating e.number, then remove it once the
+   # new one has been written under the new number.
+   old_path=file_sync.episode_file_path(project,e)
+   e.number=i
+   db.flush()
+   try:
+    old_path.unlink(missing_ok=True)
+   except OSError:
+    logger.exception('Failed to remove stale episode file for episode %s',e.id)
+   file_sync.write_episode_file(project,e)
+   renumbered_count+=1
+ db.commit()
+ for e in remaining:db.refresh(e)
+ return EpisodeBulkDeleteResult(deleted_count=deleted_count,renumbered_count=renumbered_count,episodes=remaining)
 @app.get('/api/v1/episodes/{eid}/revisions',response_model=list[EpisodeRevisionListOut])
 def episode_revisions(eid:int,db:Session=Depends(get_db)):
  crud_get_or_404(db,Episode,eid,'Episode')

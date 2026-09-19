@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import { api, post, put } from "../lib/api";
 import { Episode, Project } from "../lib/types";
+import { computeQualityIssues } from "../lib/qualityCheck";
 
 const CUSTOM_ACTIONS = [
   { label: "⏱ 時系列チェック", prompt: "時系列的に矛盾がないかチェックしてください。エピソード番号、世界内時間、出来事の前後関係、人物の移動・年齢・経過時間を確認し、矛盾があれば根拠となるエピソード番号と修正案を示してください。" },
@@ -25,7 +26,12 @@ export default function WritePanel({ project }: { project: Project }) {
   const [showHistory, setShowHistory] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [preview, setPreview] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showChecks, setShowChecks] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const qualityIssues = useMemo(() => computeQualityIssues(es), [es]);
 
   async function load() {
     const d = await api(`/projects/${project.id}/episodes`);
@@ -33,6 +39,35 @@ export default function WritePanel({ project }: { project: Project }) {
     setE(d[0] || null);
   }
   useEffect(() => { load(); }, [project.id]);
+
+  function toggleSelected(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`選択した${selectedIds.size}件のエピソードを削除しますか？残りのエピソードの話数は自動的に詰められます。`)) return;
+    setBulkBusy(true);
+    try {
+      const result = await post(`/projects/${project.id}/episodes/bulk-delete`, { episode_ids: Array.from(selectedIds) });
+      const newEs: Episode[] = result.episodes;
+      setEs(newEs);
+      setSelectedIds(new Set());
+      setE((cur) => (cur ? newEs.find((x) => x.id === cur.id) ?? newEs[0] ?? null : newEs[0] ?? null));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function jumpToIssue(episodeId: number | null) {
+    if (episodeId === null) return;
+    const target = es.find((x) => x.id === episodeId);
+    if (target) { setE(target); setShowChecks(false); }
+  }
 
   async function addEpisode() {
     const number = (es[es.length - 1]?.number || 0) + 1;
@@ -107,9 +142,20 @@ export default function WritePanel({ project }: { project: Project }) {
       <aside className="writeEpisodeList">
         <div className="section">EPISODES</div>
         <div className="episodes">
-          {es.map((x) => <button className={e.id === x.id ? "ep active" : "ep"} onClick={() => setE(x)} key={x.id}>#{String(x.number).padStart(3, "0")} {x.title}</button>)}
+          {es.map((x) => (
+            <div className={e.id === x.id ? "epRow active" : "epRow"} key={x.id}>
+              <input type="checkbox" checked={selectedIds.has(x.id)} onChange={() => toggleSelected(x.id)} onClick={(ev) => ev.stopPropagation()} />
+              <button className="ep" onClick={() => setE(x)}>#{String(x.number).padStart(3, "0")} {x.title}</button>
+            </div>
+          ))}
         </div>
         <button className="newEpisode" onClick={addEpisode}>＋ 新規エピソード</button>
+        <button className="newEpisode" onClick={deleteSelected} disabled={selectedIds.size === 0 || bulkBusy}>
+          {bulkBusy ? "削除中..." : `選択した${selectedIds.size || ""}件を削除（話数を自動調整）`}
+        </button>
+        <button className="newEpisode" onClick={() => setShowChecks(true)}>
+          ⚠ 品質チェック{qualityIssues.length > 0 ? `（${qualityIssues.length}）` : ""}
+        </button>
       </aside>
       <section className="main">
         <div className="writeHead">
@@ -154,6 +200,28 @@ export default function WritePanel({ project }: { project: Project }) {
         <div className="result"><small>AI RESULT</small><pre>{busy ? "AI処理中..." : ai || "結果がここに表示されます"}</pre></div>
         {ai && <button className="adopt" onClick={() => { setE({ ...e, content: e.content + "\n\n" + ai }); setAi(""); }}>＋ 本文に追加</button>}
       </aside>
+      {showChecks && (
+        <div className="modalOverlay" onClick={() => setShowChecks(false)}>
+          <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
+            <h1>品質チェック</h1>
+            <p style={{ color: "#687386", fontSize: 12, margin: 0 }}>
+              タイトルの空欄・重複・話数の不一致、本文への英単語の混在を、保存操作なしでその場でチェックします。クリックすると該当エピソードを開きます。
+            </p>
+            {qualityIssues.length === 0 ? (
+              <p className="savedNote">問題は見つかりませんでした。</p>
+            ) : (
+              <div className="revisionList">
+                {qualityIssues.map((issue, i) => (
+                  <div className="revisionRow" key={i} style={{ cursor: issue.episodeId !== null ? "pointer" : "default" }} onClick={() => jumpToIssue(issue.episodeId)}>
+                    <div><span>{issue.message}</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modalActions"><button onClick={() => setShowChecks(false)}>閉じる</button></div>
+          </div>
+        </div>
+      )}
       {showHistory && (
         <div className="modalOverlay" onClick={() => setShowHistory(false)}>
           <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
