@@ -259,6 +259,26 @@ curl -u admin:パスワード http://localhost:8000/api/v1/system-settings
 ```
 レスポンスの`cors_origins`が現在有効な値です（読み取り専用——このエンドポイントに`PUT`で送っても変更されません）。
 
+## アップグレード方法
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+通常はこれで十分です。Dockerは、実際に内容が変わったファイルを含むコンテナだけを再ビルドします。ただし1つだけ例外があります。**`apps/api/requirements.txt`は共有ライブラリ`editor_common`を、バージョン番号ではなく`git+...@main`という「動く」参照でピン留めしています**（`editor-common @ git+https://github.com/itanaka66/editor-common-module.git@main`）。この*上流リポジトリ側*にだけ新しいコミットが追加された場合——`requirements.txt`自体のテキストは変わらないため——Dockerのレイヤーキャッシュは`COPY requirements.txt`のステップを「変更なし」と判断して`pip install`を再実行せず、`api`コンテナはビルド時点の`editor_common`のまま動き続けます。上流側の変更を静かに取りこぼしたまま、というわけです。この症状は、一見正しく見えるコードから`TypeError: ... got an unexpected keyword argument '...'`のようなエラーが出る、という形で現れます——このアプリのコード自体は、コンテナに実際にインストールされているものより新しい`editor_common`のAPIを呼び出している、ということです。この状況が疑われる場合は明示的に強制してください：
+
+```bash
+docker compose build --no-cache api
+docker compose up -d api
+```
+
+実際に稼働中のコンテナにどのバージョンが入っているか確認するには：
+
+```bash
+docker compose exec api pip show editor-common
+```
+
 ## トラブルシューティング
 
 | 症状 | 想定される原因 |
@@ -269,3 +289,4 @@ curl -u admin:パスワード http://localhost:8000/api/v1/system-settings
 | 自動執筆ジョブがすぐに`error`になり接続エラーが表示される | Ollamaが起動していない、または`OLLAMA_URL`/`CONTROLLER_OLLAMA_URL`が誤っている（`http://host.docker.internal:11434`はWindows/macOSのDocker内からのみ解決可能。Linuxではホストのアドレスを別途指定するか、Ollamaを同じComposeネットワークで動かしてください） |
 | `api`コンテナ起動時に`relation "projects" already exists`エラー | このプロジェクトがAlembic導入前に作られた古いPostgresボリュームが残っています。`docker compose down -v`でリセット（**全データ削除**）するか、データを残したい場合はそのDBに対して手動で`alembic stamp head`を実行してください |
 | 検索が常に「全文一致 (PostgreSQL フォールバック)」になる | `QDRANT_URL`にQdrantが到達できていません。セマンティック検索は失敗時に単純な`ILIKE`一致検索へ自動的に切り替わります |
+| 新しいコードをpullした後に`TypeError: ... got an unexpected keyword argument '...'` | `api`コンテナの`editor_common`が古いままビルドされています。上記の[アップグレード方法](#アップグレード方法)、`docker compose build --no-cache api`を参照してください |
