@@ -4,6 +4,7 @@ import { marked } from "marked";
 import { api, post, put } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { computeQualityIssues } from "../lib/qualityCheck";
+import { useResizableWidth } from "../lib/useResizable";
 import ProofreadPanel from "./ProofreadPanel";
 
 const CUSTOM_ACTIONS = [
@@ -32,6 +33,8 @@ export default function WritePanel({ project }: { project: Project }) {
   const [showChecks, setShowChecks] = useState(false);
   const [showProofread, setShowProofread] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const episodeList = useResizableWidth("ine-write-episodelist-width", 190, 150, 400, "right");
+  const rightPanel = useResizableWidth("ine-write-rightpanel-width", 280, 220, 560, "left");
 
   const qualityIssues = useMemo(() => computeQualityIssues(es), [es]);
 
@@ -140,7 +143,7 @@ export default function WritePanel({ project }: { project: Project }) {
   if (!e) return <div className="panel"><p>エピソードがまだありません。</p><button className="add" onClick={addEpisode}>＋ エピソードを追加</button></div>;
 
   return (
-    <div className="writeLayout">
+    <div className="writeLayout" style={{ "--ep-w": `${episodeList.width}px`, "--right-w": `${rightPanel.width}px` } as React.CSSProperties}>
       <aside className="writeEpisodeList">
         <div className="section">EPISODES</div>
         <div className="episodes">
@@ -159,6 +162,7 @@ export default function WritePanel({ project }: { project: Project }) {
           ⚠ 品質チェック{qualityIssues.length > 0 ? `（${qualityIssues.length}）` : ""}
         </button>
       </aside>
+      <div className="resizeHandle" onMouseDown={episodeList.startDrag} />
       <section className="main">
         <div className="writeHead">
           <div><small>EPISODE {e.number}</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
@@ -187,6 +191,7 @@ export default function WritePanel({ project }: { project: Project }) {
           <textarea ref={textareaRef} className="novel" value={e.content} onChange={(x) => setE({ ...e, content: x.target.value })} />
         )}
       </section>
+      <div className="resizeHandle" onMouseDown={rightPanel.startDrag} />
       <aside className="right">
         <b>AI EDITOR-IN-CHIEF</b>
         <p className="context">Context Builder：本文、人物、世界観、プロット、伏線、RAGを統合</p>

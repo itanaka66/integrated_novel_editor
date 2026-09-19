@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { checkSession, clearAuth, getAuth, logout, setUnauthorizedHandler } from "./lib/api";
+import { useResizableWidth } from "./lib/useResizable";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
 import Sidebar, { Section } from "./components/Sidebar";
@@ -40,12 +41,14 @@ export default function Studio() {
 function Workspace({ onLogout }: { onLogout: () => void }) {
   const [project, setProject] = useState<Project | null>(null);
   const [section, setSection] = useState<Section>("home");
+  const sidebar = useResizableWidth("ine-sidebar-width", 190, 150, 400, "right");
 
   if (!project) return <Dashboard onOpen={(p) => { setProject(p); setSection("home"); }} onLogout={onLogout} />;
 
   return (
-    <div className="appShell">
+    <div className="appShell" style={{ "--sidebar-w": `${sidebar.width}px` } as React.CSSProperties}>
       <Sidebar project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)} onLogout={onLogout} />
+      <div className="resizeHandle" onMouseDown={sidebar.startDrag} />
       <main className="appMain">
         {section === "home" && <ProjectHome project={project} onSection={setSection} />}
         {section === "write" && <WritePanel project={project} />}
