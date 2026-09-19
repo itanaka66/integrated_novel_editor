@@ -68,9 +68,23 @@ def test_generate_retries_transient_failures_then_succeeds(monkeypatch):
     assert text == "ok"
     assert model == "test-model"
     assert _FlakyClient.calls["count"] == 2
-    # app.ollama always sends its fixed generation options (num_ctx etc.) —
-    # see GENERATION_OPTIONS.
-    assert _FlakyClient.last_json["options"] == ollama.GENERATION_OPTIONS
+    # generate() (the Writer path) sends its fixed generation options
+    # (num_ctx etc.) by default — see WRITER_GENERATION_OPTIONS.
+    assert _FlakyClient.last_json["options"] == ollama.WRITER_GENERATION_OPTIONS
+
+
+def test_controller_generate_uses_ollamas_own_defaults(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(common_ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    text, model = asyncio.run(ollama.controller_generate("hello"))
+    assert text == "ok"
+    assert model == _FAKE_CONFIG.controller_ollama_model
+    # Unlike the Writer path, the Controller model gets no options override —
+    # it runs on smaller hardware sized for Ollama's own defaults.
+    assert "options" not in _FlakyClient.last_json
 
 
 def test_generate_gives_up_after_max_attempts(monkeypatch):
