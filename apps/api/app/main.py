@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File
+from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -112,6 +112,8 @@ def init():
  _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
+@app.get('/api/v1/me')
+def me(request:Request):return {'username':request.state.username}
 MAX_PAGE_SIZE=500
 def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
 def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
