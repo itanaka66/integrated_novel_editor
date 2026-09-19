@@ -21,7 +21,12 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # A Google/GitHub-only account (editor_common.users.get_or_create_oauth_user)
     # has no password to hash — see editor_common.users.UserMixin's docstring.
-    op.alter_column('users', 'password_hash', existing_type=sa.String(length=255), nullable=True)
+    # batch_alter_table (rather than a bare op.alter_column) so this also
+    # works against SQLite, which has no native ALTER COLUMN and needs the
+    # table recreated — CI's migration round-trip check runs against
+    # SQLite even though every real deployment uses Postgres.
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.alter_column('password_hash', existing_type=sa.String(length=255), nullable=True)
     op.add_column('users', sa.Column('email', sa.String(length=255), nullable=True))
     op.create_index('ix_users_email', 'users', ['email'], unique=True)
 
@@ -29,4 +34,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index('ix_users_email', table_name='users')
     op.drop_column('users', 'email')
-    op.alter_column('users', 'password_hash', existing_type=sa.String(length=255), nullable=False)
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.alter_column('password_hash', existing_type=sa.String(length=255), nullable=False)
