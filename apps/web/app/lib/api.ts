@@ -69,6 +69,17 @@ export async function checkSession(): Promise<boolean> {
   }
 }
 
+// The username behind whichever credential actually authenticated this
+// request (Basic Auth pair or OAuth2 session cookie) — see GET /api/v1/me.
+export async function getCurrentUser(): Promise<string | null> {
+  try {
+    const r = await api("/me");
+    return r.username as string;
+  } catch {
+    return null;
+  }
+}
+
 // Clears the stored Basic Auth pair and asks the server to drop the OAuth2
 // session cookie, if any — best-effort; local state is cleared either way,
 // since that alone is enough to make studio.tsx show the login screen
