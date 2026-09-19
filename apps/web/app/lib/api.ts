@@ -69,12 +69,14 @@ export async function checkSession(): Promise<boolean> {
   }
 }
 
-// The username behind whichever credential actually authenticated this
-// request (Basic Auth pair or OAuth2 session cookie) — see GET /api/v1/me.
-export async function getCurrentUser(): Promise<string | null> {
+// Who's behind whichever credential actually authenticated this request
+// (Basic Auth pair or OAuth2 session cookie), and whether that account has
+// admin rights (gates the user-management UI) — see GET /api/v1/me.
+export type CurrentUser = { username: string; isAdmin: boolean };
+export async function getCurrentUser(): Promise<CurrentUser | null> {
   try {
     const r = await api("/me");
-    return r.username as string;
+    return { username: r.username as string, isAdmin: !!r.is_admin };
   } catch {
     return null;
   }
@@ -92,6 +94,54 @@ export async function logout(): Promise<void> {
     /* server unreachable; the local sign-out above still stands */
   }
 }
+// Changes the logged-in user's own password (GET /api/v1/me identifies
+// who that is server-side). Unlike api()/post(), this checks r.ok and
+// throws with the server's Japanese error message (e.g. wrong current
+// password) instead of silently returning it as if the call succeeded.
+export async function changeMyPassword(currentPassword: string, newPassword: string): Promise<string> {
+  const auth = getAuth();
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
+  const r = await fetch(`${API}/me/password`, {
+    method: "PUT",
+    headers,
+    credentials: "include",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    onUnauthorized?.();
+    throw new Error("unauthorized");
+  }
+  if (!r.ok) throw new Error(body.detail || "パスワードの変更に失敗しました。");
+  return body.detail as string;
+}
+
+// Both below are called from outside any logged-in session (a forgotten
+// password, by definition) — plain fetch() against API_ROOT's /auth/...
+// routes (public, see apps/api/app/auth.py's public_path_prefixes),
+// never api()'s API (=.../api/v1) base or its Basic Auth header.
+export async function forgotPassword(email: string): Promise<string> {
+  const r = await fetch(`${API_ROOT}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || "エラーが発生しました。");
+  return body.detail as string;
+}
+export async function resetPassword(token: string, newPassword: string): Promise<string> {
+  const r = await fetch(`${API_ROOT}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || "エラーが発生しました。");
+  return body.detail as string;
+}
+
 export async function post(p: string, b: unknown) {
   return api(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
 }

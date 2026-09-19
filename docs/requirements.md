@@ -95,6 +95,18 @@ Unlike most settings here, this one is read by the **browser**, not the server �
 
 A provider's login button only appears once **both** its client ID and secret are set; leave both blank to keep username/password as the only sign-in method (the default). See the [Installation Manual](installation.md#optional--oauth2-login-google--github) for the step-by-step provider setup. All five variables are env/`.env`-only — not editable from 設定 > 接続設定, and read once at startup (recreate the `api` container after changing any of them).
 
+## Account management (password change / reset / adding users)
+
+Every logged-in user can change their own password (ダッシュボード > ⚙ アカウント設定), and an admin account (`is_admin=true` — the bootstrap `ADMIN_USERNAME` account always is) can add new accounts from the same screen, optionally with an email address. A "パスワードをお忘れですか？" link on the login screen sends a reset email to accounts that have an email set (via Google/GitHub login, or one entered when an admin added the account); the emailed link is time-limited (1 hour by default) and single-purpose — it can't be reused as a session token.
+
+| Config | Default | Purpose |
+|---|---|---|
+| `SMTP_HOST` | *(unset)* | Mail server for password-reset emails. Unset (the default) means the reset link is only written to the `api` container's log instead of actually emailed — fine for local/dev use, not for anyone else to receive it |
+| `SMTP_PORT` | `587` | |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | *(unset)* | Leave both unset for a server that doesn't require auth |
+| `SMTP_FROM` | `noreply@example.com` | The `From:` address on reset emails |
+| `SMTP_USE_TLS` | `true` | STARTTLS — turn off only for a server that doesn't support it |
+
 ## Ports used
 
 | Port | Service |

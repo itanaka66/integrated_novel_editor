@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Login from "./Login";
-import { api, setAuth } from "../lib/api";
+import { api, forgotPassword, setAuth } from "../lib/api";
 
 vi.mock("../lib/api", () => ({
   api: vi.fn(),
   setAuth: vi.fn(),
+  forgotPassword: vi.fn(),
   API_ROOT: "http://localhost:8000",
 }));
 
@@ -13,6 +14,7 @@ describe("Login", () => {
   beforeEach(() => {
     vi.mocked(api).mockReset();
     vi.mocked(setAuth).mockReset();
+    vi.mocked(forgotPassword).mockReset();
   });
 
   it("stores credentials and calls onLoggedIn when the check succeeds", async () => {
@@ -72,5 +74,18 @@ describe("Login", () => {
     expect(googleLink).toHaveAttribute("href", "http://localhost:8000/auth/login/google");
     // GitHub wasn't in oauth_providers, so it stays a disabled placeholder.
     expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+  });
+
+  it("switches to the forgot-password form and reports the server's message", async () => {
+    vi.mocked(api).mockResolvedValue({ oauth_providers: [] });
+    vi.mocked(forgotPassword).mockResolvedValue("登録されているメールアドレス宛てに、パスワード再設定用のメールを送信しました。");
+    render(<Login onLoggedIn={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "パスワードをお忘れですか？" }));
+    fireEvent.change(screen.getByPlaceholderText("メールアドレス"), { target: { value: "user@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定メールを送信" }));
+
+    await waitFor(() => expect(forgotPassword).toHaveBeenCalledWith("user@example.com"));
+    expect(await screen.findByText(/再設定用のメールを送信しました/)).toBeInTheDocument();
   });
 });

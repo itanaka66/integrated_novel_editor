@@ -40,6 +40,13 @@ class AIGenerate(BaseModel): project_id:int; episode_id:int|None=None; instructi
 class RagIndex(BaseModel): project_id:int
 class RagSearch(BaseModel): project_id:int; query:str; limit:int=8
 class RagSearchAll(BaseModel): query:str; limit:int=8
+class PasswordChangeRequest(BaseModel): current_password:str; new_password:str
+class ForgotPasswordRequest(BaseModel): email:str
+class ResetPasswordRequest(BaseModel): token:str; new_password:str
+class UserCreate(BaseModel): username:str; password:str; is_admin:bool=False; email:str|None=None
+class UserOut(BaseModel):
+    id:int; username:str; email:str|None; is_admin:bool; is_active:bool
+    model_config=ConfigDict(from_attributes=True)
 class CharacterStateOut(BaseModel):
     id:int; project_id:int; character_id:int; episode_id:int|None; episode_number:int; status:str; location:str; emotion:str; health:str; goal:str; knowledge:str; notes:str
     model_config=ConfigDict(from_attributes=True)

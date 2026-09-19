@@ -17,9 +17,15 @@ The "Googleでログイン" / "GitHubでログイン" buttons are enabled once t
 
 The sidebar/dashboard's "⏻ ログアウト" button clears whichever of these applies — the stored Basic Auth pair, the session cookie, or both.
 
+Forgot your password? "パスワードをお忘れですか？" on the login screen emails a time-limited reset link to that account's email address (only accounts that have one set — see "Account settings" below). If the server has no mail server configured (`SMTP_HOST`, see [requirements.md](requirements.md#account-management-password-change--reset--adding-users)), the link is only written to the `api` container's log instead of actually emailed.
+
 ## Dashboard
 
 Lists all projects as cards, each showing genre and a progress bar (episodes written ÷ that project's episode target). The panel on the right shows detailed stats — episode count, open continuity issues, and an overall health score — for your most recently created project. Click a card to open that project. "＋ 新規作品作成" opens the new-project form.
+
+### Account settings
+
+"⚙ アカウント設定" opens a form to change your own password (current password required). An admin account (`is_admin=true` — the bootstrap `ADMIN_USERNAME` account always is) also sees a "ユーザー管理" section here listing every account, with a form to add a new one — username, initial password, an optional email (needed for that account to be able to use "パスワードをお忘れですか？"), and whether to grant it admin rights.
 
 *The "AI利用状況" (AI usage) stat mentioned in early design sketches is not implemented — nothing tracks token/request usage yet.*
 

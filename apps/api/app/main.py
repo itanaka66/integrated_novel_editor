@@ -25,8 +25,10 @@ from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
 from . import backup as backup_mod
-from editor_common.users import ensure_bootstrap_user, get_or_create_oauth_user
+from editor_common.users import ensure_bootstrap_user, get_or_create_oauth_user, authenticate_user, change_password, create_user, list_users, UsernameTakenError
 from editor_common.oauth import google_provider, github_provider, register_oauth_routes
+from editor_common import session_tokens
+from . import mailer
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger(__name__)
 if settings.admin_password=='novel-studio-change-me':
@@ -113,7 +115,65 @@ def init():
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
 @app.get('/api/v1/me')
-def me(request:Request):return {'username':request.state.username}
+def me(request:Request,db:Session=Depends(get_db)):
+ u=db.scalar(select(User).where(User.username==request.state.username))
+ return {'username':request.state.username,'is_admin':bool(u and u.is_admin)}
+@app.put('/api/v1/me/password')
+def change_my_password(x:PasswordChangeRequest,request:Request,db:Session=Depends(get_db)):
+ if authenticate_user(db,User,request.state.username,x.current_password) is None:
+  raise HTTPException(400,'現在のパスワードが正しくありません')
+ try:
+  change_password(db,User,request.state.username,x.new_password)
+ except ValueError as e:
+  raise HTTPException(400,str(e))
+ return {'detail':'パスワードを変更しました'}
+def require_admin(request:Request,db:Session=Depends(get_db))->User:
+ u=db.scalar(select(User).where(User.username==request.state.username))
+ if u is None or not u.is_admin:raise HTTPException(403,'管理者のみ操作できます')
+ return u
+@app.get('/api/v1/users',response_model=list[UserOut])
+def users_list(admin:User=Depends(require_admin),db:Session=Depends(get_db)):return list_users(db,User)
+@app.post('/api/v1/users',response_model=UserOut)
+def users_add(x:UserCreate,admin:User=Depends(require_admin),db:Session=Depends(get_db)):
+ email=(x.email or '').strip().lower() or None
+ if email and db.scalar(select(User).where(User.email==email)):
+  raise HTTPException(409,'そのメールアドレスは既に使われています')
+ try:
+  u=create_user(db,User,x.username,x.password,is_admin=x.is_admin)
+ except UsernameTakenError:
+  raise HTTPException(409,'そのユーザー名は既に使われています')
+ except ValueError as e:
+  raise HTTPException(400,str(e))
+ if email:
+  u.email=email;db.commit();db.refresh(u)
+ return u
+# Public (see AuthMiddleware's public_path_prefixes=('/auth',)) — reachable
+# without being logged in, since "I forgot my password" implies exactly that.
+@app.post('/auth/forgot-password')
+def forgot_password(x:ForgotPasswordRequest,db:Session=Depends(get_db)):
+ email=x.email.strip().lower()
+ user=db.scalar(select(User).where(User.email==email)) if email else None
+ if user is not None and user.is_active:
+  token=session_tokens.sign(settings.session_secret,{'uid':user.id,'purpose':'pwreset'},max_age_seconds=settings.password_reset_max_age_seconds)
+  link=f'{settings.oauth_login_redirect_url}/reset-password?token={token}'
+  mailer.send_email(user.email,'【Integrated Novel Editor】パスワード再設定',f'以下のリンクから新しいパスワードを設定してください（{settings.password_reset_max_age_seconds//60}分間有効）:\n\n{link}\n\n心当たりがない場合はこのメールを無視してください。')
+ # Same response either way — an OAuth2-only or unknown email must not be
+ # distinguishable from a real one that just got an email, or this becomes
+ # an account-enumeration oracle.
+ return {'detail':'登録されているメールアドレス宛てに、パスワード再設定用のメールを送信しました。'}
+@app.post('/auth/reset-password')
+def reset_password(x:ResetPasswordRequest,db:Session=Depends(get_db)):
+ payload=session_tokens.verify(settings.session_secret,x.token)
+ if not payload or payload.get('purpose')!='pwreset':
+  raise HTTPException(400,'リンクが無効か期限切れです。再度パスワード再設定をリクエストしてください。')
+ user=db.get(User,payload.get('uid'))
+ if user is None or not user.is_active:
+  raise HTTPException(400,'リンクが無効です。')
+ try:
+  change_password(db,User,user.username,x.new_password)
+ except ValueError as e:
+  raise HTTPException(400,str(e))
+ return {'detail':'パスワードを再設定しました。新しいパスワードでログインしてください。'}
 MAX_PAGE_SIZE=500
 def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
 def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())

@@ -1,6 +1,6 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
-import { api, API_ROOT, setAuth } from "../lib/api";
+import { api, API_ROOT, forgotPassword, setAuth } from "../lib/api";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -8,6 +8,10 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauthProviders, setOauthProviders] = useState<string[]>([]);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
 
   useEffect(() => {
     // /health needs no login (see apps/api/app/auth.py's public paths), so
@@ -41,6 +45,32 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
 
   const PROVIDER_LABELS: Record<string, string> = { google: "Googleでログイン", github: "GitHubでログイン" };
 
+  async function submitForgot(ev: FormEvent) {
+    ev.preventDefault();
+    setForgotBusy(true);
+    try {
+      const detail = await forgotPassword(forgotEmail);
+      setForgotMessage(detail);
+    } catch (err) {
+      setForgotMessage(err instanceof Error ? err.message : "エラーが発生しました。");
+    } finally { setForgotBusy(false); }
+  }
+
+  if (showForgot) {
+    return (
+      <div className="center">
+        <form className="loginCard" onSubmit={submitForgot}>
+          <b>✦ パスワード再設定</b>
+          <p>登録済みのメールアドレスに、再設定用のリンクを送信します。</p>
+          <input placeholder="メールアドレス" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} autoFocus />
+          {forgotMessage && <div className="loginError">{forgotMessage}</div>}
+          <button type="submit" disabled={forgotBusy}>{forgotBusy ? "送信中..." : "再設定メールを送信"}</button>
+          <button type="button" className="loginOAuth loginOAuthLink" onClick={() => { setShowForgot(false); setForgotMessage(""); }}>ログイン画面に戻る</button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
@@ -50,6 +80,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         <input placeholder="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
+        <button type="button" className="loginOAuth loginOAuthLink" onClick={() => setShowForgot(true)}>パスワードをお忘れですか？</button>
         <div className="loginDivider">または</div>
         {["google", "github"].map((p) =>
           oauthProviders.includes(p) ? (
