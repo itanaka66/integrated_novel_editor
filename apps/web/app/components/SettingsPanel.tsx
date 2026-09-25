@@ -368,14 +368,6 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
               </label>
               {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>既定値に戻す</button>}
 
-              <label>
-                CORS許可オリジン
-                <input value={sys.cors_origins} readOnly disabled />
-              </label>
-              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
-                セキュリティに関わる設定のため、この画面からは変更できません。変更するにはサーバーの環境変数<code>CORS_ORIGINS</code>（<code>.env</code>）を編集し、再起動してください（Docker Composeの場合は<code>docker compose up -d</code>で<code>api</code>コンテナを作り直します）。詳しくはインストールマニュアルの「CORS_ORIGINSの設定方法」を参照してください。
-              </p>
-
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
                 各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。
               </p>
