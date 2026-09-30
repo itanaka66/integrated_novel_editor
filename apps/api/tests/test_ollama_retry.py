@@ -50,9 +50,10 @@ class _FlakyClient:
     async def __aexit__(self, *a):
         return False
 
-    async def post(self, url, json):
+    async def post(self, url, json, headers=None):
         _FlakyClient.calls["count"] += 1
         _FlakyClient.last_json = json
+        _FlakyClient.last_headers = headers
         if _FlakyClient.calls["count"] <= self.fail_times:
             raise httpx.ConnectError("connection refused")
         return _FakeResponse(self.payload)
@@ -85,6 +86,40 @@ def test_controller_generate_uses_ollamas_own_defaults(monkeypatch):
     # Unlike the Writer path, the Controller model gets no options override —
     # it runs on smaller hardware sized for Ollama's own defaults.
     assert "options" not in _FlakyClient.last_json
+
+
+def test_generate_sends_no_authorization_header_when_no_api_key_configured(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(common_ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(ollama.env_settings, "ollama_api_key", "")
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert _FlakyClient.last_headers == {}
+
+
+def test_generate_sends_writer_api_key_as_bearer_header(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(common_ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(ollama.env_settings, "ollama_api_key", "writer-secret")
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.generate("hello", model="test-model"))
+    assert _FlakyClient.last_headers == {"Authorization": "Bearer writer-secret"}
+
+
+def test_controller_generate_uses_its_own_api_key_not_the_writers(monkeypatch):
+    _FlakyClient.calls["count"] = 0
+    monkeypatch.setattr(common_ollama, "RETRY_BACKOFF_SECONDS", 0)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda *a, **kw: _FAKE_CONFIG)
+    monkeypatch.setattr(ollama.env_settings, "ollama_api_key", "writer-secret")
+    monkeypatch.setattr(ollama.env_settings, "controller_ollama_api_key", "controller-secret")
+    monkeypatch.setattr(common_ollama.httpx, "AsyncClient", lambda **kw: _FlakyClient(fail_times=0, payload={"response": "ok"}, **kw))
+
+    asyncio.run(ollama.controller_generate("hello"))
+    assert _FlakyClient.last_headers == {"Authorization": "Bearer controller-secret"}
 
 
 def test_generate_gives_up_after_max_attempts(monkeypatch):

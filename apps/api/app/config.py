@@ -12,6 +12,15 @@ class Settings(BaseSettings):
  database_url:str='postgresql+psycopg2://novel:novel@localhost:5432/novel'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
  admin_username:str='admin'; admin_password:str='novel-studio-change-me'
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
+ # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
+ # embeddings and Controller respectively) when set — see
+ # editor_common.ollama's module docstring. A bare local `ollama serve` has
+ # no auth at all, so both are blank by default; set one only if your Ollama
+ # sits behind something that does check one (a gated reverse proxy, a
+ # hosted/cloud Ollama offering, an OpenAI-API-compatible gateway). Secrets
+ # like this stay env/.env-only, never exposed or editable from 設定 >
+ # 接続設定, unlike the URL/model overrides there.
+ ollama_api_key:str=''; controller_ollama_api_key:str=''
  # OAuth2 ("Googleでログイン" / "GitHubでログイン") — see editor_common.oauth.
  # A provider only appears as a login option once BOTH its client_id and
  # client_secret are set (empty strings, the default, leave that provider
