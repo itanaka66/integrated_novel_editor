@@ -10,3 +10,8 @@ ollama/
 novel_storage/
 *.log
 .DS_Store
+installer/windows-nodocker/.cache/
+installer/windows-nodocker/payload/
+apps/api/build/
+apps/api/*.spec
+dist/
