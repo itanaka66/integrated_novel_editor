@@ -10,6 +10,24 @@ from .planner.planner_service import PlannerService
 
 running = {}
 
+def _check_stopped(db,job):
+    """Re-reads `job`'s status and, if a stop was requested (status
+    'stopping', set by POST /auto-write/{id}/stop on a separate request),
+    transitions it to 'stopped' and returns True. Call this at every
+    natural pause point within an episode's processing — each Controller/
+    Writer call can take minutes, so checking only once per episode (at
+    the top of the `for n in range(...)` loop) left a stop request
+    sitting unnoticed for however long the in-progress episode's *entire*
+    remaining pipeline took to finish, and if that happened to be the
+    last episode in range, the loop's normal exit then overwrote
+    'stopping' with 'completed' — the stop was silently dropped instead of
+    ever reaching 'stopped'."""
+    db.refresh(job)
+    if job.status=='stopping':
+        job.status='stopped'; db.commit()
+        return True
+    return False
+
 def _json(text):
     text=(text or '').strip()
     m=re.search(r'\{.*\}', text, re.S)
@@ -50,8 +68,7 @@ async def run_job(job_id,premise='',overwrite=False):
         job.last_message='Series Planner: EP.1～500 全体構成を確認中'; db.commit()
         series_obj=await planner.ensure_series(db,job.project_id,premise)
         for n in range(job.start_episode,job.end_episode+1):
-            db.refresh(job)
-            if job.status=='stopping': job.status='stopped'; db.commit(); return
+            if _check_stopped(db,job): return
             job.current_episode=n; job.last_message=f'EP.{n}: 階層Plannerを展開中'; db.commit()
             project=db.get(Project,job.project_id)
             existing=db.scalar(select(Episode).where(Episode.project_id==job.project_id,Episode.number==n))
@@ -71,6 +88,7 @@ async def run_job(job_id,premise='',overwrite=False):
             plan=json.loads(ep_obj.content)
 
             # Controller-owned preflight
+            if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Controller preflight (timeline/character/world/plot)'; db.commit()
             preflight_prompt=f'''A770 Controllerです。EP.{n}の執筆前監査を行います。
 担当は時系列・人物状態・世界観・プロット。文章品質は対象外。
@@ -83,6 +101,7 @@ JSONのみ: {{"status":"PASS|WARN|BLOCK","issues":[],"constraints":[]}}'''
                 if repaired: plan=repaired; ep_obj.content=json.dumps(plan,ensure_ascii=False); db.commit()
 
             # RTX3090 Writer
+            if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Writer ({job.writer_model})'; db.commit()
             writer_prompt=f'''あなたはRTX3090上のWriter AIです。EP.{n}の完成した日本語小説本文だけを出力してください。
 Controllerが決めた計画とStory Digital Twinを厳守してください。
@@ -96,6 +115,7 @@ Controllerが決めた計画とStory Digital Twinを厳守してください。
             content,_=await generate(writer_prompt,job.writer_model)
 
             # Controller final gate
+            if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Controller final gate'; db.commit()
             gate=await _controller_gate(project,ctx,series,arc,mini,plan,content)
             if gate.get('status')=='BLOCK':
@@ -119,6 +139,13 @@ Controllerが決めた計画とStory Digital Twinを厳守してください。
                 except Exception: pass
             job.last_message=f'EP.{n}: completed / gate={gate.get("status","UNKNOWN")}'; db.commit()
             await asyncio.sleep(0)
+        # A stop requested during this last episode's remaining
+        # post-processing (save/character-state update/RAG index/continuity
+        # check) would otherwise never be seen — there's no next loop
+        # iteration to catch it at the top — and the job would silently
+        # finish as 'completed' instead of the 'stopped' the caller asked
+        # for. One last check here closes that gap.
+        if _check_stopped(db,job): return
         job.status='completed'; job.last_message='全エピソード生成完了'; db.commit()
     except Exception as ex:
         job.status='error'; job.last_message=f'{type(ex).__name__}: {ex}'; db.commit()
