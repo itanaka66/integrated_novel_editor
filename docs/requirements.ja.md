@@ -44,6 +44,8 @@ ControllerとWriterは**同じ**Ollamaサーバー（モデル名だけ変える
 
 上記のQdrant URLと両方のOllamaのURL/モデルは、アプリの設定＞接続設定画面からも実行中に変更できます（[操作マニュアル](user-guide.ja.md#接続設定)参照）。多くの場合、環境変数を編集して再起動するよりこちらの方が手軽です。
 
+Ollamaが認証を要求する何か（アクセスキーで保護されたリバースプロキシ、Ollamaのホスティング／クラウドサービス、OpenAI API互換ゲートウェイなど）の背後にある場合は、`OLLAMA_API_KEY`（Writer／埋め込み用）や`CONTROLLER_OLLAMA_API_KEY`（Controller用）を設定してください。設定すると、そのサーバーへの全リクエストに`Authorization: Bearer <key>`ヘッダーが付加されます。素の`ollama serve`には認証がないため両方とも既定は空欄（ヘッダー自体を送信しない）で、このアプリの他の認証情報と同様にenv／`.env`専用であり、接続設定画面からは変更できません。
+
 ## ローカルディスク／GitHubへのエピソード保存
 
 | 設定項目 | デフォルト | 用途 |

@@ -44,6 +44,8 @@ The Controller and Writer can point at the **same** Ollama server (just differen
 
 Qdrant URL and both Ollama endpoints/models above can also be changed live from the app's 設定 > 接続設定 screen — see the [User Guide](user-guide.md#connection-settings) — which is usually more convenient than editing these env vars and restarting.
 
+If Ollama sits behind something that requires authentication — a gated reverse proxy, a hosted/cloud Ollama offering, an OpenAI-API-compatible gateway — set `OLLAMA_API_KEY` (Writer/embeddings) and/or `CONTROLLER_OLLAMA_API_KEY` (Controller), sent as `Authorization: Bearer <key>` on every request to that server. Both are blank by default (no header sent at all) since a bare local `ollama serve` has no auth, and — like other credentials in this app — are env/`.env`-only, not editable from 接続設定.
+
 ## Local-disk / GitHub episode storage
 
 | Config | Default | Purpose |
