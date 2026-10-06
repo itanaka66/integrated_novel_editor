@@ -16,6 +16,43 @@ const ICONS: { key: Section; label: string }[] = [
   { key: "settings", label: "⚙ 設定" },
 ];
 
+const LANGUAGES: { code: string; label: string }[] = [
+  { code: "ja", label: "日本語" }, { code: "en", label: "English" }, { code: "zh-CN", label: "简体中文" },
+  { code: "ko", label: "한국어" }, { code: "es", label: "Español" }, { code: "fr", label: "Français" },
+  { code: "de", label: "Deutsch" }, { code: "pt-BR", label: "Português (BR)" },
+];
+type TranslateJob = { id: number; project_id: number | null; language: string; status: string; progress_percent: number; last_message: string };
+
+export default function ProjectHome({ project, onSection, onOpenProject }: { project: Project; onSection: (s: Section) => void; onOpenProject?: (p: Project) => void }) {
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [tJob, setTJob] = useState<TranslateJob | null>(null);
+  const [tError, setTError] = useState("");
+  const tBusy = !!tJob && (tJob.status === "queued" || tJob.status === "running");
+
+  // Poll the background translation job until it finishes.
+  useEffect(() => {
+    if (!tJob || !tBusy) return;
+    const t = setInterval(async () => {
+      try {
+        const j = await api(`/translate-jobs/${tJob.id}`);
+        if (j?.id) setTJob(j); else { setTError(j?.detail || "進捗の取得に失敗しました"); setTJob(null); }
+      } catch { /* transient; retry on next tick */ }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [tJob, tBusy]);
+
+  async function translate(code: string, label: string) {
+    if (!window.confirm(`作品全編を「${label}」に翻訳し、新しい作品として作成します（元の作品は変更されません）。エピソード数が多いと時間がかかります。よろしいですか？`)) return;
+    setTError(""); setTJob(null);
+    try {
+      const j = await api(`/projects/${project.id}/translate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: code }) });
+      if (j?.id) setTJob(j); else setTError(j?.detail || "翻訳を開始できませんでした");
+    } catch (e) { setTError(e instanceof Error ? e.message : "翻訳を開始できませんでした"); }
+  }
+  async function openTranslated() {
+    if (!tJob?.project_id || !onOpenProject) return;
+    const p = await api(`/projects/${tJob.project_id}`);
+    if (p?.id) onOpenProject(p);
 type DigestResult = { project: Project; source_episode_count: number; episode_count: number; source_chars: number; chars: number; source_numbers: number[] };
 
 export default function ProjectHome({ project, onSection, onOpenProject }: { project: Project; onSection: (s: Section) => void; onOpenProject?: (p: Project) => void }) {
@@ -49,6 +86,17 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{x.label}</button>)}
       </div>
       <div className="card">
+        <small>多言語化（全編翻訳）</small>
+        <p>作品全編を選択した言語に翻訳し、新しい作品として作成します。</p>
+        <div className="exportButtons">
+          {LANGUAGES.map((l) => <button key={l.code} onClick={() => translate(l.code, l.label)} disabled={tBusy || episodes.length === 0}>{l.label}</button>)}
+        </div>
+        {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
+        {tJob && (
+          <div className="resultCard">
+            <b>{tJob.status === "completed" ? "翻訳完了" : tJob.status === "error" ? "翻訳エラー" : `翻訳中 ${tJob.progress_percent}%`}</b>
+            <p>{tJob.last_message}</p>
+            {tJob.status === "completed" && onOpenProject && <button onClick={openTranslated}>翻訳版を開く</button>}
         <small>総集編</small>
         <p>プロット終端・伏線回収・最終話などのクライマックス話を集め、約1/2の分量の新しい作品を作成します。</p>
         <button onClick={makeDigest} disabled={digesting || episodes.length === 0}>{digesting ? "作成中..." : "総集編作成"}</button>

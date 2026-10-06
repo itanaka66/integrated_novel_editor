@@ -16,6 +16,7 @@ from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
+from . import translator
 from . import digest as digest_mod
 from . import runtime_config as rc
 from . import file_sync
@@ -284,6 +285,23 @@ async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest()
   except Exception as ex:
    yield f'data: {json.dumps({"error":f"Ollama error: {ex}"},ensure_ascii=False)}\n\n'
  return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
+def _translate_job_out(job):
+ pct=round(job['processed_episodes']/job['total_episodes']*100,1) if job['total_episodes'] else 0.0
+ return TranslateJobOut(**job,progress_percent=pct)
+@app.post('/api/v1/projects/{pid}/translate',response_model=TranslateJobOut)
+async def project_translate(pid:int,x:TranslateRequest,db:Session=Depends(get_db)):
+ # Translates every episode into a NEW project in the background (a full
+ # novel takes far longer than a request should stay open); poll the job.
+ crud_get_or_404(db,Project,pid,'Project')
+ if x.language not in translator.LANGUAGES:raise HTTPException(400,'unsupported language: '+', '.join(translator.LANGUAGES))
+ job=translator.new_job(pid,x.language)
+ translator.running[job['id']]=asyncio.create_task(translator.run_translation(job))
+ return _translate_job_out(job)
+@app.get('/api/v1/translate-jobs/{job_id}',response_model=TranslateJobOut)
+def translate_job_get(job_id:int):
+ job=translator.jobs.get(job_id)
+ if not job:raise HTTPException(404,'Translate job not found')
+ return _translate_job_out(job)
 @app.post('/api/v1/projects/{pid}/digest',response_model=DigestResult)
 def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(get_db)):
  # 総集編: a new, independent project holding only the climax episodes
