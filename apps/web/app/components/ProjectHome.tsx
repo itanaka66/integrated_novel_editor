@@ -53,6 +53,23 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
     if (!tJob?.project_id || !onOpenProject) return;
     const p = await api(`/projects/${tJob.project_id}`);
     if (p?.id) onOpenProject(p);
+type DigestResult = { project: Project; source_episode_count: number; episode_count: number; source_chars: number; chars: number; source_numbers: number[] };
+
+export default function ProjectHome({ project, onSection, onOpenProject }: { project: Project; onSection: (s: Section) => void; onOpenProject?: (p: Project) => void }) {
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [digesting, setDigesting] = useState(false);
+  const [digest, setDigest] = useState<DigestResult | null>(null);
+  const [digestError, setDigestError] = useState("");
+
+  async function makeDigest() {
+    if (!window.confirm("クライマックス中心に約1/2の分量で、新しい作品「総集編」を作成します（元の作品は変更されません）。よろしいですか？")) return;
+    setDigesting(true); setDigestError(""); setDigest(null);
+    try {
+      const r = await api(`/projects/${project.id}/digest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ratio: 0.5 }) });
+      if (r?.project) setDigest(r); else setDigestError(r?.detail || "総集編の作成に失敗しました");
+    } catch (e) {
+      setDigestError(e instanceof Error ? e.message : "総集編の作成に失敗しました");
+    } finally { setDigesting(false); }
   }
   useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes); }, [project.id]);
   const goal = project.episode_goal || 500;
@@ -80,6 +97,15 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
             <b>{tJob.status === "completed" ? "翻訳完了" : tJob.status === "error" ? "翻訳エラー" : `翻訳中 ${tJob.progress_percent}%`}</b>
             <p>{tJob.last_message}</p>
             {tJob.status === "completed" && onOpenProject && <button onClick={openTranslated}>翻訳版を開く</button>}
+        <small>総集編</small>
+        <p>プロット終端・伏線回収・最終話などのクライマックス話を集め、約1/2の分量の新しい作品を作成します。</p>
+        <button onClick={makeDigest} disabled={digesting || episodes.length === 0}>{digesting ? "作成中..." : "総集編作成"}</button>
+        {digestError && <p style={{ color: "#c0392b" }}>{digestError}</p>}
+        {digest && (
+          <div className="resultCard">
+            <b>{digest.project.name}</b>
+            <p>{digest.source_episode_count}話中{digest.episode_count}話（原作 第{digest.source_numbers.join("・")}話）／ {digest.chars.toLocaleString()}字（原作 {digest.source_chars.toLocaleString()}字）</p>
+            {onOpenProject && <button onClick={() => onOpenProject(digest.project)}>総集編を開く</button>}
           </div>
         )}
       </div>
