@@ -57,3 +57,26 @@ def test_export_not_found_project(client):
 def test_export_empty_project_does_not_crash(client, project):
     r = client.get(f"/api/v1/projects/{project['id']}/export", params={"format": "epub"})
     assert r.status_code == 200
+
+
+def test_digest_picks_climax_into_new_project(client, project):
+    pid = project["id"]
+    for n in range(1, 7):
+        client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": f"話{n}", "content": "あ" * 100})
+    client.post(f"/api/v1/projects/{pid}/plots", json={"title": "第一部", "start_episode": 1, "end_episode": 3})
+    r = client.post(f"/api/v1/projects/{pid}/digest", json={"ratio": 0.5})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["project"]["id"] != pid
+    assert body["source_numbers"] == [1, 3, 6]
+    assert body["chars"] == 300 and body["source_chars"] == 600
+    eps = client.get(f"/api/v1/projects/{body['project']['id']}/episodes").json()
+    assert [e["number"] for e in eps] == [1, 2, 3]
+    assert [e["title"] for e in eps] == ["話1", "話3", "話6"]
+    assert len(client.get(f"/api/v1/projects/{pid}/episodes").json()) == 6
+
+
+def test_digest_rejects_empty_project_and_bad_ratio(client, project):
+    pid = project["id"]
+    assert client.post(f"/api/v1/projects/{pid}/digest", json={}).status_code == 400
+    assert client.post(f"/api/v1/projects/{pid}/digest", json={"ratio": 2}).status_code == 400

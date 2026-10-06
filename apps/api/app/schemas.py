@@ -187,3 +187,5 @@ class SystemSettingsUpdate(BaseModel):
     # cors_origins is intentionally NOT a field here — CORS_ORIGINS can only
     # be set via env/.env, not from this endpoint. See
     # models.RuntimeConfig's docstring for why.
+class DigestRequest(BaseModel): ratio:float=0.5; name:str=''
+class DigestResult(BaseModel): project:ProjectOut; source_episode_count:int; episode_count:int; source_chars:int; chars:int; source_numbers:list[int]
