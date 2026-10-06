@@ -50,7 +50,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
       <Sidebar project={project} section={section} onSection={setSection} onDashboard={() => setProject(null)} onLogout={onLogout} />
       <div className="resizeHandle" onMouseDown={sidebar.startDrag} />
       <main className="appMain">
-        {section === "home" && <ProjectHome project={project} onSection={setSection} />}
+        {section === "home" && <ProjectHome project={project} onSection={setSection} onOpenProject={(p) => { setProject(p); setSection("home"); }} />}
         {section === "write" && <WritePanel project={project} />}
         {section === "plot" && <PlotPanel projectId={project.id} />}
         {section === "characters" && <CharacterPanel projectId={project.id} />}
