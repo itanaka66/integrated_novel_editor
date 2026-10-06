@@ -16,6 +16,7 @@ from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
+from . import digest as digest_mod
 from . import runtime_config as rc
 from . import file_sync
 from .revisions import snapshot_revision
@@ -283,6 +284,30 @@ async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest()
   except Exception as ex:
    yield f'data: {json.dumps({"error":f"Ollama error: {ex}"},ensure_ascii=False)}\n\n'
  return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
+@app.post('/api/v1/projects/{pid}/digest',response_model=DigestResult)
+def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(get_db)):
+ # 総集編: a new, independent project holding only the climax episodes
+ # (renumbered from 1), so the original is never touched and the digest
+ # can be edited/exported like any other work.
+ if not 0.05<=x.ratio<=1:raise HTTPException(400,'ratio must be between 0.05 and 1')
+ p=crud_get_or_404(db,Project,pid,'Project')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ if not any((e.content or '').strip() for e in eps):raise HTTPException(400,'本文のあるエピソードがありません')
+ plots=db.scalars(select(Plot).where(Plot.project_id==pid)).all()
+ fores=db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all()
+ chosen=digest_mod.select_climax(eps,plots,fores,x.ratio)
+ d=Project(name=x.name.strip() or f'{p.name} 総集編',description=p.description,genre=p.genre,rules=p.rules,episode_goal=len(chosen),style_guide=p.style_guide)
+ db.add(d);db.flush()
+ for c in db.scalars(select(Character).where(Character.project_id==pid)).all():
+  db.add(Character(project_id=d.id,name=c.name,role=c.role,personality=c.personality,speech_style=c.speech_style,goal=c.goal,status=c.status,description=c.description))
+ for w in db.scalars(select(WorldEntity).where(WorldEntity.project_id==pid)).all():
+  db.add(WorldEntity(project_id=d.id,name=w.name,entity_type=w.entity_type,description=w.description,rules=w.rules,location=w.location,era=w.era))
+ new_eps=[]
+ for i,e in enumerate(chosen,start=1):
+  ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,content=e.content or '');db.add(ne);new_eps.append(ne)
+ db.commit();db.refresh(d)
+ for ne in new_eps:file_sync.write_episode_file(d,ne)
+ return DigestResult(project=d,source_episode_count=len(eps),episode_count=len(chosen),source_chars=sum(len(e.content or '') for e in eps),chars=sum(len(e.content or '') for e in chosen),source_numbers=[e.number for e in chosen])
 @app.get('/api/v1/projects/{pid}/export')
 def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
