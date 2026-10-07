@@ -69,11 +69,22 @@ def _epub_xhtml(title, body, lang='ja'):
 </html>'''
 
 
-def build_epub(project, episodes) -> bytes:
+_IMG_TYPES = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}
+
+
+def build_epub(project, episodes, cover=None) -> bytes:
+    """`cover` is an optional (image_bytes, '.png'|'.jpg'|'.webp') embedded as the EPUB cover."""
     book_id = f'urn:uuid:{uuid.uuid4()}'
     lang = _lang(project)
     chapters = [(f'ch{i}', _episode_heading(e, lang), e.content) for i, e in enumerate(episodes, start=1)]
 
+    cover_manifest = cover_meta = cover_spine = ''
+    if cover:
+        cover_ext = cover[1]
+        cover_manifest = (f'<item id="cover-image" href="cover{cover_ext}" media-type="{_IMG_TYPES[cover_ext]}" properties="cover-image"/>'
+                          '<item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>')
+        cover_meta = '<meta name="cover" content="cover-image"/>'
+        cover_spine = '<itemref idref="cover-page" linear="yes"/>'
     manifest_items = ''.join(f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>' for cid, _, _ in chapters)
     spine_items = ''.join(f'<itemref idref="{cid}"/>' for cid, _, _ in chapters)
     nav_items = ''.join(f'<li><a href="{cid}.xhtml">{html.escape(title)}</a></li>' for cid, title, _ in chapters)
@@ -84,12 +95,13 @@ def build_epub(project, episodes) -> bytes:
 <dc:identifier id="bookid">{book_id}</dc:identifier>
 <dc:title>{html.escape(project.name)}</dc:title>
 <dc:language>{lang}</dc:language>
+{cover_meta}
 </metadata>
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-{manifest_items}
+{cover_manifest}{manifest_items}
 </manifest>
-<spine>{spine_items}</spine>
+<spine>{cover_spine}{spine_items}</spine>
 </package>'''
 
     nav_xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
@@ -109,6 +121,13 @@ def build_epub(project, episodes) -> bytes:
 </container>''')
         z.writestr('OEBPS/content.opf', content_opf)
         z.writestr('OEBPS/nav.xhtml', nav_xhtml)
+        if cover:
+            z.writestr(f'OEBPS/cover{cover[1]}', cover[0])
+            z.writestr('OEBPS/cover.xhtml', f'''<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}" lang="{lang}">
+<head><title>{html.escape(project.name)}</title><meta charset="utf-8"/></head>
+<body style="margin:0;text-align:center"><img src="cover{cover[1]}" alt="{html.escape(project.name)}" style="max-width:100%;max-height:100%"/></body>
+</html>''')
         for cid, title, body in chapters:
             z.writestr(f'OEBPS/{cid}.xhtml', _epub_xhtml(title, body, lang))
     return buf.getvalue()
