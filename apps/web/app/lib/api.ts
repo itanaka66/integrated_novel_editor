@@ -236,3 +236,18 @@ export async function downloadFile(path: string, fallbackFilename: string) {
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Fetches an authenticated binary endpoint (e.g. a cover image) and returns
+// an object URL — <img src> can't send the Basic Auth header itself.
+export async function fetchBlobUrl(path: string): Promise<string> {
+  const auth = getAuth();
+  const headers = new Headers();
+  if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
+  const r = await fetch(API + path, { headers, credentials: "include" });
+  if (r.status === 401) {
+    onUnauthorized?.();
+    throw new Error("unauthorized");
+  }
+  if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
+  return URL.createObjectURL(await r.blob());
+}

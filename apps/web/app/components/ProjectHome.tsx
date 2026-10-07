@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
+import CoverPanel from "./CoverPanel";
 
 const ICONS: { key: Section; label: string }[] = [
   { key: "write", label: "✎ 執筆" },
@@ -113,6 +114,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
           </div>
         )}
       </div>
+      <CoverPanel projectId={project.id} />
       <div className="card">
         <small>最近の更新</small>
         {recent.length === 0 ? <p>まだエピソードがありません。「執筆」から書き始めましょう。</p> :

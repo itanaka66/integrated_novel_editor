@@ -193,3 +193,8 @@ class TranslateJobOut(BaseModel):
     total_episodes:int; processed_episodes:int; last_message:str; progress_percent:float=0.0
 class DigestRequest(BaseModel): ratio:float=0.5; name:str=''
 class DigestResult(BaseModel): project:ProjectOut; source_episode_count:int; episode_count:int; source_chars:int; chars:int; source_numbers:list[int]
+class CoverPromptOut(BaseModel): prompt:str
+class CoverGenerateRequest(BaseModel): provider:str; prompt:str
+class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str
+class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool
+class CoverSelectRequest(BaseModel): filename:str

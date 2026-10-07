@@ -17,6 +17,7 @@ from .auth import AuthMiddleware
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import translator
+from . import cover as cover_mod
 from . import digest as digest_mod
 from . import runtime_config as rc
 from . import file_sync
@@ -326,6 +327,42 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
  db.commit();db.refresh(d)
  for ne in new_eps:file_sync.write_episode_file(d,ne)
  return DigestResult(project=d,source_episode_count=len(eps),episode_count=len(chosen),source_chars=sum(len(e.content or '') for e in eps),chars=sum(len(e.content or '') for e in chosen),source_numbers=[e.number for e in chosen])
+@app.post('/api/v1/projects/{pid}/cover/prompt',response_model=CoverPromptOut)
+async def cover_prompt(pid:int,db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ chars=db.scalars(select(Character).where(Character.project_id==pid)).all()
+ return CoverPromptOut(prompt=await cover_mod.build_prompt(p,eps,chars))
+@app.post('/api/v1/projects/{pid}/cover/generate',response_model=CoverJobOut)
+async def cover_generate(pid:int,x:CoverGenerateRequest,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ if x.provider not in cover_mod.PROVIDERS:raise HTTPException(400,'provider must be one of: '+', '.join(cover_mod.PROVIDERS))
+ if not x.prompt.strip():raise HTTPException(400,'prompt is required')
+ job=cover_mod.new_job(pid,x.provider,x.prompt.strip())
+ cover_mod.running[job['id']]=asyncio.create_task(cover_mod.run_cover_job(job))
+ return job
+@app.get('/api/v1/cover-jobs/{job_id}',response_model=CoverJobOut)
+def cover_job_get(job_id:int):
+ job=cover_mod.jobs.get(job_id)
+ if not job:raise HTTPException(404,'Cover job not found')
+ return job
+@app.get('/api/v1/projects/{pid}/covers',response_model=list[CoverImageOut])
+def covers_list(pid:int,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ return cover_mod.list_covers(pid)
+@app.get('/api/v1/projects/{pid}/covers/{filename}')
+def cover_file(pid:int,filename:str,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ if not cover_mod.SAFE_NAME.match(filename):raise HTTPException(400,'invalid filename')
+ f=cover_mod.covers_dir(pid)/filename
+ if not f.exists():raise HTTPException(404,'Cover not found')
+ return Response(f.read_bytes(),media_type={'.png':'image/png','.webp':'image/webp'}.get(f.suffix.lower(),'image/jpeg'))
+@app.put('/api/v1/projects/{pid}/cover',response_model=list[CoverImageOut])
+def cover_select(pid:int,x:CoverSelectRequest,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ try:cover_mod.select_cover(pid,x.filename)
+ except FileNotFoundError:raise HTTPException(404,'Cover not found')
+ return cover_mod.list_covers(pid)
 @app.get('/api/v1/projects/{pid}/export')
 def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
@@ -336,7 +373,7 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  if format=='md':
   return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
-  return Response(export_mod.build_epub(p,eps),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+  return Response(export_mod.build_epub(p,eps,cover_mod.selected_cover(pid)),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
  raise HTTPException(400,'format must be one of: txt, md, epub')
 
 def _system_settings_out(db):
