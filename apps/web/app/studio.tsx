@@ -14,6 +14,7 @@ import SearchPanel from "./components/SearchPanel";
 import ChatPanel from "./components/ChatPanel";
 import AutoWritePanel from "./components/AutoWritePanel";
 import SettingsPanel from "./components/SettingsPanel";
+import LlmActivityDialog from "./components/LlmActivityDialog";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -35,7 +36,12 @@ export default function Studio() {
 
   if (authed === null) return <div className="center">確認中...</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
-  return <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />;
+  return (
+    <>
+      <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />
+      <LlmActivityDialog />
+    </>
+  );
 }
 
 function Workspace({ onLogout }: { onLogout: () => void }) {

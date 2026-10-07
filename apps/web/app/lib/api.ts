@@ -1,3 +1,5 @@
+import { beginActivity, endActivity } from "./llmActivity";
+
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 // editor_common.oauth's login/callback/logout routes (see app/main.py) are
 // mounted on the API app directly, not under /api/v1 — this is the same
@@ -41,17 +43,32 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn;
 }
 
+function jsonBodyOf(opts?: RequestInit): unknown {
+  try {
+    return typeof opts?.body === "string" ? JSON.parse(opts.body) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function api(path: string, opts?: RequestInit) {
   const auth = getAuth();
   const headers = new Headers(opts?.headers);
   if (auth) headers.set("Authorization", "Basic " + btoa(`${auth.u}:${auth.pw}`));
-  const r = await fetch(API + path, { ...opts, headers, credentials: "include" });
-  if (r.status === 401) {
-    onUnauthorized?.();
-    throw new Error("unauthorized");
+  // Registers this call with LlmActivityDialog if it's one that waits on an
+  // LLM (see lib/llmActivity.ts); a no-op (null) for everything else.
+  const activity = beginActivity(opts?.method || "GET", path, jsonBodyOf(opts));
+  try {
+    const r = await fetch(API + path, { ...opts, headers, credentials: "include" });
+    if (r.status === 401) {
+      onUnauthorized?.();
+      throw new Error("unauthorized");
+    }
+    if (r.status === 204) return null;
+    return await r.json();
+  } finally {
+    endActivity(activity);
   }
-  if (r.status === 204) return null;
-  return r.json();
 }
 
 // A lightweight "am I actually logged in" probe — true for either a stored
@@ -175,6 +192,7 @@ export function streamSSE(path: string, onMessage: (data: unknown) => void, onDo
       init.method = "POST";
       init.body = JSON.stringify(body);
     }
+    const activity = beginActivity(init.method || "GET", path, body);
     try {
       const r = await fetch(API + path, init);
       if (r.status === 401) {
@@ -205,6 +223,7 @@ export function streamSSE(path: string, onMessage: (data: unknown) => void, onDo
     } catch (err) {
       if ((err as { name?: string }).name !== "AbortError") throw err;
     } finally {
+      endActivity(activity);
       onDone?.();
     }
   })();
