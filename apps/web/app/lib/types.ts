@@ -5,6 +5,7 @@ export type Project = {
   genre: string;
   rules: string;
   episode_goal?: number;
+  language?: string;
   style_guide?: string;
 };
 export type Episode = { id: number; project_id: number; number: number; title: string; summary: string; content: string; updated_at: string };

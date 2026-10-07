@@ -97,7 +97,7 @@ async def run_translation(job: dict) -> None:
         name = (await translate_text(src.name, lang, glossary)).strip() or src.name
         desc = await translate_text(src.description, lang, glossary)
         dst = Project(name=f'{name} [{LANGUAGES[lang]}]', description=desc, genre=src.genre, rules=src.rules,
-                      episode_goal=src.episode_goal, style_guide='')
+                      episode_goal=src.episode_goal, style_guide='', language=lang)
         db.add(dst)
         db.flush()
         for c in chars:

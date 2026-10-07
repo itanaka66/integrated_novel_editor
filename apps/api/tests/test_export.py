@@ -80,3 +80,23 @@ def test_digest_rejects_empty_project_and_bad_ratio(client, project):
     pid = project["id"]
     assert client.post(f"/api/v1/projects/{pid}/digest", json={}).status_code == 400
     assert client.post(f"/api/v1/projects/{pid}/digest", json={"ratio": 2}).status_code == 400
+
+
+def test_export_uses_project_language(client, project):
+    pid = project["id"]
+    client.put(f"/api/v1/projects/{pid}", json={"language": "en"})
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "Awakening", "content": "The boy woke."})
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 2, "title": "Empty"})
+    txt = client.get(f"/api/v1/projects/{pid}/export", params={"format": "txt"}).text
+    assert "Episode 1: Awakening" in txt and "(No text)" in txt and "第1話" not in txt
+    z = zipfile.ZipFile(BytesIO(client.get(f"/api/v1/projects/{pid}/export", params={"format": "epub"}).content))
+    assert "<dc:language>en</dc:language>" in z.read("OEBPS/content.opf").decode()
+    assert 'lang="en"' in z.read("OEBPS/ch1.xhtml").decode()
+    assert "Contents" in z.read("OEBPS/nav.xhtml").decode()
+
+
+def test_export_defaults_to_japanese(client, project):
+    pid = project["id"]
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "転移", "content": "本文"})
+    z = zipfile.ZipFile(BytesIO(client.get(f"/api/v1/projects/{pid}/export", params={"format": "epub"}).content))
+    assert "<dc:language>ja</dc:language>" in z.read("OEBPS/content.opf").decode()
