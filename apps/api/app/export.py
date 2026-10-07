@@ -12,16 +12,37 @@ import uuid
 import zipfile
 
 
-def _episode_heading(e):
-    return f'第{e.number}話 {e.title}'.strip()
+# Per-language wording for the fixed strings an export emits. The project's
+# `language` (set by 翻訳 / defaulting to 'ja') picks the set, so a translated
+# novel doesn't come out with Japanese headings or a `ja` EPUB language tag.
+LABELS = {
+    'ja': ('第{n}話 {t}', '(本文未入力)', '目次'),
+    'en': ('Episode {n}: {t}', '(No text)', 'Contents'),
+    'zh-CN': ('第{n}话 {t}', '(尚无正文)', '目录'),
+    'ko': ('제{n}화 {t}', '(본문 없음)', '목차'),
+    'es': ('Episodio {n}: {t}', '(Sin texto)', 'Índice'),
+    'fr': ('Épisode {n} : {t}', '(Aucun texte)', 'Table des matières'),
+    'de': ('Episode {n}: {t}', '(Kein Text)', 'Inhaltsverzeichnis'),
+    'pt-BR': ('Episódio {n}: {t}', '(Sem texto)', 'Sumário'),
+}
+
+
+def _lang(project) -> str:
+    lang = getattr(project, 'language', None) or 'ja'
+    return lang if lang in LABELS else 'ja'
+
+
+def _episode_heading(e, lang='ja'):
+    return LABELS[lang][0].format(n=e.number, t=e.title or '').strip()
 
 
 def build_text(project, episodes) -> str:
     parts = [project.name, '']
     if project.description:
         parts += [project.description, '']
+    lang = _lang(project)
     for e in episodes:
-        parts += [_episode_heading(e), '', e.content or '(本文未入力)', '', '']
+        parts += [_episode_heading(e, lang), '', e.content or LABELS[lang][1], '', '']
     return '\n'.join(parts)
 
 
@@ -29,27 +50,29 @@ def build_markdown(project, episodes) -> str:
     parts = [f'# {project.name}', '']
     if project.description:
         parts += [project.description, '']
+    lang = _lang(project)
     for e in episodes:
-        parts += [f'## {_episode_heading(e)}', '']
+        parts += [f'## {_episode_heading(e, lang)}', '']
         if e.summary:
             parts += [f'> {e.summary}', '']
-        parts += [e.content or '*(本文未入力)*', '', '']
+        parts += [e.content or f'*{LABELS[lang][1]}*', '', '']
     return '\n'.join(parts)
 
 
-def _epub_xhtml(title, body):
+def _epub_xhtml(title, body, lang='ja'):
     escaped_title = html.escape(title)
     body_html = ''.join(f'<p>{html.escape(line)}</p>' for line in (body or '').split('\n') if line.strip())
     return f'''<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="{lang}" lang="{lang}">
 <head><title>{escaped_title}</title><meta charset="utf-8"/></head>
-<body><h1>{escaped_title}</h1>{body_html or '<p>(本文未入力)</p>'}</body>
+<body><h1>{escaped_title}</h1>{body_html or f'<p>{html.escape(LABELS[lang][1])}</p>'}</body>
 </html>'''
 
 
 def build_epub(project, episodes) -> bytes:
     book_id = f'urn:uuid:{uuid.uuid4()}'
-    chapters = [(f'ch{i}', f'第{e.number}話 {e.title}'.strip(), e.content) for i, e in enumerate(episodes, start=1)]
+    lang = _lang(project)
+    chapters = [(f'ch{i}', _episode_heading(e, lang), e.content) for i, e in enumerate(episodes, start=1)]
 
     manifest_items = ''.join(f'<item id="{cid}" href="{cid}.xhtml" media-type="application/xhtml+xml"/>' for cid, _, _ in chapters)
     spine_items = ''.join(f'<itemref idref="{cid}"/>' for cid, _, _ in chapters)
@@ -60,7 +83,7 @@ def build_epub(project, episodes) -> bytes:
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">{book_id}</dc:identifier>
 <dc:title>{html.escape(project.name)}</dc:title>
-<dc:language>ja</dc:language>
+<dc:language>{lang}</dc:language>
 </metadata>
 <manifest>
 <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -70,8 +93,8 @@ def build_epub(project, episodes) -> bytes:
 </package>'''
 
     nav_xhtml = f'''<?xml version="1.0" encoding="utf-8"?>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>目次</title><meta charset="utf-8"/></head>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="{lang}" lang="{lang}">
+<head><title>{html.escape(LABELS[lang][2])}</title><meta charset="utf-8"/></head>
 <body><nav epub:type="toc"><ol>{nav_items}</ol></nav></body>
 </html>'''
 
@@ -87,5 +110,5 @@ def build_epub(project, episodes) -> bytes:
         z.writestr('OEBPS/content.opf', content_opf)
         z.writestr('OEBPS/nav.xhtml', nav_xhtml)
         for cid, title, body in chapters:
-            z.writestr(f'OEBPS/{cid}.xhtml', _epub_xhtml(title, body))
+            z.writestr(f'OEBPS/{cid}.xhtml', _epub_xhtml(title, body, lang))
     return buf.getvalue()

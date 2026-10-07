@@ -29,6 +29,7 @@ def test_translate_creates_new_project(client, project, monkeypatch, db_session_
     assert j["status"] == "completed", j
     assert j["project_id"] != pid and j["progress_percent"] == 100.0
     eps = client.get(f"/api/v1/projects/{j['project_id']}/episodes").json()
+    assert client.get(f"/api/v1/projects/{j['project_id']}").json()["language"] == "en"
     assert eps[0]["title"] == "EN:転移" and eps[0]["content"] == "EN:少年は目覚めた。"
     assert client.get(f"/api/v1/projects/{pid}/episodes").json()[0]["content"] == "少年は目覚めた。"
 

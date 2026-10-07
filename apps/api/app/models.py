@@ -6,7 +6,7 @@ from .db import Base
 
 class Project(Base):
     __tablename__='projects'
-    id:Mapped[int]=mapped_column(primary_key=True); name:Mapped[str]=mapped_column(String(200)); description:Mapped[str]=mapped_column(Text,default=''); genre:Mapped[str]=mapped_column(String(100),default=''); rules:Mapped[str]=mapped_column(Text,default=''); episode_goal:Mapped[int]=mapped_column(Integer,default=500); style_guide:Mapped[str]=mapped_column(Text,default='')
+    id:Mapped[int]=mapped_column(primary_key=True); name:Mapped[str]=mapped_column(String(200)); description:Mapped[str]=mapped_column(Text,default=''); genre:Mapped[str]=mapped_column(String(100),default=''); rules:Mapped[str]=mapped_column(Text,default=''); episode_goal:Mapped[int]=mapped_column(Integer,default=500); style_guide:Mapped[str]=mapped_column(Text,default=''); language:Mapped[str]=mapped_column(String(10),default='ja',server_default='ja')
     episodes=relationship('Episode',back_populates='project',cascade='all, delete-orphan'); characters=relationship('Character',back_populates='project',cascade='all, delete-orphan'); worlds=relationship('WorldEntity',back_populates='project',cascade='all, delete-orphan'); plots=relationship('Plot',back_populates='project',cascade='all, delete-orphan'); foreshadowings=relationship('Foreshadowing',back_populates='project',cascade='all, delete-orphan')
 class Episode(Base):
     __tablename__='episodes'

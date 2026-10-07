@@ -1,7 +1,7 @@
 from pydantic import BaseModel,ConfigDict
-class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500; style_guide:str=''
+class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500; style_guide:str=''; language:str='ja'
 class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes=True)
-class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None
+class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None; language:str|None=None
 class StyleGuideOut(BaseModel): style_guide:str
 class StyleGuideGenerateRequest(BaseModel): category:str=''; detail:str=''
 class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''

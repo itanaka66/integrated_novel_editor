@@ -23,6 +23,8 @@ const LANGUAGES: { code: string; label: string }[] = [
 ];
 type TranslateJob = { id: number; project_id: number | null; language: string; status: string; progress_percent: number; last_message: string };
 
+type DigestResult = { project: Project; source_episode_count: number; episode_count: number; source_chars: number; chars: number; source_numbers: number[] };
+
 export default function ProjectHome({ project, onSection, onOpenProject }: { project: Project; onSection: (s: Section) => void; onOpenProject?: (p: Project) => void }) {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [tJob, setTJob] = useState<TranslateJob | null>(null);
@@ -53,10 +55,8 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
     if (!tJob?.project_id || !onOpenProject) return;
     const p = await api(`/projects/${tJob.project_id}`);
     if (p?.id) onOpenProject(p);
-type DigestResult = { project: Project; source_episode_count: number; episode_count: number; source_chars: number; chars: number; source_numbers: number[] };
+  }
 
-export default function ProjectHome({ project, onSection, onOpenProject }: { project: Project; onSection: (s: Section) => void; onOpenProject?: (p: Project) => void }) {
-  const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [digesting, setDigesting] = useState(false);
   const [digest, setDigest] = useState<DigestResult | null>(null);
   const [digestError, setDigestError] = useState("");
@@ -97,6 +97,10 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
             <b>{tJob.status === "completed" ? "翻訳完了" : tJob.status === "error" ? "翻訳エラー" : `翻訳中 ${tJob.progress_percent}%`}</b>
             <p>{tJob.last_message}</p>
             {tJob.status === "completed" && onOpenProject && <button onClick={openTranslated}>翻訳版を開く</button>}
+          </div>
+        )}
+      </div>
+      <div className="card">
         <small>総集編</small>
         <p>プロット終端・伏線回収・最終話などのクライマックス話を集め、約1/2の分量の新しい作品を作成します。</p>
         <button onClick={makeDigest} disabled={digesting || episodes.length === 0}>{digesting ? "作成中..." : "総集編作成"}</button>
