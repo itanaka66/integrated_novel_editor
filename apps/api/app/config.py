@@ -21,6 +21,10 @@ class Settings(BaseSettings):
  # like this stay env/.env-only, never exposed or editable from 設定 >
  # 接続設定, unlike the URL/model overrides there.
  ollama_api_key:str=''; controller_ollama_api_key:str=''
+ # How many Ollama calls may run at once per (server, model); the rest wait
+ # in the visible queue (app/llm_queue.py, GET /api/v1/llm/queue). 1 matches
+ # Ollama's own default; raise it if OLLAMA_NUM_PARALLEL is higher; 0 = never wait.
+ ollama_max_concurrency:int=1
  # OAuth2 ("Googleでログイン" / "GitHubでログイン") — see editor_common.oauth.
  # A provider only appears as a login option once BOTH its client_id and
  # client_secret are set (empty strings, the default, leave that provider

@@ -4,6 +4,7 @@ from .db import SessionLocal
 from .models import Project, Episode, AutoWriteJob, SeriesPlan, ArcPlan, MiniArcPlan, EpisodePlan
 from .context import build
 from .ollama import controller_generate, generate
+from .llm_queue import purpose
 from .continuity import update_character_states, check_continuity
 from .rag import index
 from .planner.planner_service import PlannerService
@@ -70,6 +71,7 @@ async def run_job(job_id,premise='',overwrite=False):
         for n in range(job.start_episode,job.end_episode+1):
             if _check_stopped(db,job): return
             job.current_episode=n; job.last_message=f'EP.{n}: 階層Plannerを展開中'; db.commit()
+            purpose.set(f'自動執筆 EP.{n}: 階層Planner')
             project=db.get(Project,job.project_id)
             existing=db.scalar(select(Episode).where(Episode.project_id==job.project_id,Episode.number==n))
             if existing and existing.content.strip() and not overwrite:
@@ -90,6 +92,7 @@ async def run_job(job_id,premise='',overwrite=False):
             # Controller-owned preflight
             if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Controller preflight (timeline/character/world/plot)'; db.commit()
+            purpose.set(f'自動執筆 EP.{n}: Controller事前監査')
             preflight_prompt=f'''A770 Controllerです。EP.{n}の執筆前監査を行います。
 担当は時系列・人物状態・世界観・プロット。文章品質は対象外。
 Series={json.dumps(series,ensure_ascii=False)}\nArc={json.dumps(arc,ensure_ascii=False)}\nMiniArc={json.dumps(mini,ensure_ascii=False)}\nEpisode={json.dumps(plan,ensure_ascii=False)}\nStoryTwin={json.dumps(ctx,ensure_ascii=False)}
@@ -103,6 +106,7 @@ JSONのみ: {{"status":"PASS|WARN|BLOCK","issues":[],"constraints":[]}}'''
             # RTX3090 Writer
             if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Writer ({job.writer_model})'; db.commit()
+            purpose.set(f'自動執筆 EP.{n}: 本文生成')
             writer_prompt=f'''あなたはRTX3090上のWriter AIです。EP.{n}の完成した日本語小説本文だけを出力してください。
 Controllerが決めた計画とStory Digital Twinを厳守してください。
 【Series】{json.dumps(series,ensure_ascii=False)}
@@ -117,9 +121,11 @@ Controllerが決めた計画とStory Digital Twinを厳守してください。
             # Controller final gate
             if _check_stopped(db,job): return
             job.last_message=f'EP.{n}: Controller final gate'; db.commit()
+            purpose.set(f'自動執筆 EP.{n}: Controller最終監査')
             gate=await _controller_gate(project,ctx,series,arc,mini,plan,content)
             if gate.get('status')=='BLOCK':
                 job.last_message=f'EP.{n}: Controller BLOCK → Writer再執筆'; db.commit()
+                purpose.set(f'自動執筆 EP.{n}: Writer再執筆')
                 revise=f'''EP.{n}本文を修正し、完成本文のみ出力してください。変更対象はControllerが指摘した時系列・人物状態・世界観・プロットの矛盾です。
 監査={json.dumps(gate,ensure_ascii=False)}\nEpisode Blueprint={json.dumps(plan,ensure_ascii=False)}\n本文={content}'''
                 content,_=await generate(revise,job.writer_model)
