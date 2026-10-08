@@ -14,6 +14,7 @@ from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
+from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import translator
@@ -41,6 +42,7 @@ app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 # so AuthMiddleware is added first: CORS must stay outermost or a 401
 # response never gets CORS headers and the browser reports an opaque network
 # error instead of a readable 401.
+app.add_middleware(PurposeMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(DynamicCORSMiddleware,allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
 def _oauth_get_or_create_user(email,name):
@@ -117,6 +119,8 @@ def init():
  _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
+@app.get('/api/v1/llm/queue')
+def llm_queue():return {'entries':llm_queue_snapshot(),'max_concurrency':settings.ollama_max_concurrency}
 @app.get('/api/v1/me')
 def me(request:Request,db:Session=Depends(get_db)):
  u=db.scalar(select(User).where(User.username==request.state.username))

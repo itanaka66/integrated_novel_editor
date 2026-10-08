@@ -46,6 +46,8 @@ Qdrant URL and both Ollama endpoints/models above can also be changed live from 
 
 If Ollama sits behind something that requires authentication — a gated reverse proxy, a hosted/cloud Ollama offering, an OpenAI-API-compatible gateway — set `OLLAMA_API_KEY` (Writer/embeddings) and/or `CONTROLLER_OLLAMA_API_KEY` (Controller), sent as `Authorization: Bearer <key>` on every request to that server. Both are blank by default (no header sent at all) since a bare local `ollama serve` has no auth, and — like other credentials in this app — are env/`.env`-only, not editable from 接続設定.
 
+While any AI call is running or waiting, a floating "AI処理中・LLMキュー" dialog lists what's running and what's queued behind it (for example a manual proofread waiting on an auto-write step). Requests to the same Ollama server and model run `OLLAMA_MAX_CONCURRENCY` at a time (default `1`, like Ollama itself); different models or servers never wait on each other. Raise it if you've set `OLLAMA_NUM_PARALLEL` higher on the Ollama side, or set `0` to never queue.
+
 ## Local-disk / GitHub episode storage
 
 | Config | Default | Purpose |
