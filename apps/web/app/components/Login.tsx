@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, API_ROOT, forgotPassword, setAuth } from "../lib/api";
 import { applyStoredLanguage, isLangCode, LANGUAGES, readStoredLanguage, storeLanguage } from "../lib/i18n";
 
-export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
+export default function Login({ onLoggedIn, notice }: { onLoggedIn: () => void; notice?: string }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -81,6 +81,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       <form className="loginCard" onSubmit={submit}>
         <b>✦ Integrated Novel Editor</b>
         <p>Write your story with AI</p>
+        {notice && <div className="loginNotice" role="status">{notice}</div>}
         <label className="loginLang">
           Display language
           <select value={lang} onChange={(e) => { const v = e.target.value; if (isLangCode(v)) { setLang(v); storeLanguage(v); } }} aria-label="Display language">
