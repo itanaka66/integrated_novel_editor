@@ -4,6 +4,12 @@ English version → [README.md](README.md)
 
 長編小説（数話〜約500話規模）のためのAI執筆支援アプリです。キャラクター・世界観・プロット・伏線・年表という構造化されたストーリーデータをAIが本文生成前に必ず参照する仕組みにより、長期にわたる作品でも設定の一貫性を保ちます。すべて自分のPC・サーバー上で動作し、ローカルの[Ollama](https://ollama.com)を使用します。外部クラウドAI APIへは接続しません。
 
+
+![Local screenshot](./images/novel1.jpg)
+![Local screenshot](./images/novel2.jpg)
+![Local screenshot](./images/novel3.jpg)
+![Local screenshot](./images/novel4.jpg)
+
 ## ドキュメント
 
 オンラインマニュアル: **https://itanaka66.github.io/integrated_novel_editor/** — もしくは[`docs/`](docs/)配下のファイルを直接どうぞ。
