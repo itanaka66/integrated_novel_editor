@@ -4,6 +4,12 @@
 
 An AI-assisted writing environment for long-form novels (from a handful of episodes up to ~500), built around a structured story database — characters, world, plot, foreshadowing, timeline — that the AI reads before generating text, so long-running stories stay internally consistent. Runs entirely on your own machine/server with a local [Ollama](https://ollama.com) LLM; no external cloud AI API is called.
 
+
+![Local screenshot](./images/novel1.jpg)
+![Local screenshot](./images/novel2.jpg)
+![Local screenshot](./images/novel3.jpg)
+![Local screenshot](./images/novel4.jpg)
+
 ## Documentation
 
 Browse the online manual: **https://itanaka66.github.io/integrated_novel_editor/** — or read the same files directly in [`docs/`](docs/):
