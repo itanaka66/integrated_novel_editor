@@ -15,10 +15,12 @@ import ChatPanel from "./components/ChatPanel";
 import AutoWritePanel from "./components/AutoWritePanel";
 import SettingsPanel from "./components/SettingsPanel";
 import LlmActivityDialog from "./components/LlmActivityDialog";
+import { useIdleLogout } from "./lib/useIdleLogout";
 import { getLanguage, t } from "./lib/i18n";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const [idleNotice, setIdleNotice] = useState(false);
 
   // layout.tsx server-renders <html lang="ja">; hydration restores that over
   // whatever lib/i18n set at module load, so set it again once mounted.
@@ -39,8 +41,14 @@ export default function Studio() {
     return () => setUnauthorizedHandler(null);
   }, []);
 
+  // 10 minutes without any input signs the user out (see lib/useIdleLogout).
+  useIdleLogout(authed === true, () => {
+    setIdleNotice(true);
+    logout().then(() => setAuthed(false));
+  });
+
   if (authed === null) return <div className="center" suppressHydrationWarning>{t("確認中...")}</div>;
-  if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
+  if (!authed) return <Login notice={idleNotice ? "You were signed out automatically after 10 minutes of inactivity." : undefined} onLoggedIn={() => { setIdleNotice(false); setAuthed(true); }} />;
   return (
     <>
       <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />
