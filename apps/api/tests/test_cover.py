@@ -86,3 +86,26 @@ def test_validation_and_path_safety(client, project):
     assert client.post(f"/api/v1/projects/{pid}/cover/generate", json={"provider": "comfyui", "prompt": " "}).status_code == 400
     assert client.get(f"/api/v1/projects/{pid}/covers/..%2Fsecret.png").status_code in (400, 404)
     assert client.put(f"/api/v1/projects/{pid}/cover", json={"filename": "../x.png"}).status_code == 404
+
+
+def test_resolve_checkpoint_matches_name_without_extension_or_case():
+    installed = ["NoobAI-XL.safetensors", "other.ckpt"]
+    assert cover.resolve_checkpoint("NoobAI-XL", installed) == "NoobAI-XL.safetensors"
+    assert cover.resolve_checkpoint("noobai-xl.SAFETENSORS", installed) == "NoobAI-XL.safetensors"
+    assert cover.resolve_checkpoint("other.ckpt", installed) == "other.ckpt"
+    assert cover.resolve_checkpoint("", installed) == "NoobAI-XL.safetensors"
+
+
+def test_resolve_checkpoint_explains_an_empty_checkpoint_list():
+    import pytest
+
+    with pytest.raises(cover.CoverError, match="models/checkpoints"):
+        cover.resolve_checkpoint("NoobAI-XL", [])
+
+
+def test_resolve_checkpoint_lists_what_is_available_when_the_name_is_unknown():
+    import pytest
+
+    with pytest.raises(cover.CoverError) as ex:
+        cover.resolve_checkpoint("missing", ["a.safetensors", "b.ckpt"])
+    assert "a.safetensors" in str(ex.value) and "b.ckpt" in str(ex.value)
