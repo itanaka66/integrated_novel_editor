@@ -27,15 +27,15 @@ function emptyForm(cfg: EntityConfig) {
   return f;
 }
 
-function Cell({ field, value, onChange, onCommit }: {
-  field: Field; value: unknown; onChange: (v: unknown) => void; onCommit?: () => void;
+function Cell({ field, value, onChange }: {
+  field: Field; value: unknown; onChange: (v: unknown) => void;
 }) {
   if (field.type === "textarea") {
-    return <textarea rows={2} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} onBlur={onCommit} />;
+    return <textarea rows={2} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }
   if (field.type === "select") {
     return (
-      <select value={String(value ?? "")} onChange={(e) => { onChange(e.target.value); onCommit?.(); }}>
+      <select value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
         {(field.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     );
@@ -45,7 +45,6 @@ function Cell({ field, value, onChange, onCommit }: {
       type={field.type === "number" ? "number" : "text"}
       value={String(value ?? "")}
       onChange={(e) => onChange(field.type === "number" ? Number(e.target.value) : e.target.value)}
-      onBlur={onCommit}
     />
   );
 }
@@ -54,6 +53,9 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [busy, setBusy] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  // Rows edited on screen but not yet written to the DB — saved only by the
+  // row's 更新 button, never implicitly (e.g. on blur).
+  const [dirtyIds, setDirtyIds] = useState<Set<number>>(new Set());
   const [newRows, setNewRows] = useState<Record<string, unknown>[]>([]);
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
@@ -72,6 +74,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
 
   function updateField(id: number, key: string, value: unknown) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
+    setDirtyIds((prev) => new Set(prev).add(id));
   }
   async function commitRow(id: number) {
     const item = items.find((it) => it.id === id);
@@ -79,6 +82,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     setSavingIds((prev) => new Set(prev).add(id));
     try {
       await put(cfg.itemPath(id), item);
+      setDirtyIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     } finally {
       setSavingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     }
@@ -173,14 +177,15 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
             {items.map((item) => {
               const id = item.id as number;
               return (
-                <tr key={id}>
+                <tr key={id} className={dirtyIds.has(id) ? "entityDirtyRow" : undefined}>
                   {cfg.fields.map((f) => (
                     <td key={f.key}>
-                      <Cell field={f} value={item[f.key]} onChange={(v) => updateField(id, f.key, v)} onCommit={() => commitRow(id)} />
+                      <Cell field={f} value={item[f.key]} onChange={(v) => updateField(id, f.key, v)} />
                     </td>
                   ))}
                   <td className="entityRowActions">
-                    {savingIds.has(id) ? <span className="savedNote">{t("保存中...")}</span> : <button onClick={() => remove(id)}>{t("削除")}</button>}
+                    <button className="saveButton" onClick={() => commitRow(id)} disabled={!dirtyIds.has(id) || savingIds.has(id)}>{savingIds.has(id) ? t("保存中...") : t("更新")}</button>
+                    <button onClick={() => remove(id)} disabled={savingIds.has(id)}>{t("削除")}</button>
                   </td>
                 </tr>
               );
@@ -193,7 +198,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
                   </td>
                 ))}
                 <td className="entityRowActions">
-                  <button onClick={() => commitNewRow(idx)}>{t("作成")}</button>
+                  <button className="saveButton" onClick={() => commitNewRow(idx)}>{t("作成")}</button>
                   <button onClick={() => cancelNewRow(idx)}>{t("取消")}</button>
                 </td>
               </tr>

@@ -170,7 +170,7 @@ export default function WritePanel({ project }: { project: Project }) {
           <div className="writeHeadActions">
             <button className="historyButton" onClick={openHistory}>{t("🕘 履歴")}</button>
             <button className="historyButton" onClick={() => setShowProofread(true)} title={t("スタイルガイドと照合し、差分を1件ずつ確認しながら修正します")}>{t("📐 文章校正")}</button>
-            <button onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? t("保存中") : t("保存＋人物状態更新")}</button>
+            <button className="saveButton" onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? t("保存中") : t("保存＋人物状態更新")}</button>
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}

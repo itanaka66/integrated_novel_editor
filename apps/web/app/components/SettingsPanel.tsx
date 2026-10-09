@@ -249,7 +249,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
             {t("用途に近い種類を選ぶと、既存の本文サンプルの文体・表記の傾向も踏まえて、より適したスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。")}
           </p>
           <div className="entityFormActions">
-            <button onClick={save} disabled={busy}>{busy ? t("保存中...") : t("保存")}</button>
+            <button className="saveButton" onClick={save} disabled={busy}>{busy ? t("保存中...") : t("保存")}</button>
             {saved && <span className="savedNote">{t("保存しました")}</span>}
           </div>
         </div>
@@ -303,7 +303,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
             {t("ここで保存した値は、このブラウザでの「自動執筆」開始フォームの初期値として使われます。実際のOllama接続先（A770 / RTX3090のURL）はサーバー側の環境変数（CONTROLLER_OLLAMA_URL / OLLAMA_URL）で設定してください。")}
           </p>
           <div className="entityFormActions">
-            <button onClick={() => { saveModelDefaults(defaults); setSaved(true); }}>{t("保存")}</button>
+            <button className="saveButton" onClick={() => { saveModelDefaults(defaults); setSaved(true); }}>{t("保存")}</button>
             {saved && <span className="savedNote">{t("保存しました")}</span>}
           </div>
         </div>
@@ -373,7 +373,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
                 {t("各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。")}
               </p>
               <div className="entityFormActions">
-                <button onClick={saveConnection} disabled={sysBusy}>{sysBusy ? t("保存中...") : t("保存")}</button>
+                <button className="saveButton" onClick={saveConnection} disabled={sysBusy}>{sysBusy ? t("保存中...") : t("保存")}</button>
                 {sysSaved && <span className="savedNote">{t("保存しました")}</span>}
               </div>
             </>
