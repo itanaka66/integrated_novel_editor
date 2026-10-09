@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { marked } from "marked";
 import { api, del, post } from "../lib/api";
+import { t } from "../lib/i18n";
 
 type Msg = { id: number; role: "user" | "assistant"; content: string };
 
@@ -28,7 +29,7 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
     }
   }
   async function clear() {
-    if (!confirm("会話履歴を削除しますか？")) return;
+    if (!confirm(t("会話履歴を削除しますか？"))) return;
     await del(`/projects/${projectId}/chat`);
     setMessages([]);
   }
@@ -36,15 +37,15 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
   return (
     <div className="panel chatPanel">
       <div className="chatHeader">
-        <div><small>AI CHAT</small><h1>AIチャット</h1></div>
-        {messages.length > 0 && <button className="historyButton" onClick={clear}>履歴を削除</button>}
+        <div><small>AI CHAT</small><h1>{t("AIチャット")}</h1></div>
+        {messages.length > 0 && <button className="historyButton" onClick={clear}>{t("履歴を削除")}</button>}
       </div>
-      <p>Context Builder（本文・人物・世界観・プロット・伏線・RAG）を踏まえた自由対話です。会話履歴はこの作品ごとにサーバーに保存され、次回開いたときも表示されます。</p>
+      <p>{t("Context Builder（本文・人物・世界観・プロット・伏線・RAG）を踏まえた自由対話です。会話履歴はこの作品ごとにサーバーに保存され、次回開いたときも表示されます。")}</p>
       <div className="chatMessages">
-        {messages.length === 0 && <div className="card"><b>質問してみましょう</b><p>例：「田中の現在の目標は？」「第3話の伏線はまだ回収されていない？」</p></div>}
+        {messages.length === 0 && <div className="card"><b>{t("質問してみましょう")}</b><p>{t("例：「田中の現在の目標は？」「第3話の伏線はまだ回収されていない？」")}</p></div>}
         {messages.map((m) => (
           <div className={`chatBubble ${m.role}`} key={m.id}>
-            <b>{m.role === "user" ? "あなた" : "AI"}</b>
+            <b>{m.role === "user" ? t("あなた") : "AI"}</b>
             {/* Single-user app; content is always this same admin's own
                 Markdown or this same admin's AI conversation (never
                 third-party input), so raw HTML rendering here carries no
@@ -55,11 +56,11 @@ export default function ChatPanel({ projectId }: { projectId: number }) {
             <div className="chatMarkdown" dangerouslySetInnerHTML={{ __html: marked.parse(m.content || "", { async: false, breaks: true }) as string }} />
           </div>
         ))}
-        {busy && <div className="chatBubble assistant"><b>AI</b><p className="thinking">考えています...</p></div>}
+        {busy && <div className="chatBubble assistant"><b>AI</b><p className="thinking">{t("考えています...")}</p></div>}
       </div>
       <div className="chatInputRow">
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="質問を入力..." disabled={busy} />
-        <button onClick={send} disabled={busy}>送信</button>
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={t("質問を入力...")} disabled={busy} />
+        <button onClick={send} disabled={busy}>{t("送信")}</button>
       </div>
     </div>
   );

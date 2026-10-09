@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, del, post } from "../lib/api";
+import { t } from "../lib/i18n";
 
 type Graph = { nodes: any[]; edges: any[] };
 
@@ -68,7 +69,7 @@ function RelationEditor({ projectId, cfg, onChanged }: { projectId: number; cfg:
 
   return (
     <div className="relationSection">
-      <small>{cfg.entityLabel}の関係を編集</small>
+      <small>{t("{name}の関係を編集", { name: cfg.entityLabel })}</small>
       <div className="relationForm">
         <select value={from} onChange={(e) => setFrom(e.target.value ? Number(e.target.value) : "")}>
           <option value="">from...</option>
@@ -78,15 +79,15 @@ function RelationEditor({ projectId, cfg, onChanged }: { projectId: number; cfg:
           <option value="">to...</option>
           {entities.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
         </select>
-        <input value={relationType} onChange={(e) => setRelationType(e.target.value)} placeholder="関係の種類" />
-        <button onClick={add} disabled={!from || !to || from === to}>＋ 関係を追加</button>
+        <input value={relationType} onChange={(e) => setRelationType(e.target.value)} placeholder={t("関係の種類")} />
+        <button onClick={add} disabled={!from || !to || from === to}>{t("＋ 関係を追加")}</button>
       </div>
       {relations.length > 0 && (
         <div className="relationList">
           {relations.map((r) => (
             <div className="relationRow" key={r.id}>
               <span>{nameOf(r[cfg.fromKey])} → {nameOf(r[cfg.toKey])}（{r.relation_type}）</span>
-              <button onClick={() => remove(r.id)}>削除</button>
+              <button onClick={() => remove(r.id)}>{t("削除")}</button>
             </div>
           ))}
         </div>
@@ -96,7 +97,7 @@ function RelationEditor({ projectId, cfg, onChanged }: { projectId: number; cfg:
 }
 
 const characterRelationConfig: RelationConfig = {
-  entityLabel: "キャラクター",
+  entityLabel: t("キャラクター"),
   listEntities: (pid) => api(`/projects/${pid}/characters`),
   listRelations: (pid) => api(`/projects/${pid}/character-relations`),
   createRelation: (pid, body) => post(`/projects/${pid}/character-relations`, body),
@@ -105,7 +106,7 @@ const characterRelationConfig: RelationConfig = {
 };
 
 const worldRelationConfig: RelationConfig = {
-  entityLabel: "世界観",
+  entityLabel: t("世界観"),
   listEntities: (pid) => api(`/projects/${pid}/world`),
   listRelations: (pid) => api(`/projects/${pid}/world-relations`),
   createRelation: (pid, body) => post(`/projects/${pid}/world-relations`, body),
@@ -119,13 +120,13 @@ function ContinuitySection({ projectId }: { projectId: number }) {
   useEffect(() => { api(`/projects/${projectId}/continuity/issues`).then(setIssues); }, [projectId]);
   return (
     <div>
-      <button className="add" onClick={run}>{busy ? "監査中…" : "▶ 全体を監査"}</button>
+      <button className="add" onClick={run}>{busy ? t("監査中…") : t("▶ 全体を監査")}</button>
       <div className="issues">
-        {issues.length === 0 ? <div className="card"><b>問題なし</b><p>まだ監査結果がありません。</p></div> :
+        {issues.length === 0 ? <div className="card"><b>{t("問題なし")}</b><p>{t("まだ監査結果がありません。")}</p></div> :
           issues.map((x) => (
             <div className={`issue ${x.severity}`} key={x.id}>
               <div><b>{x.severity.toUpperCase()}</b><span> EP.{x.episode_number ?? "?"} / {x.issue_type}</span></div>
-              <h3>{x.message}</h3><p><b>根拠：</b>{x.evidence}</p><p><b>修正案：</b>{x.suggestion}</p>
+              <h3>{x.message}</h3><p><b>{t("根拠：")}</b>{x.evidence}</p><p><b>{t("修正案：")}</b>{x.suggestion}</p>
             </div>
           ))}
       </div>
@@ -150,22 +151,22 @@ function WordCountSection({ projectId }: { projectId: number }) {
   return (
     <div>
       <div className="twinMetrics" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
-        <div className="metric"><small>総文字数</small><b>{total.toLocaleString()}</b></div>
-        <div className="metric"><small>エピソード数</small><b>{points.length}</b></div>
-        <div className="metric"><small>1話あたり平均</small><b>{points.length ? Math.round(total / points.length).toLocaleString() : 0}</b></div>
+        <div className="metric"><small>{t("総文字数")}</small><b>{total.toLocaleString()}</b></div>
+        <div className="metric"><small>{t("エピソード数")}</small><b>{points.length}</b></div>
+        <div className="metric"><small>{t("1話あたり平均")}</small><b>{points.length ? Math.round(total / points.length).toLocaleString() : 0}</b></div>
       </div>
       {points.length > 1 && (
         <div className="wordCountChart">
           <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
             <path d={path} fill="none" stroke="currentColor" strokeWidth="2" />
           </svg>
-          <p className="graphHint">累積文字数の推移（話数順）。横軸はエピソード順、縦軸は累積文字数。</p>
+          <p className="graphHint">{t("累積文字数の推移（話数順）。横軸はエピソード順、縦軸は累積文字数。")}</p>
         </div>
       )}
       <div className="stateTable" style={{ marginTop: 14 }}>
         {points.map((p) => (
           <div className="stateRow" key={p.number} style={{ gridTemplateColumns: "70px 1fr 1fr" }}>
-            <b>EP.{p.number}</b><span>{p.chars.toLocaleString()}文字</span><span>累計 {p.cumulative.toLocaleString()}</span>
+            <b>EP.{p.number}</b><span>{t("{n}文字", { n: p.chars.toLocaleString() })}</span><span>{t("累計 {n}", { n: p.cumulative.toLocaleString() })}</span>
           </div>
         ))}
       </div>
@@ -173,35 +174,35 @@ function WordCountSection({ projectId }: { projectId: number }) {
   );
 }
 
-const TABS = [["overview", "概要"], ["characters", "人物関係図"], ["world", "世界観グラフ"], ["timeline", "時系列グラフ"], ["states", "状態履歴"], ["wordcount", "文字数"], ["continuity", "連続性"]] as const;
+const TABS = [["overview", t("概要")], ["characters", t("人物関係図")], ["world", t("世界観グラフ")], ["timeline", t("時系列グラフ")], ["states", t("状態履歴")], ["wordcount", t("文字数")], ["continuity", t("連続性")]] as const;
 
 export default function AnalyticsPanel({ projectId }: { projectId: number }) {
-  const [t, setT] = useState<any | null>(null), [busy, setBusy] = useState(false), [tab, setTab] = useState<string>("overview");
-  async function load() { setBusy(true); try { setT(await api(`/projects/${projectId}/story-twin`)); } finally { setBusy(false); } }
+  const [twin, setTwin] = useState<any | null>(null), [busy, setBusy] = useState(false), [tab, setTab] = useState<string>("overview");
+  async function load() { setBusy(true); try { setTwin(await api(`/projects/${projectId}/story-twin`)); } finally { setBusy(false); } }
   useEffect(() => { load(); }, [projectId]);
-  if (!t) return <div className="panel"><small>ANALYTICS</small><h1>分析ダッシュボード</h1><p>作品全体の状態を統合しています…</p></div>;
-  const m = t.metrics, h = t.health;
+  if (!twin) return <div className="panel"><small>ANALYTICS</small><h1>{t("分析ダッシュボード")}</h1><p>{t("作品全体の状態を統合しています…")}</p></div>;
+  const m = twin.metrics, h = twin.health;
   return (
     <div className="panel twin">
-      <small>ANALYTICS</small><h1>分析ダッシュボード</h1>
+      <small>ANALYTICS</small><h1>{t("分析ダッシュボード")}</h1>
       <div className="twinHero">
-        <div><small>STORY DIGITAL TWIN</small><h2>{t.project.name}</h2><p>人物・世界・時系列・プロット・伏線・状態履歴・連続性を1つの作品モデルとして統合。</p></div>
-        <div className={`health ${h.label}`}><b>{h.score}</b><span>{h.label === "healthy" ? "安定" : h.label === "attention" ? "要注意" : "要監査"}</span></div>
+        <div><small>STORY DIGITAL TWIN</small><h2>{twin.project.name}</h2><p>{t("人物・世界・時系列・プロット・伏線・状態履歴・連続性を1つの作品モデルとして統合。")}</p></div>
+        <div className={`health ${h.label}`}><b>{h.score}</b><span>{h.label === "healthy" ? t("安定") : h.label === "attention" ? t("要注意") : t("要監査")}</span></div>
       </div>
       <div className="twinMetrics">{[["EPISODES", m.episodes], ["CHARACTERS", m.characters], ["WORLD", m.world_entities], ["PLOTS", m.plots], ["FORESHADOW", m.foreshadowings], ["OPEN ISSUES", m.continuity_open], ["GRAPH NODES", m.graph_nodes], ["GRAPH EDGES", m.graph_edges]].map((x) => <div className="metric" key={x[0] as string}><small>{x[0]}</small><b>{x[1]}</b></div>)}</div>
-      <div className="twinTabs">{TABS.map(([k, label]) => <button className={tab === k ? "on" : ""} onClick={() => setTab(k)} key={k}>{label}</button>)}<button onClick={load}>{busy ? "更新中…" : "↻ 再計算"}</button></div>
+      <div className="twinTabs">{TABS.map(([k, label]) => <button className={tab === k ? "on" : ""} onClick={() => setTab(k)} key={k}>{label}</button>)}<button onClick={load}>{busy ? t("更新中…") : t("↻ 再計算")}</button></div>
       {tab === "overview" && (
         <div className="twinGrid">
-          <div className="twinCard"><h3>作品構造</h3><p>キャラクター {m.characters}人 → 世界要素 {m.world_entities}件 → プロット {m.plots}件 → 伏線 {m.foreshadowings}件</p><p>グラフ全体：{m.graph_nodes} nodes / {m.graph_edges} edges</p></div>
-          <div className="twinCard"><h3>執筆進捗</h3><div className="progress"><i style={{ width: `${h.episode_coverage}%` }} /></div><p>本文カバレッジ {h.episode_coverage}%</p><p>未解決：HIGH {t.continuity.high} / MEDIUM {t.continuity.medium} / LOW {t.continuity.low}</p></div>
-          <div className="twinCard"><h3>アクティブなプロット</h3>{t.active_plots.slice(0, 6).map((x: any) => <div className="twinRow" key={x.id}><b>{x.title}</b><span>{x.start_episode ?? "?"}–{x.end_episode ?? "?"}</span></div>)}</div>
-          <div className="twinCard"><h3>未回収の伏線</h3>{t.open_foreshadowings.slice(0, 6).map((x: any) => <div className="twinRow" key={x.id}><b>{x.title}</b><span>設置 EP.{x.setup_episode ?? "?"}</span></div>)}</div>
+          <div className="twinCard"><h3>{t("作品構造")}</h3><p>{t("キャラクター {c}人 → 世界要素 {w}件 → プロット {p}件 → 伏線 {f}件", { c: m.characters, w: m.world_entities, p: m.plots, f: m.foreshadowings })}</p><p>{t("グラフ全体：{nodes} nodes / {edges} edges", { nodes: m.graph_nodes, edges: m.graph_edges })}</p></div>
+          <div className="twinCard"><h3>{t("執筆進捗")}</h3><div className="progress"><i style={{ width: `${h.episode_coverage}%` }} /></div><p>{t("本文カバレッジ {pct}%", { pct: h.episode_coverage })}</p><p>{t("未解決：HIGH {h} / MEDIUM {m} / LOW {l}", { h: twin.continuity.high, m: twin.continuity.medium, l: twin.continuity.low })}</p></div>
+          <div className="twinCard"><h3>{t("アクティブなプロット")}</h3>{twin.active_plots.slice(0, 6).map((x: any) => <div className="twinRow" key={x.id}><b>{x.title}</b><span>{x.start_episode ?? "?"}–{x.end_episode ?? "?"}</span></div>)}</div>
+          <div className="twinCard"><h3>{t("未回収の伏線")}</h3>{twin.open_foreshadowings.slice(0, 6).map((x: any) => <div className="twinRow" key={x.id}><b>{x.title}</b><span>{t("設置 EP.{n}", { n: x.setup_episode ?? "?" })}</span></div>)}</div>
         </div>
       )}
-      {tab === "characters" && <><GraphMini graph={t.characters} /><RelationEditor projectId={projectId} cfg={characterRelationConfig} onChanged={load} /></>}
-      {tab === "world" && <><GraphMini graph={t.world} /><RelationEditor projectId={projectId} cfg={worldRelationConfig} onChanged={load} /></>}
-      {tab === "timeline" && <GraphMini graph={t.timeline} timeline />}
-      {tab === "states" && <div className="stateTable">{t.recent_states.length === 0 ? <p>キャラクター状態履歴はまだありません。</p> : t.recent_states.map((x: any) => <div className="stateRow" key={x.id}><b>EP.{x.episode_number}</b><strong>#{x.character_id}</strong><span>{x.status || "—"}</span><span>{x.location || "—"}</span><span>{x.emotion || "—"}</span><p>{x.notes || "—"}</p></div>)}</div>}
+      {tab === "characters" && <><GraphMini graph={twin.characters} /><RelationEditor projectId={projectId} cfg={characterRelationConfig} onChanged={load} /></>}
+      {tab === "world" && <><GraphMini graph={twin.world} /><RelationEditor projectId={projectId} cfg={worldRelationConfig} onChanged={load} /></>}
+      {tab === "timeline" && <GraphMini graph={twin.timeline} timeline />}
+      {tab === "states" && <div className="stateTable">{twin.recent_states.length === 0 ? <p>{t("キャラクター状態履歴はまだありません。")}</p> : twin.recent_states.map((x: any) => <div className="stateRow" key={x.id}><b>EP.{x.episode_number}</b><strong>#{x.character_id}</strong><span>{x.status || "—"}</span><span>{x.location || "—"}</span><span>{x.emotion || "—"}</span><p>{x.notes || "—"}</p></div>)}</div>}
       {tab === "wordcount" && <WordCountSection projectId={projectId} />}
       {tab === "continuity" && <ContinuitySection projectId={projectId} />}
     </div>

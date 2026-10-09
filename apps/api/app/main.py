@@ -167,20 +167,20 @@ def forgot_password(x:ForgotPasswordRequest,db:Session=Depends(get_db)):
  # Same response either way — an OAuth2-only or unknown email must not be
  # distinguishable from a real one that just got an email, or this becomes
  # an account-enumeration oracle.
- return {'detail':'登録されているメールアドレス宛てに、パスワード再設定用のメールを送信しました。'}
+ return {'detail':'If that email address is registered, a password-reset email has been sent.'}
 @app.post('/auth/reset-password')
 def reset_password(x:ResetPasswordRequest,db:Session=Depends(get_db)):
  payload=session_tokens.verify(settings.session_secret,x.token)
  if not payload or payload.get('purpose')!='pwreset':
-  raise HTTPException(400,'リンクが無効か期限切れです。再度パスワード再設定をリクエストしてください。')
+  raise HTTPException(400,'This link is invalid or has expired. Please request a new password-reset email.')
  user=db.get(User,payload.get('uid'))
  if user is None or not user.is_active:
-  raise HTTPException(400,'リンクが無効です。')
+  raise HTTPException(400,'This link is invalid.')
  try:
   change_password(db,User,user.username,x.new_password)
  except ValueError as e:
   raise HTTPException(400,str(e))
- return {'detail':'パスワードを再設定しました。新しいパスワードでログインしてください。'}
+ return {'detail':'Your password has been reset. Please sign in with the new password.'}
 MAX_PAGE_SIZE=500
 def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
 def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())

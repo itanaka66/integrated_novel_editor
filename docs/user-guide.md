@@ -17,6 +17,8 @@ The "Googleでログイン" / "GitHubでログイン" buttons are enabled once t
 
 The sidebar/dashboard's "⏻ ログアウト" button clears whichever of these applies — the stored Basic Auth pair, the session cookie, or both.
 
+**Display language.** The login screen (always shown in English, since no language has been chosen yet) has a "Display language" selector with eight languages: 日本語, English, 简体中文, 繁體中文, 한국어, Español, Français and Deutsch. The choice is saved in this browser and applied right after you sign in (the page reloads once if it differs from the current one). It can only be changed on the login screen — sign out and back in to switch. It affects the app's interface only: AI prompts and generated text, the novel content itself, and messages coming from the server (e.g. some error details) stay in Japanese.
+
 Forgot your password? "パスワードをお忘れですか？" on the login screen emails a time-limited reset link to that account's email address (only accounts that have one set — see "Account settings" below). If the server has no mail server configured (`SMTP_HOST`, see [requirements.md](requirements.md#account-management-password-change--reset--adding-users)), the link is only written to the `api` container's log instead of actually emailed.
 
 ## Dashboard

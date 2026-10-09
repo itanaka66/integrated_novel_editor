@@ -2,6 +2,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { api } from "../lib/api";
 import { getActivities, subscribeActivities } from "../lib/llmActivity";
+import { t } from "../lib/i18n";
 
 const NO_ACTIVITIES: ReturnType<typeof getActivities> = [];
 
@@ -55,7 +56,7 @@ export default function LlmActivityDialog() {
       ? entries.map((e) => ({
           key: `s${e.id}`,
           state: e.state,
-          head: `${e.position}. ${e.purpose ?? "AI処理"}`,
+          head: `${e.position}. ${e.purpose ?? t("AI処理")}`,
           detail: `${e.kind_label} · ${e.model}`,
           seconds: e.elapsed_seconds,
         }))
@@ -73,29 +74,29 @@ export default function LlmActivityDialog() {
   const waiting = rows.length - running;
 
   return (
-    <div className="llmDialog" role="dialog" aria-live="polite" aria-label="AI処理中">
+    <div className="llmDialog" role="dialog" aria-live="polite" aria-label={t("AI処理中")}>
       <div className="llmDialogHead">
-        <b>AI処理中・LLMキュー</b>
-        <small>実行中 {running}{waiting > 0 ? ` / 待機 ${waiting}` : ""}</small>
-        <button type="button" className="llmDialogToggle" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? "展開" : "折りたたむ"}>
-          {collapsed ? "＋" : "−"}
+        <b>{t("AI処理中・LLMキュー")}</b>
+        <small>{t("実行中 {n}", { n: running })}{waiting > 0 ? t(" / 待機 {n}", { n: waiting }) : ""}</small>
+        <button type="button" className="llmDialogToggle" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? t("展開") : t("折りたたむ")}>
+          {collapsed ? t("＋") : "−"}
         </button>
       </div>
       {!collapsed && (
         <ul className="llmQueue">
           {rows.map((r) => (
             <li key={r.key} className={r.state === "waiting" ? "waiting" : "running"}>
-              <span className="llmQueueState">{r.state === "running" ? "実行中" : "待機中"}</span>
+              <span className="llmQueueState">{r.state === "running" ? t("実行中") : t("待機中")}</span>
               <span className="llmQueueMain">
                 {r.head}
                 {r.detail && <small>{r.detail}</small>}
               </span>
-              <small>{r.seconds}秒{r.state === "waiting" ? "待ち" : ""}</small>
+              <small>{t("{n}秒", { n: r.seconds })}{r.state === "waiting" ? t("待ち") : ""}</small>
             </li>
           ))}
         </ul>
       )}
-      <div className="llmBar" role="progressbar" aria-label="処理中"><i /></div>
+      <div className="llmBar" role="progressbar" aria-label={t("処理中")}><i /></div>
     </div>
   );
 }

@@ -15,9 +15,14 @@ import ChatPanel from "./components/ChatPanel";
 import AutoWritePanel from "./components/AutoWritePanel";
 import SettingsPanel from "./components/SettingsPanel";
 import LlmActivityDialog from "./components/LlmActivityDialog";
+import { getLanguage, t } from "./lib/i18n";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
+
+  // layout.tsx server-renders <html lang="ja">; hydration restores that over
+  // whatever lib/i18n set at module load, so set it again once mounted.
+  useEffect(() => { document.documentElement.lang = getLanguage(); }, []);
 
   useEffect(() => {
     setUnauthorizedHandler(() => { clearAuth(); setAuthed(false); });
@@ -34,7 +39,7 @@ export default function Studio() {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  if (authed === null) return <div className="center">確認中...</div>;
+  if (authed === null) return <div className="center" suppressHydrationWarning>{t("確認中...")}</div>;
   if (!authed) return <Login onLoggedIn={() => setAuthed(true)} />;
   return (
     <>
