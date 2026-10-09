@@ -71,6 +71,8 @@ export const ROWS_4: Row[] = [
   ["タイトル「{title}」が第{nums}話で重複しています", "The title “{title}” is duplicated in episodes {nums}", "标题“{title}”在第 {nums} 话重复", "標題「{title}」在第 {nums} 話重複", "제목 ‘{title}’이(가) 제{nums}화에서 중복됩니다", "El título «{title}» está repetido en los episodios {nums}", "Le titre « {title} » est en double aux épisodes {nums}", "Der Titel „{title}“ kommt in den Episoden {nums} doppelt vor"],
   ["話・第", ", ", "、", "、", ", ", ", ", ", ", ", "],
 
+  ["更新", "Update", "更新", "更新", "업데이트", "Actualizar", "Mettre à jour", "Aktualisieren"],
+
   // studio
   ["確認中...", "Checking...", "确认中...", "確認中...", "확인 중...", "Comprobando...", "Vérification...", "Wird geprüft..."],
 ];

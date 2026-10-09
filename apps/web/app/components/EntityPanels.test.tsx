@@ -26,16 +26,23 @@ describe("CharacterPanel (generic EntityPanel)", () => {
     expect(api).toHaveBeenCalledWith("/projects/1/characters");
   });
 
-  it("editing a cell and blurring saves the whole row via PUT", async () => {
+  it("editing a cell does not save by itself; the 更新 button saves the whole row via PUT", async () => {
     vi.mocked(api).mockResolvedValue([{ id: 1, name: "田中", role: "主人公", personality: "慎重", status: "alive" }]);
     vi.mocked(put).mockResolvedValue({});
     render(<CharacterPanel projectId={1} />);
 
     const nameInput = await screen.findByDisplayValue("田中");
+    const update = screen.getByRole("button", { name: "更新" });
+    expect(update).toBeDisabled(); // nothing edited yet
+
     fireEvent.change(nameInput, { target: { value: "田中太郎" } });
     fireEvent.blur(nameInput);
+    expect(put).not.toHaveBeenCalled();
+    expect(update).toBeEnabled();
 
+    fireEvent.click(update);
     await waitFor(() => expect(put).toHaveBeenCalledWith("/characters/1", expect.objectContaining({ name: "田中太郎" })));
+    await waitFor(() => expect(screen.getByRole("button", { name: "更新" })).toBeDisabled()); // clean again
   });
 
   it("adding a new row and filling the title field creates it, seeding cfg.defaults", async () => {
