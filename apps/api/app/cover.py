@@ -108,17 +108,38 @@ def comfy_workflow(prompt: str, checkpoint: str, seed: int) -> dict:
     }
 
 
+def resolve_checkpoint(configured: str, installed: list[str]) -> str:
+    """Pick the checkpoint name ComfyUI will accept. ComfyUI validates
+    `ckpt_name` against the exact file names in models/checkpoints (extension
+    included, e.g. "NoobAI-XL.safetensors"), so a name written without the
+    extension or with different case is matched against the installed list
+    instead of being sent as-is and rejected."""
+    if not installed:
+        raise CoverError(
+            'ComfyUI にチェックポイントモデルが1つもありません（ComfyUI が認識している models/checkpoints が空です）。'
+            'モデルファイル（.safetensors / .ckpt）を ComfyUI の models/checkpoints に置き、'
+            'ComfyUI を再起動するか画面の「Refresh」を押してから、もう一度お試しください。')
+    if not configured:  # no override: use the first checkpoint ComfyUI has installed
+        return installed[0]
+    if configured in installed:
+        return configured
+    key = configured.lower()
+    for name in installed:
+        stem = name.rsplit('.', 1)[0] if '.' in name else name
+        if name.lower() == key or stem.lower() == key:
+            return name
+    raise CoverError(
+        f'COMFYUI_CHECKPOINT="{configured}" は ComfyUI のチェックポイント一覧にありません。'
+        f'ファイル名は拡張子を含めて指定してください。利用可能: {", ".join(installed)}')
+
+
 async def comfyui_image(prompt: str, timeout: float = 600) -> bytes:
     base = settings.comfyui_url.rstrip('/')
     async with httpx.AsyncClient(timeout=60) as c:
-        checkpoint = settings.comfyui_checkpoint
-        if not checkpoint:  # no override: use the first checkpoint ComfyUI has installed
-            r = await c.get(f'{base}/object_info/CheckpointLoaderSimple')
-            r.raise_for_status()
-            names = r.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0]
-            if not names:
-                raise CoverError('ComfyUI にチェックポイントモデルがありません。')
-            checkpoint = names[0]
+        r = await c.get(f'{base}/object_info/CheckpointLoaderSimple')
+        r.raise_for_status()
+        installed = r.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0]
+        checkpoint = resolve_checkpoint(settings.comfyui_checkpoint, list(installed))
         r = await c.post(f'{base}/prompt', json={'prompt': comfy_workflow(prompt, checkpoint, random.randint(0, 2**32 - 1))})
         if r.status_code != 200:
             raise CoverError(f'ComfyUI がワークフローを拒否しました: {r.text[:300]}')
