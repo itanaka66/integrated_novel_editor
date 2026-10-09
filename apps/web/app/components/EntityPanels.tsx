@@ -2,6 +2,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { api, post, put, del } from "../lib/api";
 import { parseCSV, toCSV, downloadTextFile } from "../lib/csv";
+import { t } from "../lib/i18n";
 
 type Field = { key: string; label: string; type?: "text" | "textarea" | "number" | "select"; options?: string[] };
 type EntityConfig = {
@@ -83,7 +84,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     }
   }
   async function remove(id: number) {
-    if (!confirm("削除しますか？")) return;
+    if (!confirm(t("削除しますか？"))) return;
     await del(cfg.itemPath(id));
     await load();
   }
@@ -133,7 +134,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           failed++;
         }
       }
-      setCsvResult(`${created}件を作成しました。${failed ? `（${failed}件は失敗またはスキップされました）` : ""}`);
+      setCsvResult(t("{n}件を作成しました。", { n: created }) + (failed ? t("（{n}件は失敗またはスキップされました）", { n: failed }) : ""));
       await load();
     } finally {
       setCsvBusy(false);
@@ -146,10 +147,10 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       <h1>{cfg.title}</h1>
       <p>{cfg.hint}</p>
       <div className="entityToolbar">
-        <button className="add" onClick={addRow}>＋ 行を追加</button>
-        <button type="button" onClick={downloadTemplate}>CSVテンプレート</button>
+        <button className="add" onClick={addRow}>{t("＋ 行を追加")}</button>
+        <button type="button" onClick={downloadTemplate}>{t("CSVテンプレート")}</button>
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={csvBusy}>
-          {csvBusy ? "取り込み中..." : "CSVインポート"}
+          {csvBusy ? t("取り込み中...") : t("CSVインポート")}
         </button>
         <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleCsvFile} />
       </div>
@@ -164,10 +165,10 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           </thead>
           <tbody>
             {busy && items.length === 0 && newRows.length === 0 && (
-              <tr><td colSpan={cfg.fields.length + 1} className="loading">読み込み中...</td></tr>
+              <tr><td colSpan={cfg.fields.length + 1} className="loading">{t("読み込み中...")}</td></tr>
             )}
             {!busy && items.length === 0 && newRows.length === 0 && (
-              <tr><td colSpan={cfg.fields.length + 1} className="loading">まだデータがありません。「＋ 行を追加」またはCSVインポートで登録してください。</td></tr>
+              <tr><td colSpan={cfg.fields.length + 1} className="loading">{t("まだデータがありません。「＋ 行を追加」またはCSVインポートで登録してください。")}</td></tr>
             )}
             {items.map((item) => {
               const id = item.id as number;
@@ -179,7 +180,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
                     </td>
                   ))}
                   <td className="entityRowActions">
-                    {savingIds.has(id) ? <span className="savedNote">保存中...</span> : <button onClick={() => remove(id)}>削除</button>}
+                    {savingIds.has(id) ? <span className="savedNote">{t("保存中...")}</span> : <button onClick={() => remove(id)}>{t("削除")}</button>}
                   </td>
                 </tr>
               );
@@ -192,8 +193,8 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
                   </td>
                 ))}
                 <td className="entityRowActions">
-                  <button onClick={() => commitNewRow(idx)}>作成</button>
-                  <button onClick={() => cancelNewRow(idx)}>取消</button>
+                  <button onClick={() => commitNewRow(idx)}>{t("作成")}</button>
+                  <button onClick={() => cancelNewRow(idx)}>{t("取消")}</button>
                 </td>
               </tr>
             ))}
@@ -206,15 +207,15 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
 
 export function CharacterPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "キャラクター", hint: "作品の正本情報。AI Context Builderが生成時に参照します。",
+    title: t("キャラクター"), hint: t("作品の正本情報。AI Context Builderが生成時に参照します。"),
     listPath: (pid) => `/projects/${pid}/characters`, itemPath: (id) => `/characters/${id}`,
     titleField: "name",
     fields: [
-      { key: "name", label: "名前" }, { key: "role", label: "役割" },
-      { key: "personality", label: "性格", type: "textarea" }, { key: "speech_style", label: "口調", type: "textarea" },
-      { key: "goal", label: "目標", type: "textarea" },
-      { key: "status", label: "状態", type: "select", options: ["alive", "dead", "missing", "unknown"] },
-      { key: "description", label: "補足", type: "textarea" },
+      { key: "name", label: t("名前") }, { key: "role", label: t("役割") },
+      { key: "personality", label: t("性格"), type: "textarea" }, { key: "speech_style", label: t("口調"), type: "textarea" },
+      { key: "goal", label: t("目標"), type: "textarea" },
+      { key: "status", label: t("状態"), type: "select", options: ["alive", "dead", "missing", "unknown"] },
+      { key: "description", label: t("補足"), type: "textarea" },
     ],
     defaults: { status: "alive" },
   }} />;
@@ -222,15 +223,15 @@ export function CharacterPanel({ projectId }: { projectId: number }) {
 
 export function WorldPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "世界観", hint: "場所・組織・技術・魔法などの世界設定。",
+    title: t("世界観"), hint: t("場所・組織・技術・魔法などの世界設定。"),
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
     titleField: "name",
     filter: (x) => x.entity_type !== "glossary",
     fields: [
-      { key: "name", label: "名称" },
-      { key: "entity_type", label: "種類", type: "select", options: ["setting", "location", "technology", "magic", "organization", "item"] },
-      { key: "description", label: "説明", type: "textarea" }, { key: "rules", label: "ルール", type: "textarea" },
-      { key: "location", label: "場所" }, { key: "era", label: "時代" },
+      { key: "name", label: t("名称") },
+      { key: "entity_type", label: t("種類"), type: "select", options: ["setting", "location", "technology", "magic", "organization", "item"] },
+      { key: "description", label: t("説明"), type: "textarea" }, { key: "rules", label: t("ルール"), type: "textarea" },
+      { key: "location", label: t("場所") }, { key: "era", label: t("時代") },
     ],
     defaults: { entity_type: "setting" },
   }} />;
@@ -238,27 +239,27 @@ export function WorldPanel({ projectId }: { projectId: number }) {
 
 export function GlossaryPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "用語集", hint: "作品固有の用語。世界観データベースに entity_type=\"glossary\" として保存されます。",
+    title: t("用語集"), hint: t("作品固有の用語。世界観データベースに entity_type=\"glossary\" として保存されます。"),
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
     titleField: "name",
     filter: (x) => x.entity_type === "glossary",
-    fields: [{ key: "name", label: "用語" }, { key: "description", label: "説明", type: "textarea" }, { key: "location", label: "カテゴリ" }],
+    fields: [{ key: "name", label: t("用語") }, { key: "description", label: t("説明"), type: "textarea" }, { key: "location", label: t("カテゴリ") }],
     defaults: { entity_type: "glossary" },
   }} />;
 }
 
 export function PlotPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "プロット", hint: "作品全体および各アークの構成。",
+    title: t("プロット"), hint: t("作品全体および各アークの構成。"),
     listPath: (pid) => `/projects/${pid}/plots`, itemPath: (id) => `/plots/${id}`,
     titleField: "title",
     fields: [
-      { key: "title", label: "タイトル" },
-      { key: "plot_type", label: "種類", type: "select", options: ["main_arc", "arc", "subplot"] },
-      { key: "status", label: "状態", type: "select", options: ["planned", "active", "completed"] },
-      { key: "start_episode", label: "開始話数", type: "number" }, { key: "end_episode", label: "終了話数", type: "number" },
-      { key: "objective", label: "目的", type: "textarea" }, { key: "conflict", label: "対立", type: "textarea" },
-      { key: "resolution", label: "決着", type: "textarea" },
+      { key: "title", label: t("タイトル") },
+      { key: "plot_type", label: t("種類"), type: "select", options: ["main_arc", "arc", "subplot"] },
+      { key: "status", label: t("状態"), type: "select", options: ["planned", "active", "completed"] },
+      { key: "start_episode", label: t("開始話数"), type: "number" }, { key: "end_episode", label: t("終了話数"), type: "number" },
+      { key: "objective", label: t("目的"), type: "textarea" }, { key: "conflict", label: t("対立"), type: "textarea" },
+      { key: "resolution", label: t("決着"), type: "textarea" },
     ],
     defaults: { plot_type: "arc", status: "planned" },
   }} />;
@@ -266,13 +267,13 @@ export function PlotPanel({ projectId }: { projectId: number }) {
 
 export function ForeshadowPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "伏線", hint: "設置・回収の状態を管理します。",
+    title: t("伏線"), hint: t("設置・回収の状態を管理します。"),
     listPath: (pid) => `/projects/${pid}/foreshadowings`, itemPath: (id) => `/foreshadowings/${id}`,
     titleField: "title",
     fields: [
-      { key: "title", label: "タイトル" }, { key: "description", label: "説明", type: "textarea" },
-      { key: "setup_episode", label: "設置話数", type: "number" }, { key: "payoff_episode", label: "回収話数", type: "number" },
-      { key: "status", label: "状態", type: "select", options: ["open", "resolved", "abandoned"] },
+      { key: "title", label: t("タイトル") }, { key: "description", label: t("説明"), type: "textarea" },
+      { key: "setup_episode", label: t("設置話数"), type: "number" }, { key: "payoff_episode", label: t("回収話数"), type: "number" },
+      { key: "status", label: t("状態"), type: "select", options: ["open", "resolved", "abandoned"] },
     ],
     defaults: { status: "open" },
   }} />;
@@ -280,12 +281,12 @@ export function ForeshadowPanel({ projectId }: { projectId: number }) {
 
 export function TimelinePanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
-    title: "年表", hint: "エピソード番号に紐づく出来事の年表。",
+    title: t("年表"), hint: t("エピソード番号に紐づく出来事の年表。"),
     listPath: (pid) => `/projects/${pid}/timeline`, itemPath: (id) => `/timeline/${id}`,
     titleField: "title",
     fields: [
-      { key: "episode_number", label: "話数", type: "number" }, { key: "title", label: "出来事" },
-      { key: "world_time", label: "世界内時間" }, { key: "description", label: "説明", type: "textarea" },
+      { key: "episode_number", label: t("話数"), type: "number" }, { key: "title", label: t("出来事") },
+      { key: "world_time", label: t("世界内時間") }, { key: "description", label: t("説明"), type: "textarea" },
     ],
     defaults: { episode_number: 1 },
   }} />;

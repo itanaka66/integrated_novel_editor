@@ -1,4 +1,5 @@
 import { Episode } from "./types";
+import { t } from "../lib/i18n";
 
 export type QualityIssue = { episodeId: number | null; episodeNumber: number | null; message: string };
 
@@ -22,14 +23,14 @@ export function computeQualityIssues(episodes: Episode[]): QualityIssue[] {
   for (const ep of episodes) {
     const title = ep.title?.trim() ?? "";
     if (!title) {
-      issues.push({ episodeId: ep.id, episodeNumber: ep.number, message: `第${ep.number}話：タイトルが空です` });
+      issues.push({ episodeId: ep.id, episodeNumber: ep.number, message: t("第{n}話：タイトルが空です", { n: ep.number }) });
     } else {
       const m = title.match(TITLE_NUMBER_RE);
       if (m && Number(m[1]) !== ep.number) {
         issues.push({
           episodeId: ep.id,
           episodeNumber: ep.number,
-          message: `第${ep.number}話「${title}」：タイトル中の話数（${m[1]}）が実際の話数（${ep.number}）と一致していません`,
+          message: t("第{n}話「{title}」：タイトル中の話数（{m}）が実際の話数（{n}）と一致していません", { n: ep.number, title, m: m[1] }),
         });
       }
       const list = titleOccurrences.get(title) ?? [];
@@ -39,8 +40,8 @@ export function computeQualityIssues(episodes: Episode[]): QualityIssue[] {
 
     const words = Array.from(new Set(ep.content?.match(ENGLISH_WORD_RE) ?? []));
     if (words.length > 0) {
-      const shown = words.slice(0, 8).join("、") + (words.length > 8 ? " 他" : "");
-      issues.push({ episodeId: ep.id, episodeNumber: ep.number, message: `第${ep.number}話「${title || "（無題）"}」：本文に英単語が混在しています（${shown}）` });
+      const shown = words.slice(0, 8).join("、") + (words.length > 8 ? t(" 他") : "");
+      issues.push({ episodeId: ep.id, episodeNumber: ep.number, message: t("第{n}話「{title}」：本文に英単語が混在しています（{shown}）", { n: ep.number, title: title || t("（無題）"), shown }) });
     }
   }
 
@@ -50,7 +51,7 @@ export function computeQualityIssues(episodes: Episode[]): QualityIssue[] {
       issues.push({
         episodeId: eps[0].id,
         episodeNumber: eps[0].number,
-        message: `タイトル「${title}」が第${numbers.join("話・第")}話で重複しています`,
+        message: t("タイトル「{title}」が第{nums}話で重複しています", { title, nums: numbers.join(t("話・第")) }),
       });
     }
   }

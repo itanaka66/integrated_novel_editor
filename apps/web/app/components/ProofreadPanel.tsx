@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { streamSSE } from "../lib/api";
+import { t } from "../lib/i18n";
 
 type Diff = { original: string; suggested: string; reason: string };
 
@@ -60,7 +61,7 @@ export default function ProofreadPanel({
           // without bothering the user with an error that clears itself
           // a moment later.
           if (attempt === 0) { attempt = 1; start(); return; }
-          setError(gotError || "校正に失敗しました。");
+          setError(gotError || t("校正に失敗しました。"));
           setLoading(false);
         },
         { content: checkedContent.current },
@@ -94,13 +95,13 @@ export default function ProofreadPanel({
   return (
     <div className="modalOverlay" onClick={onClose}>
       <div className="modalCard" onClick={(ev) => ev.stopPropagation()}>
-        <h1>文章校正</h1>
-        {loading && <p>スタイルガイドと照合しています...</p>}
+        <h1>{t("文章校正")}</h1>
+        {loading && <p>{t("スタイルガイドと照合しています...")}</p>}
         {error && <p className="errorNote">{error}</p>}
-        {!loading && !error && diffs.length === 0 && <p>スタイルガイドに沿った修正点は見つかりませんでした。</p>}
+        {!loading && !error && diffs.length === 0 && <p>{t("スタイルガイドに沿った修正点は見つかりませんでした。")}</p>}
         {!loading && !error && current && (
           <>
-            <p className="searchSource">{index + 1} / {diffs.length}件</p>
+            <p className="searchSource">{t("{i} / {n}件", { i: index + 1, n: diffs.length })}</p>
             <div className="proofreadDiff">
               <div className="diffChunk diffRemoved"><pre>- {current.original}</pre></div>
               <div className="diffChunk diffAdded"><pre>+ {current.suggested}</pre></div>
@@ -110,11 +111,11 @@ export default function ProofreadPanel({
         )}
         <div className="modalActions">
           {done || diffs.length === 0 || error ? (
-            <button onClick={onClose}>閉じる</button>
+            <button onClick={onClose}>{t("閉じる")}</button>
           ) : (
             <>
-              <button onClick={skipCurrent}>スキップで次に進む</button>
-              <button onClick={applyCurrent}>OKで次に進む</button>
+              <button onClick={skipCurrent}>{t("スキップで次に進む")}</button>
+              <button onClick={applyCurrent}>{t("OKで次に進む")}</button>
             </>
           )}
         </div>

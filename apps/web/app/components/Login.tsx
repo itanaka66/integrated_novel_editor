@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import { api, API_ROOT, forgotPassword, setAuth } from "../lib/api";
+import { applyStoredLanguage, isLangCode, LANGUAGES, readStoredLanguage, storeLanguage } from "../lib/i18n";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -9,6 +10,10 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [busy, setBusy] = useState(false);
   const [oauthProviders, setOauthProviders] = useState<string[]>([]);
   const [showForgot, setShowForgot] = useState(false);
+  // The only place the UI language can be changed: stored here, applied by a
+  // reload right after a successful sign-in (see applyStoredLanguage). This
+  // screen itself is deliberately English-only — the language isn't chosen yet.
+  const [lang, setLang] = useState(readStoredLanguage());
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotMessage, setForgotMessage] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
@@ -27,7 +32,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     setAuth(username, password);
     try {
       await api("/projects");
-      onLoggedIn();
+      if (!applyStoredLanguage()) onLoggedIn();
     } catch (err) {
       // api() throws a specifically-worded Error only for a real 401 —
       // anything else here (a network error, a CORS rejection) is not a
@@ -36,14 +41,14 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       // never the issue. See docs/requirements.md's CORS_ORIGINS section if
       // this keeps happening after double-checking the password.
       if (err instanceof Error && err.message === "unauthorized") {
-        setError("ユーザー名またはパスワードが違います。");
+        setError("Incorrect username or password.");
       } else {
-        setError("APIに接続できませんでした。サーバーが起動しているか、環境変数 CORS_ORIGINS にこのページのアドレスが含まれているかを確認してください。");
+        setError("Could not reach the API. Check that the server is running and that the CORS_ORIGINS environment variable includes this page's address.");
       }
     } finally { setBusy(false); }
   }
 
-  const PROVIDER_LABELS: Record<string, string> = { google: "Googleでログイン", github: "GitHubでログイン" };
+  const PROVIDER_LABELS: Record<string, string> = { google: "Sign in with Google", github: "Sign in with GitHub" };
 
   async function submitForgot(ev: FormEvent) {
     ev.preventDefault();
@@ -52,7 +57,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       const detail = await forgotPassword(forgotEmail);
       setForgotMessage(detail);
     } catch (err) {
-      setForgotMessage(err instanceof Error ? err.message : "エラーが発生しました。");
+      setForgotMessage(err instanceof Error ? err.message : "Something went wrong.");
     } finally { setForgotBusy(false); }
   }
 
@@ -60,12 +65,12 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     return (
       <div className="center">
         <form className="loginCard" onSubmit={submitForgot}>
-          <b>✦ パスワード再設定</b>
-          <p>登録済みのメールアドレスに、再設定用のリンクを送信します。</p>
-          <input placeholder="メールアドレス" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} autoFocus />
+          <b>✦ Reset password</b>
+          <p>We will email a password-reset link to your registered address.</p>
+          <input placeholder="Email address" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} autoFocus />
           {forgotMessage && <div className="loginError">{forgotMessage}</div>}
-          <button type="submit" disabled={forgotBusy}>{forgotBusy ? "送信中..." : "再設定メールを送信"}</button>
-          <button type="button" className="loginOAuth loginOAuthLink" onClick={() => { setShowForgot(false); setForgotMessage(""); }}>ログイン画面に戻る</button>
+          <button type="submit" disabled={forgotBusy}>{forgotBusy ? "Sending..." : "Send reset email"}</button>
+          <button type="button" className="loginOAuth loginOAuthLink" onClick={() => { setShowForgot(false); setForgotMessage(""); }}>Back to sign in</button>
         </form>
       </div>
     );
@@ -75,18 +80,24 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
         <b>✦ Integrated Novel Editor</b>
-        <p>AIと創る、あなただけの物語</p>
-        <input placeholder="ユーザー名" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
-        <input placeholder="パスワード" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <p>Write your story with AI</p>
+        <label className="loginLang">
+          Display language
+          <select value={lang} onChange={(e) => { const v = e.target.value; if (isLangCode(v)) { setLang(v); storeLanguage(v); } }} aria-label="Display language">
+            {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
+          </select>
+        </label>
+        <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
+        <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
-        <button type="submit" disabled={busy}>{busy ? "確認中..." : "ログイン"}</button>
-        <button type="button" className="loginOAuth loginOAuthLink" onClick={() => setShowForgot(true)}>パスワードをお忘れですか？</button>
-        <div className="loginDivider">または</div>
+        <button type="submit" disabled={busy}>{busy ? "Checking..." : "Sign in"}</button>
+        <button type="button" className="loginOAuth loginOAuthLink" onClick={() => setShowForgot(true)}>Forgot your password?</button>
+        <div className="loginDivider">or</div>
         {["google", "github"].map((p) =>
           oauthProviders.includes(p) ? (
             <a key={p} className="loginOAuth loginOAuthLink" href={`${API_ROOT}/auth/login/${p}`}>{PROVIDER_LABELS[p]}</a>
           ) : (
-            <button key={p} type="button" className="loginOAuth" disabled title="サーバー側でこのログイン方法が設定されていません">{PROVIDER_LABELS[p]}</button>
+            <button key={p} type="button" className="loginOAuth" disabled title="This sign-in method is not configured on the server">{PROVIDER_LABELS[p]}</button>
           ),
         )}
       </form>

@@ -22,7 +22,7 @@ export default function ResetPassword() {
     ev.preventDefault();
     setError("");
     if (newPassword !== confirm) {
-      setError("新しいパスワードが一致しません。");
+      setError("The new passwords do not match.");
       return;
     }
     setBusy(true);
@@ -31,7 +31,7 @@ export default function ResetPassword() {
       setMessage(detail);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました。");
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally { setBusy(false); }
   }
 
@@ -40,7 +40,7 @@ export default function ResetPassword() {
       <div className="center">
         <div className="loginCard">
           <b>✦ Integrated Novel Editor</b>
-          <p>無効なリンクです。パスワード再設定メールのリンクからやり直してください。</p>
+          <p>This link is invalid. Please start again from the link in the password-reset email.</p>
         </div>
       </div>
     );
@@ -50,9 +50,9 @@ export default function ResetPassword() {
     return (
       <div className="center">
         <div className="loginCard">
-          <b>✦ パスワード再設定</b>
+          <b>✦ Reset password</b>
           <p>{message}</p>
-          <a className="loginOAuth loginOAuthLink" href="/">ログイン画面へ</a>
+          <a className="loginOAuth loginOAuthLink" href="/">Go to sign in</a>
         </div>
       </div>
     );
@@ -61,11 +61,11 @@ export default function ResetPassword() {
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
-        <b>✦ パスワード再設定</b>
-        <input placeholder="新しいパスワード" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoFocus />
-        <input placeholder="新しいパスワード（確認）" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        <b>✦ Reset password</b>
+        <input placeholder="New password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoFocus />
+        <input placeholder="Confirm new password" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
-        <button type="submit" disabled={busy}>{busy ? "送信中..." : "パスワードを再設定"}</button>
+        <button type="submit" disabled={busy}>{busy ? "Sending..." : "Reset password"}</button>
       </form>
     </div>
   );

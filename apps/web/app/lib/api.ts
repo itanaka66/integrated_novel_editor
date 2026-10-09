@@ -1,4 +1,5 @@
 import { beginActivity, endActivity } from "./llmActivity";
+import { t } from "../lib/i18n";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 // editor_common.oauth's login/callback/logout routes (see app/main.py) are
@@ -130,7 +131,7 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
     onUnauthorized?.();
     throw new Error("unauthorized");
   }
-  if (!r.ok) throw new Error(body.detail || "パスワードの変更に失敗しました。");
+  if (!r.ok) throw new Error(body.detail || t("パスワードの変更に失敗しました。"));
   return body.detail as string;
 }
 
@@ -145,7 +146,7 @@ export async function forgotPassword(email: string): Promise<string> {
     body: JSON.stringify({ email }),
   });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || "エラーが発生しました。");
+  if (!r.ok) throw new Error(body.detail || "Something went wrong.");
   return body.detail as string;
 }
 export async function resetPassword(token: string, newPassword: string): Promise<string> {
@@ -155,7 +156,7 @@ export async function resetPassword(token: string, newPassword: string): Promise
     body: JSON.stringify({ token, new_password: newPassword }),
   });
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || "エラーが発生しました。");
+  if (!r.ok) throw new Error(body.detail || "Something went wrong.");
   return body.detail as string;
 }
 

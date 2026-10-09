@@ -4,17 +4,18 @@ import { api } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
 import CoverPanel from "./CoverPanel";
+import { t } from "../lib/i18n";
 
 const ICONS: { key: Section; label: string }[] = [
-  { key: "write", label: "✎ 執筆" },
-  { key: "plot", label: "◆ プロット" },
-  { key: "characters", label: "♟ 人物" },
-  { key: "world", label: "◈ 世界観" },
-  { key: "timeline", label: "⏱ 年表" },
-  { key: "glossary", label: "📖 用語集" },
-  { key: "foreshadow", label: "◎ 伏線" },
-  { key: "analytics", label: "📊 分析" },
-  { key: "settings", label: "⚙ 設定" },
+  { key: "write", label: t("✎ 執筆") },
+  { key: "plot", label: t("◆ プロット") },
+  { key: "characters", label: t("♟ 人物") },
+  { key: "world", label: t("◈ 世界観") },
+  { key: "timeline", label: t("⏱ 年表") },
+  { key: "glossary", label: t("📖 用語集") },
+  { key: "foreshadow", label: t("◎ 伏線") },
+  { key: "analytics", label: t("📊 分析") },
+  { key: "settings", label: t("⚙ 設定") },
 ];
 
 const LANGUAGES: { code: string; label: string }[] = [
@@ -35,22 +36,22 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   // Poll the background translation job until it finishes.
   useEffect(() => {
     if (!tJob || !tBusy) return;
-    const t = setInterval(async () => {
+    const timer = setInterval(async () => {
       try {
         const j = await api(`/translate-jobs/${tJob.id}`);
-        if (j?.id) setTJob(j); else { setTError(j?.detail || "進捗の取得に失敗しました"); setTJob(null); }
+        if (j?.id) setTJob(j); else { setTError(j?.detail || t("進捗の取得に失敗しました")); setTJob(null); }
       } catch { /* transient; retry on next tick */ }
     }, 2000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [tJob, tBusy]);
 
   async function translate(code: string, label: string) {
-    if (!window.confirm(`作品全編を「${label}」に翻訳し、新しい作品として作成します（元の作品は変更されません）。エピソード数が多いと時間がかかります。よろしいですか？`)) return;
+    if (!window.confirm(t("作品全編を「{label}」に翻訳し、新しい作品として作成します（元の作品は変更されません）。エピソード数が多いと時間がかかります。よろしいですか？", { label }))) return;
     setTError(""); setTJob(null);
     try {
       const j = await api(`/projects/${project.id}/translate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: code }) });
-      if (j?.id) setTJob(j); else setTError(j?.detail || "翻訳を開始できませんでした");
-    } catch (e) { setTError(e instanceof Error ? e.message : "翻訳を開始できませんでした"); }
+      if (j?.id) setTJob(j); else setTError(j?.detail || t("翻訳を開始できませんでした"));
+    } catch (e) { setTError(e instanceof Error ? e.message : t("翻訳を開始できませんでした")); }
   }
   async function openTranslated() {
     if (!tJob?.project_id || !onOpenProject) return;
@@ -63,13 +64,13 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [digestError, setDigestError] = useState("");
 
   async function makeDigest() {
-    if (!window.confirm("クライマックス中心に約1/2の分量で、新しい作品「総集編」を作成します（元の作品は変更されません）。よろしいですか？")) return;
+    if (!window.confirm(t("クライマックス中心に約1/2の分量で、新しい作品「総集編」を作成します（元の作品は変更されません）。よろしいですか？"))) return;
     setDigesting(true); setDigestError(""); setDigest(null);
     try {
       const r = await api(`/projects/${project.id}/digest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ratio: 0.5 }) });
-      if (r?.project) setDigest(r); else setDigestError(r?.detail || "総集編の作成に失敗しました");
+      if (r?.project) setDigest(r); else setDigestError(r?.detail || t("総集編の作成に失敗しました"));
     } catch (e) {
-      setDigestError(e instanceof Error ? e.message : "総集編の作成に失敗しました");
+      setDigestError(e instanceof Error ? e.message : t("総集編の作成に失敗しました"));
     } finally { setDigesting(false); }
   }
   useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes); }, [project.id]);
@@ -80,45 +81,45 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   return (
     <div className="panel projectHome">
       <div className="projectHomeHead">
-        <div><small>{project.genre || "未設定"}</small><h1>{project.name}</h1><p>{project.description || "あらすじ未設定"}</p></div>
-        <div className="projectHomeProgress"><span>進捗 {pct}%</span><b>({episodes.length}/{goal}話)</b></div>
+        <div><small>{project.genre || t("未設定")}</small><h1>{project.name}</h1><p>{project.description || t("あらすじ未設定")}</p></div>
+        <div className="projectHomeProgress"><span>{t("進捗 {pct}%", { pct })}</span><b>{t("({eps}/{goal}話)", { eps: episodes.length, goal })}</b></div>
       </div>
       <div className="iconGrid">
         {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{x.label}</button>)}
       </div>
       <div className="card">
-        <small>多言語化（全編翻訳）</small>
-        <p>作品全編を選択した言語に翻訳し、新しい作品として作成します。</p>
+        <small>{t("多言語化（全編翻訳）")}</small>
+        <p>{t("作品全編を選択した言語に翻訳し、新しい作品として作成します。")}</p>
         <div className="exportButtons">
           {LANGUAGES.map((l) => <button key={l.code} onClick={() => translate(l.code, l.label)} disabled={tBusy || episodes.length === 0}>{l.label}</button>)}
         </div>
         {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
         {tJob && (
           <div className="resultCard">
-            <b>{tJob.status === "completed" ? "翻訳完了" : tJob.status === "error" ? "翻訳エラー" : `翻訳中 ${tJob.progress_percent}%`}</b>
+            <b>{tJob.status === "completed" ? t("翻訳完了") : tJob.status === "error" ? t("翻訳エラー") : t("翻訳中 {pct}%", { pct: tJob.progress_percent })}</b>
             <p>{tJob.last_message}</p>
-            {tJob.status === "completed" && onOpenProject && <button onClick={openTranslated}>翻訳版を開く</button>}
+            {tJob.status === "completed" && onOpenProject && <button onClick={openTranslated}>{t("翻訳版を開く")}</button>}
           </div>
         )}
       </div>
       <div className="card">
-        <small>総集編</small>
-        <p>プロット終端・伏線回収・最終話などのクライマックス話を集め、約1/2の分量の新しい作品を作成します。</p>
-        <button onClick={makeDigest} disabled={digesting || episodes.length === 0}>{digesting ? "作成中..." : "総集編作成"}</button>
+        <small>{t("総集編")}</small>
+        <p>{t("プロット終端・伏線回収・最終話などのクライマックス話を集め、約1/2の分量の新しい作品を作成します。")}</p>
+        <button onClick={makeDigest} disabled={digesting || episodes.length === 0}>{digesting ? t("作成中...") : t("総集編作成")}</button>
         {digestError && <p style={{ color: "#c0392b" }}>{digestError}</p>}
         {digest && (
           <div className="resultCard">
             <b>{digest.project.name}</b>
-            <p>{digest.source_episode_count}話中{digest.episode_count}話（原作 第{digest.source_numbers.join("・")}話）／ {digest.chars.toLocaleString()}字（原作 {digest.source_chars.toLocaleString()}字）</p>
-            {onOpenProject && <button onClick={() => onOpenProject(digest.project)}>総集編を開く</button>}
+            <p>{t("{src}話中{n}話（原作 第{nums}話）／ {chars}字（原作 {srcChars}字）", { src: digest.source_episode_count, n: digest.episode_count, nums: digest.source_numbers.join(t("・")), chars: digest.chars.toLocaleString(), srcChars: digest.source_chars.toLocaleString() })}</p>
+            {onOpenProject && <button onClick={() => onOpenProject(digest.project)}>{t("総集編を開く")}</button>}
           </div>
         )}
       </div>
       <CoverPanel projectId={project.id} />
       <div className="card">
-        <small>最近の更新</small>
-        {recent.length === 0 ? <p>まだエピソードがありません。「執筆」から書き始めましょう。</p> :
-          recent.map((e) => <div className="twinRow" key={e.id}><b>第{e.number}話 {e.title}</b><span>{(e.summary || "").slice(0, 40) || "概要未設定"}</span></div>)}
+        <small>{t("最近の更新")}</small>
+        {recent.length === 0 ? <p>{t("まだエピソードがありません。「執筆」から書き始めましょう。")}</p> :
+          recent.map((e) => <div className="twinRow" key={e.id}><b>{t("第{n}話", { n: e.number })} {e.title}</b><span>{(e.summary || "").slice(0, 40) || t("概要未設定")}</span></div>)}
       </div>
     </div>
   );

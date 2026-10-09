@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, post } from "../lib/api";
 import { Project } from "../lib/types";
+import { t } from "../lib/i18n";
 
 type TextSearchMatch = { episode_id: number; number: number; title: string; count: number; snippets: string[] };
 type TextReplaceEpisodeResult = { episode_id: number; number: number; title: string; replaced_count: number };
@@ -35,7 +36,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
       setR(x.results || []); setSource(x.source || "");
     } finally { setBusy(false); }
   }
-  async function reindex() { const x = await post("/rag/index", { project_id: projectId }); alert(`索引を再構築しました (${x.indexed ?? 0}件)`); }
+  async function reindex() { const x = await post("/rag/index", { project_id: projectId }); alert(t("索引を再構築しました ({n}件)", { n: x.indexed ?? 0 })); }
 
   async function findAll() {
     if (!findQ) return;
@@ -58,7 +59,7 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
 
   async function replaceAll() {
     if (!findQ || selected.size === 0) return;
-    if (!confirm(`選択した${selected.size}話で「${findQ}」を「${replaceQ}」に置換します。元に戻したい場合は各話の改訂履歴から復元できます。よろしいですか？`)) return;
+    if (!confirm(t("選択した{n}話で「{find}」を「{replace}」に置換します。元に戻したい場合は各話の改訂履歴から復元できます。よろしいですか？", { n: selected.size, find: findQ, replace: replaceQ }))) return;
     setReplaceBusy(true);
     try {
       const x = await post(`/projects/${projectId}/text-replace`, {
@@ -72,23 +73,23 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
   return (
     <div className="panel">
       <small>SEARCH</small>
-      <h1>検索</h1>
+      <h1>{t("検索")}</h1>
       <div className="twinTabs">
-        <button className={mode === "semantic" ? "on" : ""} onClick={() => setMode("semantic")}>意味検索</button>
-        <button className={mode === "replace" ? "on" : ""} onClick={() => setMode("replace")}>検索・全置換</button>
+        <button className={mode === "semantic" ? "on" : ""} onClick={() => setMode("semantic")}>{t("意味検索")}</button>
+        <button className={mode === "replace" ? "on" : ""} onClick={() => setMode("replace")}>{t("検索・全置換")}</button>
       </div>
       {mode === "semantic" && (
         <>
-          <p>本文をベクトル検索（Qdrant）します。接続できない場合はPostgreSQLの全文一致にフォールバックします。</p>
+          <p>{t("本文をベクトル検索（Qdrant）します。接続できない場合はPostgreSQLの全文一致にフォールバックします。")}</p>
           <label className="searchAllToggle">
-            <input type="checkbox" checked={allProjects} onChange={(e) => setAllProjects(e.target.checked)} /> すべての作品を検索対象にする
+            <input type="checkbox" checked={allProjects} onChange={(e) => setAllProjects(e.target.checked)} /> {t("すべての作品を検索対象にする")}
           </label>
           <div className="ragbar">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={allProjects ? "全作品の本文を意味検索" : "この作品の本文を意味検索"} onKeyDown={(e) => e.key === "Enter" && search()} />
-            <button onClick={search}>{busy ? "検索中…" : "検索"}</button>
-            {!allProjects && <button onClick={reindex}>再構築</button>}
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={allProjects ? t("全作品の本文を意味検索") : t("この作品の本文を意味検索")} onKeyDown={(e) => e.key === "Enter" && search()} />
+            <button onClick={search}>{busy ? t("検索中…") : t("検索")}</button>
+            {!allProjects && <button onClick={reindex}>{t("再構築")}</button>}
           </div>
-          {source && <p className="searchSource">検索元：{source === "qdrant" ? "セマンティック検索 (Qdrant)" : "全文一致 (PostgreSQL フォールバック)"}</p>}
+          {source && <p className="searchSource">{t("検索元：")}{source === "qdrant" ? t("セマンティック検索 (Qdrant)") : t("全文一致 (PostgreSQL フォールバック)")}</p>}
           {r.map((x, i) => (
             <div className="resultCard" key={i}>
               <b>{x.title}</b>
@@ -100,39 +101,39 @@ export default function SearchPanel({ projectId }: { projectId: number }) {
       )}
       {mode === "replace" && (
         <>
-          <p>この作品内の全話本文を対象に、文字列を検索・一括置換します。置換前の内容は改訂履歴に自動保存されます。</p>
+          <p>{t("この作品内の全話本文を対象に、文字列を検索・一括置換します。置換前の内容は改訂履歴に自動保存されます。")}</p>
           <div className="ragbar">
-            <input value={findQ} onChange={(e) => setFindQ(e.target.value)} placeholder="検索する文字列" onKeyDown={(e) => e.key === "Enter" && findAll()} />
-            <input value={replaceQ} onChange={(e) => setReplaceQ(e.target.value)} placeholder="置換後の文字列" />
-            <button onClick={findAll} disabled={!findQ}>{findBusy ? "検索中…" : "検索"}</button>
+            <input value={findQ} onChange={(e) => setFindQ(e.target.value)} placeholder={t("検索する文字列")} onKeyDown={(e) => e.key === "Enter" && findAll()} />
+            <input value={replaceQ} onChange={(e) => setReplaceQ(e.target.value)} placeholder={t("置換後の文字列")} />
+            <button onClick={findAll} disabled={!findQ}>{findBusy ? t("検索中…") : t("検索")}</button>
           </div>
           <label className="searchAllToggle">
-            <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} /> 大文字・小文字を区別する
+            <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} /> {t("大文字・小文字を区別する")}
           </label>
           {totalMatches > 0 && (
             <>
-              <p className="searchSource">{matches.length}話で合計{totalMatches}件ヒット。置換したい話を選択してください。</p>
+              <p className="searchSource">{t("{n}話で合計{total}件ヒット。置換したい話を選択してください。", { n: matches.length, total: totalMatches })}</p>
               {matches.map((m) => (
                 <div className="resultCard" key={m.episode_id}>
                   <label style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                     <input type="checkbox" checked={selected.has(m.episode_id)} onChange={() => toggleSelected(m.episode_id)} />
-                    <b>第{m.number}話 {m.title}</b>
-                    <span className="resultProject">{m.count}件</span>
+                    <b>{t("第{n}話", { n: m.number })} {m.title}</b>
+                    <span className="resultProject">{t("{n}件", { n: m.count })}</span>
                   </label>
                   {m.snippets.map((s, i) => <p key={i}>{s}</p>)}
                 </div>
               ))}
               <div className="entityFormActions">
-                <button onClick={replaceAll} disabled={replaceBusy || selected.size === 0}>{replaceBusy ? "置換中…" : `選択した${selected.size}話を置換`}</button>
+                <button onClick={replaceAll} disabled={replaceBusy || selected.size === 0}>{replaceBusy ? t("置換中…") : t("選択した{n}話を置換", { n: selected.size })}</button>
               </div>
             </>
           )}
           {searched && !findBusy && totalMatches === 0 && replaceResult === null && (
-            <p className="searchSource">一致する話がありませんでした。</p>
+            <p className="searchSource">{t("一致する話がありませんでした。")}</p>
           )}
           {replaceResult && (
             <p className="searchSource">
-              {replaceResult.episodes.length}話・合計{replaceResult.total_replaced}件を置換しました。
+              {t("{n}話・合計{total}件を置換しました。", { n: replaceResult.episodes.length, total: replaceResult.total_replaced })}
             </p>
           )}
         </>

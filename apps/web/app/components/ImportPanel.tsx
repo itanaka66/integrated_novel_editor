@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, postFile } from "../lib/api";
 import { Project } from "../lib/types";
 import { ensureNotificationPermission, notify } from "../lib/notify";
+import { t } from "../lib/i18n";
 
 type ImportJob = {
   id: number;
@@ -40,8 +41,8 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
         if (latest.status === "completed" || latest.status === "error") {
           if (timer.current) clearInterval(timer.current);
           notify(
-            latest.status === "completed" ? "インポートが完了しました" : "インポートでエラーが発生しました",
-            `${latest.source_filename}${latest.status === "completed" ? `（新規${latest.created_episodes}話・更新${latest.updated_episodes}話）` : `: ${latest.last_message}`}`,
+            latest.status === "completed" ? t("インポートが完了しました") : t("インポートでエラーが発生しました"),
+            `${latest.source_filename}${latest.status === "completed" ? t("（新規{c}話・更新{u}話）", { c: latest.created_episodes, u: latest.updated_episodes }) : `: ${latest.last_message}`}`,
           );
         }
       }, 2000);
@@ -57,12 +58,12 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
   return (
     <div className="modalOverlay" onClick={job?.status === "completed" ? undefined : onCancel}>
       <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-        <h1>ファイルからインポート</h1>
+        <h1>{t("ファイルからインポート")}</h1>
         {!job && (
           <>
-            <p>なろう形式のテキストファイル（メタ情報＋エピソード区切り付きの本編、または下書きエピソードのみのファイル）から、新しい作品を作成します。</p>
+            <p>{t("なろう形式のテキストファイル（メタ情報＋エピソード区切り付きの本編、または下書きエピソードのみのファイル）から、新しい作品を作成します。")}</p>
             <label>
-              ファイル *
+              {t("ファイル *")}
               <input
                 ref={fileInput}
                 type="file"
@@ -71,11 +72,11 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
               />
             </label>
             <p className="searchSource">
-              取り込み後、各話のRAG索引付け・キャラクター状態の自動抽出・連続性監査を自動実行します（話数が多いと数分かかることがあります）。
+              {t("取り込み後、各話のRAG索引付け・キャラクター状態の自動抽出・連続性監査を自動実行します（話数が多いと数分かかることがあります）。")}
             </p>
             <div className="modalActions">
-              <button onClick={onCancel}>キャンセル</button>
-              <button onClick={start} disabled={busy || !file}>{busy ? "開始中..." : "インポート開始"}</button>
+              <button onClick={onCancel}>{t("キャンセル")}</button>
+              <button onClick={start} disabled={busy || !file}>{busy ? t("開始中...") : t("インポート開始")}</button>
             </div>
           </>
         )}
@@ -84,15 +85,15 @@ export default function ImportPanel({ onImported, onCancel }: { onImported: (p: 
             <p><b>{job.source_filename}</b></p>
             <div className="progress"><i style={{ width: `${job.progress_percent}%` }} /></div>
             <p className="searchSource">
-              {job.status === "queued" && "キューに追加しました…"}
-              {job.status === "running" && `${job.processed_episodes}/${job.total_episodes}話 処理中… ${job.last_message}`}
+              {job.status === "queued" && t("キューに追加しました…")}
+              {job.status === "running" && t("{done}/{total}話 処理中… {msg}", { done: job.processed_episodes, total: job.total_episodes, msg: job.last_message })}
               {job.status === "completed" && job.last_message}
-              {job.status === "error" && `エラー: ${job.last_message}`}
+              {job.status === "error" && t("エラー: {msg}", { msg: job.last_message })}
             </p>
             <div className="modalActions">
-              {job.status !== "completed" && job.status !== "error" && <button onClick={onCancel}>閉じる（バックグラウンドで続行）</button>}
-              {job.status === "error" && <button onClick={onCancel}>閉じる</button>}
-              {job.status === "completed" && <button onClick={finish}>作品を開く</button>}
+              {job.status !== "completed" && job.status !== "error" && <button onClick={onCancel}>{t("閉じる（バックグラウンドで続行）")}</button>}
+              {job.status === "error" && <button onClick={onCancel}>{t("閉じる")}</button>}
+              {job.status === "completed" && <button onClick={finish}>{t("作品を開く")}</button>}
             </div>
           </>
         )}

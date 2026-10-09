@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 // Tracks which backend calls are currently waiting on an LLM, so
 // LlmActivityDialog can say *what* the AI is doing instead of the UI just
 // sitting there for tens of seconds. Kept as a tiny external store (read via
@@ -9,24 +10,24 @@ export type LlmActivity = { id: number; label: string; startedAt: number };
 type Route = { method: string; re: RegExp; label: (body: unknown) => string };
 
 const AI_MODE_LABELS: Record<string, string> = {
-  continue: "続きを書いています",
-  plot: "次の展開を考えています",
-  summary: "要約しています",
-  proofread: "校正しています",
-  custom: "AIが指示を処理しています",
+  continue: t("続きを書いています"),
+  plot: t("次の展開を考えています"),
+  summary: t("要約しています"),
+  proofread: t("校正しています"),
+  custom: t("AIが指示を処理しています"),
 };
 
 // Only endpoints that actually wait on Ollama. Auto-write and cover jobs run
 // in the background and have their own progress UI, so they're not listed.
 const ROUTES: Route[] = [
-  { method: "POST", re: /^\/ai\/generate$/, label: (b) => AI_MODE_LABELS[(b as { mode?: string } | undefined)?.mode ?? ""] ?? "AIが本文を生成しています" },
-  { method: "POST", re: /^\/continuity\/check$/, label: () => "矛盾・連続性を監査しています" },
-  { method: "POST", re: /^\/episodes\/\d+\/character-states$/, label: () => "登場人物の状態を更新しています" },
-  { method: "POST", re: /^\/episodes\/\d+\/proofread(\/stream)?$/, label: () => "文章を校正しています" },
-  { method: "POST", re: /^\/projects\/\d+\/style-guide\/generate$/, label: () => "スタイルガイドを生成しています" },
-  { method: "POST", re: /^\/projects\/\d+\/chat$/, label: () => "AIが回答を考えています" },
-  { method: "POST", re: /^\/projects\/\d+\/cover\/prompt$/, label: () => "表紙のプロンプトを作成しています" },
-  { method: "POST", re: /^\/rag\/search(-all)?$/, label: () => "意味検索の準備（埋め込み生成）をしています" },
+  { method: "POST", re: /^\/ai\/generate$/, label: (b) => AI_MODE_LABELS[(b as { mode?: string } | undefined)?.mode ?? ""] ?? t("AIが本文を生成しています") },
+  { method: "POST", re: /^\/continuity\/check$/, label: () => t("矛盾・連続性を監査しています") },
+  { method: "POST", re: /^\/episodes\/\d+\/character-states$/, label: () => t("登場人物の状態を更新しています") },
+  { method: "POST", re: /^\/episodes\/\d+\/proofread(\/stream)?$/, label: () => t("文章を校正しています") },
+  { method: "POST", re: /^\/projects\/\d+\/style-guide\/generate$/, label: () => t("スタイルガイドを生成しています") },
+  { method: "POST", re: /^\/projects\/\d+\/chat$/, label: () => t("AIが回答を考えています") },
+  { method: "POST", re: /^\/projects\/\d+\/cover\/prompt$/, label: () => t("表紙のプロンプトを作成しています") },
+  { method: "POST", re: /^\/rag\/search(-all)?$/, label: () => t("意味検索の準備（埋め込み生成）をしています") },
 ];
 
 let activities: LlmActivity[] = [];

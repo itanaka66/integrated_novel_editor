@@ -22,9 +22,9 @@ describe("Login", () => {
     const onLoggedIn = vi.fn();
     render(<Login onLoggedIn={onLoggedIn} />);
 
-    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "admin" } });
-    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "novel" } });
-    fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
+    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "novel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => expect(onLoggedIn).toHaveBeenCalled());
     expect(setAuth).toHaveBeenCalledWith("admin", "novel");
@@ -35,11 +35,11 @@ describe("Login", () => {
     const onLoggedIn = vi.fn();
     render(<Login onLoggedIn={onLoggedIn} />);
 
-    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "admin" } });
-    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "wrong" } });
-    fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
+    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    await waitFor(() => expect(screen.getByText("ユーザー名またはパスワードが違います。")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Incorrect username or password.")).toBeInTheDocument());
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
@@ -48,12 +48,12 @@ describe("Login", () => {
     const onLoggedIn = vi.fn();
     render(<Login onLoggedIn={onLoggedIn} />);
 
-    fireEvent.change(screen.getByPlaceholderText("ユーザー名"), { target: { value: "admin" } });
-    fireEvent.change(screen.getByPlaceholderText("パスワード"), { target: { value: "novel" } });
-    fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
+    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "novel" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
-    await waitFor(() => expect(screen.getByText(/APIに接続できませんでした/)).toBeInTheDocument());
-    expect(screen.queryByText("ユーザー名またはパスワードが違います。")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Could not reach the API/)).toBeInTheDocument());
+    expect(screen.queryByText("Incorrect username or password.")).not.toBeInTheDocument();
     expect(onLoggedIn).not.toHaveBeenCalled();
   });
 
@@ -62,30 +62,57 @@ describe("Login", () => {
     render(<Login onLoggedIn={vi.fn()} />);
 
     await waitFor(() => expect(api).toHaveBeenCalledWith("/health"));
-    expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign in with Google" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeDisabled();
   });
 
   it("turns a configured provider into a real link to its login route", async () => {
     vi.mocked(api).mockResolvedValue({ oauth_providers: ["google"] });
     render(<Login onLoggedIn={vi.fn()} />);
 
-    const googleLink = await screen.findByRole("link", { name: "Googleでログイン" });
+    const googleLink = await screen.findByRole("link", { name: "Sign in with Google" });
     expect(googleLink).toHaveAttribute("href", "http://localhost:8000/auth/login/google");
     // GitHub wasn't in oauth_providers, so it stays a disabled placeholder.
-    expect(screen.getByRole("button", { name: "GitHubでログイン" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeDisabled();
   });
 
   it("switches to the forgot-password form and reports the server's message", async () => {
     vi.mocked(api).mockResolvedValue({ oauth_providers: [] });
-    vi.mocked(forgotPassword).mockResolvedValue("登録されているメールアドレス宛てに、パスワード再設定用のメールを送信しました。");
+    vi.mocked(forgotPassword).mockResolvedValue("If that email address is registered, a password-reset email has been sent.");
     render(<Login onLoggedIn={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "パスワードをお忘れですか？" }));
-    fireEvent.change(screen.getByPlaceholderText("メールアドレス"), { target: { value: "user@example.com" } });
-    fireEvent.click(screen.getByRole("button", { name: "再設定メールを送信" }));
+    fireEvent.click(screen.getByRole("button", { name: "Forgot your password?" }));
+    fireEvent.change(screen.getByPlaceholderText("Email address"), { target: { value: "user@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send reset email" }));
 
     await waitFor(() => expect(forgotPassword).toHaveBeenCalledWith("user@example.com"));
-    expect(await screen.findByText(/再設定用のメールを送信しました/)).toBeInTheDocument();
+    expect(await screen.findByText(/a password-reset email has been sent/)).toBeInTheDocument();
+  });
+  it("offers all eight display languages and stores the choice", () => {
+    localStorage.removeItem("ine-lang");
+    vi.mocked(api).mockResolvedValue({ oauth_providers: [] });
+    render(<Login onLoggedIn={vi.fn()} />);
+    const select = screen.getByLabelText("Display language") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["ja", "en", "zh-CN", "zh-TW", "ko", "es", "fr", "de"]);
+    fireEvent.change(select, { target: { value: "ko" } });
+    expect(localStorage.getItem("ine-lang")).toBe("ko");
+  });
+
+  it("reloads after sign-in when a different language was chosen, instead of continuing", async () => {
+    localStorage.removeItem("ine-lang");
+    vi.mocked(api).mockResolvedValue([]);
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, "location", { configurable: true, value: { ...original, reload } });
+    const onLoggedIn = vi.fn();
+    render(<Login onLoggedIn={onLoggedIn} />);
+    fireEvent.change(screen.getByLabelText("Display language"), { target: { value: "de" } });
+    fireEvent.change(screen.getByPlaceholderText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(onLoggedIn).not.toHaveBeenCalled();
+    Object.defineProperty(window, "location", { configurable: true, value: original });
+    localStorage.removeItem("ine-lang");
   });
 });
