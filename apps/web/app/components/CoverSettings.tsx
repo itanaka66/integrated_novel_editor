@@ -19,6 +19,8 @@ export default function CoverSettings() {
   const [open, setOpen] = useState("anime");
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [test, setTest] = useState<{ ok: boolean; message: string; checkpoints: string[] } | null>(null);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     api("/cover/config").then((r) => { if (r?.styles) setCfg(r); else setErr(r?.detail || t("読み込めませんでした")); }).catch(() => setErr(t("読み込めませんでした")));
@@ -38,6 +40,15 @@ export default function CoverSettings() {
     } catch (e) { setErr(e instanceof Error ? e.message : t("保存できませんでした")); }
   }
 
+  async function testConnection() {
+    setTesting(true); setTest(null);
+    try {
+      const r = await api("/cover/test-comfyui", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ url: String(cfg!.comfyui.url ?? ""), checkpoint: String(cfg!.comfyui.checkpoint ?? "") }) });
+      setTest(r?.message ? r : { ok: false, message: r?.detail || t("接続テストに失敗しました"), checkpoints: [] });
+    } catch (e) { setTest({ ok: false, message: e instanceof Error ? e.message : t("接続テストに失敗しました"), checkpoints: [] }); }
+    finally { setTesting(false); }
+  }
+
   const s = cfg.styles[open];
   return (
     <div style={{ marginTop: 14 }}>
@@ -45,6 +56,14 @@ export default function CoverSettings() {
 
       <b>{t("共通設定")}</b>
       <div className="entityForm" style={{ marginTop: 6 }}>
+        <label style={{ gridColumn: "1/-1" }}>{t("ComfyUI 接続先URL")}
+          <input value={cfg.comfyui.url ?? ""} onChange={(e) => setBase("comfyui", "url", e.target.value)} placeholder={t("空欄の場合は環境変数 COMFYUI_URL（既定 http://localhost:8188）")} />
+        </label>
+        <div style={{ gridColumn: "1/-1" }}>
+          <button type="button" onClick={testConnection} disabled={testing}>{testing ? t("確認中...") : t("接続テスト")}</button>
+          {test && <span style={{ marginLeft: 10, color: test.ok ? "#2e7d32" : "#c0392b" }}>{test.message}</span>}
+          {test && test.checkpoints.length > 0 && <div style={{ fontSize: 12, color: "#566273", marginTop: 4 }}>{t("利用可能なチェックポイント")}: {test.checkpoints.join(", ")}</div>}
+        </div>
         {COMFY.map(([k, label, num]) => (
           <label key={k}>ComfyUI {label}<input type={num ? "number" : "text"} value={cfg.comfyui[k] ?? ""} onChange={(e) => setBase("comfyui", k, e.target.value)} /></label>
         ))}

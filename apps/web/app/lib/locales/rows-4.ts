@@ -111,4 +111,10 @@ export const ROWS_4: Row[] = [
   ["プロンプトの方向づけ", "Prompt direction", "提示词方向", "提示詞方向", "프롬프트 방향", "Dirección del prompt", "Orientation du prompt", "Prompt-Richtung"],
   ["プロンプト末尾に付ける語句", "Words appended to the prompt", "附加在提示词末尾的词语", "附加在提示詞末尾的詞語", "프롬프트 끝에 붙일 문구", "Texto añadido al final del prompt", "Termes ajoutés à la fin du prompt", "An den Prompt angehängte Wörter"],
   ["ネガティブに追加", "Added to negative", "追加到负面提示词", "追加到負面提示詞", "네거티브에 추가", "Añadido al negativo", "Ajouté au négatif", "Zum Negativ hinzugefügt"],
+
+  // comfyui connection
+  ["ComfyUI 接続先URL", "ComfyUI server URL", "ComfyUI 服务器地址", "ComfyUI 伺服器網址", "ComfyUI 서버 URL", "URL del servidor ComfyUI", "URL du serveur ComfyUI", "ComfyUI-Server-URL"],
+  ["空欄の場合は環境変数 COMFYUI_URL（既定 http://localhost:8188）", "If blank, the COMFYUI_URL environment variable is used (default http://localhost:8188)", "留空则使用环境变量 COMFYUI_URL（默认 http://localhost:8188）", "留空則使用環境變數 COMFYUI_URL（預設 http://localhost:8188）", "비워 두면 환경 변수 COMFYUI_URL을 사용합니다(기본 http://localhost:8188)", "Si se deja vacío, se usa la variable COMFYUI_URL (por defecto http://localhost:8188)", "Si vide, la variable COMFYUI_URL est utilisée (par défaut http://localhost:8188)", "Leer: Umgebungsvariable COMFYUI_URL (Standard http://localhost:8188)"],
+  ["接続テストに失敗しました", "Connection test failed", "连接测试失败", "連線測試失敗", "연결 테스트에 실패했습니다", "Falló la prueba de conexión", "Échec du test de connexion", "Verbindungstest fehlgeschlagen"],
+  ["利用可能なチェックポイント", "Available checkpoints", "可用的检查点", "可用的檢查點", "사용 가능한 체크포인트", "Checkpoints disponibles", "Checkpoints disponibles", "Verfügbare Checkpoints"],
 ];

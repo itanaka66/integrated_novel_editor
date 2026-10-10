@@ -356,6 +356,9 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
 def cover_styles():
  try:return cover_mod.list_styles()
  except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+@app.post('/api/v1/cover/test-comfyui')
+async def cover_test_comfyui(x:dict=Body(default={})):
+ return await cover_mod.test_comfyui(str(x.get('url') or '').strip(),str(x.get('checkpoint') or '').strip())
 @app.get('/api/v1/cover/config')
 def cover_config_get():
  try:return cover_mod.editable_config()

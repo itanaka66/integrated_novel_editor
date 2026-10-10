@@ -63,6 +63,7 @@ def new_job(pid: int, provider: str, prompt: str, style: str = '', custom_style:
 DEFAULT_CONFIG: dict = {
     'default_style': 'anime',
     'comfyui': {
+        'url': '',  # blank = COMFYUI_URL
         'checkpoint': '',  # blank = COMFYUI_CHECKPOINT, else the first installed one
         'width': 832, 'height': 1216,  # portrait ~2:3; 832x1216 is an SDXL-native bucket
         'steps': 28, 'cfg': 6.5, 'sampler_name': 'euler', 'scheduler': 'normal',
@@ -143,7 +144,7 @@ def list_styles() -> dict:
 
 # ---- settings screen (edit cover_config.json from the UI) -------------------
 
-COMFY_FIELDS = {'checkpoint': str, 'width': int, 'height': int, 'steps': int, 'cfg': float,
+COMFY_FIELDS = {'url': str, 'checkpoint': str, 'width': int, 'height': int, 'steps': int, 'cfg': float,
                 'sampler_name': str, 'scheduler': str, 'negative': str, 'negative_extra': str}
 HIGGS_FIELDS = {'model': str, 'resolution': str, 'aspect_ratio': str}
 STYLE_TEXT_FIELDS = ('label', 'prompt_style', 'prompt_suffix')
@@ -407,13 +408,31 @@ def resolve_checkpoint(configured: str, installed: list[str]) -> str:
         f'ファイル名は拡張子を含めて指定してください。利用可能: {", ".join(installed)}')
 
 
+async def test_comfyui(url: str = '', checkpoint: str = '') -> dict:
+    """Connection test for the settings screen: can ComfyUI be reached, which
+    checkpoints does it list, and does the configured one resolve."""
+    base = (url or load_config()['comfyui'].get('url') or settings.comfyui_url).rstrip('/')
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f'{base}/object_info/CheckpointLoaderSimple')
+            r.raise_for_status()
+            installed = list(r.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0])
+    except Exception as ex:
+        return {'ok': False, 'url': base, 'checkpoints': [], 'message': f'{base} に接続できません: {type(ex).__name__}: {ex}'}
+    try:
+        used = resolve_checkpoint(checkpoint or load_config()['comfyui'].get('checkpoint') or settings.comfyui_checkpoint, installed)
+    except CoverError as ex:
+        return {'ok': False, 'url': base, 'checkpoints': installed, 'message': str(ex)}
+    return {'ok': True, 'url': base, 'checkpoints': installed, 'message': f'接続できました。チェックポイント {len(installed)} 件（使用: {used}）'}
+
+
 async def comfyui_image(prompt: str, ss: dict, timeout: float = 600) -> bytes:
-    base = settings.comfyui_url.rstrip('/')
+    cs = ss['comfyui']
+    base = (cs.get('url') or settings.comfyui_url).rstrip('/')
     async with httpx.AsyncClient(timeout=60) as c:
         r = await c.get(f'{base}/object_info/CheckpointLoaderSimple')
         r.raise_for_status()
         installed = r.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0]
-        cs = ss['comfyui']
         checkpoint = resolve_checkpoint(cs.get('checkpoint') or settings.comfyui_checkpoint, list(installed))
         if ss['suffix']:
             prompt = f"{prompt}, {ss['suffix']}"
