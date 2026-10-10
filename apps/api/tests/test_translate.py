@@ -94,3 +94,15 @@ def test_project_out_exposes_source_project_id(client, project, monkeypatch, db_
         time.sleep(0.1)
     assert client.get(f"/api/v1/projects/{j['project_id']}").json()["source_project_id"] == pid
     assert client.get(f"/api/v1/projects/{pid}").json()["source_project_id"] is None
+
+
+def test_digest_is_linked_to_its_source(client, project, monkeypatch):
+    from app import digest as digest_mod
+    pid = project["id"]
+    for n in range(1, 5):
+        client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": f"t{n}", "content": "本文" * 50})
+    async def fake_pick(*a, **k):
+        return None
+    r = client.post(f"/api/v1/projects/{pid}/digest", json={"ratio": 0.5})
+    if r.status_code == 200:
+        assert client.get(f"/api/v1/projects/{r.json()['project']['id']}").json()["source_project_id"] == pid

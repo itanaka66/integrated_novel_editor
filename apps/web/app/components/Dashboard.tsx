@@ -42,7 +42,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   const roots = projects.filter((p) => !p.source_project_id || !ids.has(p.source_project_id));
   const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-  function renderWork(p: Project, depth: number, seen: Set<number>): React.ReactNode {
+  function renderWork(p: Project, depth: number, seen: Set<number>, parent?: Project): React.ReactNode {
     const goal = p.episode_goal || 500;
     const eps = twins[p.id]?.metrics.episodes ?? 0;
     const pct = Math.min(100, Math.round((eps / goal) * 100));
@@ -59,12 +59,12 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
               )}
               {depth > 0 && "└ "}{p.name}
             </b>
-            <span>{depth > 0 && p.language ? `${p.language} · ` : ""}{p.genre || t("未設定")}</span>
+            <span>{depth > 0 ? `${parent && p.language === parent.language ? t("総集編") : p.language ?? ""} · ` : ""}{p.genre || t("未設定")}</span>
           </div>
           <div className="progress"><i style={{ width: `${pct}%` }} /></div>
           <div className="workCardFoot"><span>{t("進捗 {pct}%", { pct })}</span><span>{t("({eps}/{goal}話)", { eps, goal })}</span></div>
         </div>
-        {open && kids.map((c) => renderWork(c, depth + 1, new Set(seen).add(p.id)))}
+        {open && kids.map((c) => renderWork(c, depth + 1, new Set(seen).add(p.id), p))}
       </div>
     );
   }

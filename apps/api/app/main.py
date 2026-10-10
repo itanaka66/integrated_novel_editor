@@ -367,7 +367,7 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
  plots=db.scalars(select(Plot).where(Plot.project_id==pid)).all()
  fores=db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all()
  chosen=digest_mod.select_climax(eps,plots,fores,x.ratio)
- d=Project(name=x.name.strip() or f'{p.name} 総集編',description=p.description,genre=p.genre,rules=p.rules,episode_goal=len(chosen),style_guide=p.style_guide,language=p.language,author=p.author)
+ d=Project(name=x.name.strip() or f'{p.name} 総集編',description=p.description,genre=p.genre,rules=p.rules,episode_goal=len(chosen),style_guide=p.style_guide,language=p.language,author=p.author,source_project_id=p.id)
  db.add(d);db.flush()
  for c in db.scalars(select(Character).where(Character.project_id==pid)).all():
   db.add(Character(project_id=d.id,name=c.name,role=c.role,personality=c.personality,speech_style=c.speech_style,goal=c.goal,status=c.status,description=c.description))
