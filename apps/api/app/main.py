@@ -307,6 +307,26 @@ def translate_job_get(job_id:int):
  job=translator.jobs.get(job_id)
  if not job:raise HTTPException(404,'Translate job not found')
  return _translate_job_out(job)
+def _digest_meta_path(p):
+ d=file_sync.project_dir(p);d.mkdir(parents=True,exist_ok=True)
+ return d/'digest.json'
+def _save_digest_meta(src,digest,source_count,source_chars,source_numbers):
+ # Written next to the source project's episode files (so it is on disk, and in
+ # the git mirror if one is configured). Only which project is the digest and
+ # what it was cut from is stored; its text and title are read live, so
+ # anything the user edits in the digest shows up here too.
+ _digest_meta_path(src).write_text(json.dumps({'digest_project_id':digest.id,'source_episode_count':source_count,'source_chars':source_chars,'source_numbers':source_numbers},ensure_ascii=False,indent=2),encoding='utf-8')
+@app.get('/api/v1/projects/{pid}/digest',response_model=DigestResult|None)
+def project_digest_get(pid:int,db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ f=_digest_meta_path(p)
+ if not f.exists():return None
+ try:meta=json.loads(f.read_text(encoding='utf-8'))
+ except ValueError:return None
+ d=db.get(Project,meta.get('digest_project_id'))
+ if not d:return None
+ eps=db.scalars(select(Episode).where(Episode.project_id==d.id).order_by(Episode.number)).all()
+ return DigestResult(project=d,source_episode_count=meta.get('source_episode_count',0),episode_count=len(eps),source_chars=meta.get('source_chars',0),chars=sum(len(e.content or '') for e in eps),source_numbers=meta.get('source_numbers',[]))
 @app.post('/api/v1/projects/{pid}/digest',response_model=DigestResult)
 def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(get_db)):
  # 総集編: a new, independent project holding only the climax episodes
@@ -330,19 +350,38 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
   ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,content=e.content or '');db.add(ne);new_eps.append(ne)
  db.commit();db.refresh(d)
  for ne in new_eps:file_sync.write_episode_file(d,ne)
+ _save_digest_meta(p,d,len(eps),sum(len(e.content or '') for e in eps),[e.number for e in chosen])
  return DigestResult(project=d,source_episode_count=len(eps),episode_count=len(chosen),source_chars=sum(len(e.content or '') for e in eps),chars=sum(len(e.content or '') for e in chosen),source_numbers=[e.number for e in chosen])
+@app.get('/api/v1/cover/styles',response_model=CoverStylesOut)
+def cover_styles():
+ try:return cover_mod.list_styles()
+ except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+@app.get('/api/v1/projects/{pid}/cover/state',response_model=CoverStateOut)
+def cover_state_get(pid:int,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ try:return cover_mod.load_state(pid)
+ except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+@app.put('/api/v1/projects/{pid}/cover/state',response_model=CoverStateOut)
+def cover_state_put(pid:int,x:CoverStateIn,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ try:return cover_mod.save_state(pid,**x.model_dump())
+ except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
 @app.post('/api/v1/projects/{pid}/cover/prompt',response_model=CoverPromptOut)
-async def cover_prompt(pid:int,db:Session=Depends(get_db)):
+async def cover_prompt(pid:int,x:CoverPromptRequest=CoverPromptRequest(),db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
  chars=db.scalars(select(Character).where(Character.project_id==pid)).all()
- return CoverPromptOut(prompt=await cover_mod.build_prompt(p,eps,chars))
+ try:prompt=await cover_mod.build_prompt(p,eps,chars,x.style,x.custom_style)
+ except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+ cover_mod.save_state(pid,prompt=prompt,style=x.style or None,custom_style=x.custom_style)
+ return CoverPromptOut(prompt=prompt)
 @app.post('/api/v1/projects/{pid}/cover/generate',response_model=CoverJobOut)
 async def cover_generate(pid:int,x:CoverGenerateRequest,db:Session=Depends(get_db)):
  crud_get_or_404(db,Project,pid,'Project')
  if x.provider not in cover_mod.PROVIDERS:raise HTTPException(400,'provider must be one of: '+', '.join(cover_mod.PROVIDERS))
  if not x.prompt.strip():raise HTTPException(400,'prompt is required')
- job=cover_mod.new_job(pid,x.provider,x.prompt.strip())
+ job=cover_mod.new_job(pid,x.provider,x.prompt.strip(),x.style,x.custom_style)
+ cover_mod.save_state(pid,prompt=x.prompt.strip(),style=x.style or None,custom_style=x.custom_style,provider=x.provider)
  cover_mod.running[job['id']]=asyncio.create_task(cover_mod.run_cover_job(job))
  return job
 @app.get('/api/v1/cover-jobs/{job_id}',response_model=CoverJobOut)

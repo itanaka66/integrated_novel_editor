@@ -194,7 +194,12 @@ class TranslateJobOut(BaseModel):
 class DigestRequest(BaseModel): ratio:float=0.5; name:str=''
 class DigestResult(BaseModel): project:ProjectOut; source_episode_count:int; episode_count:int; source_chars:int; chars:int; source_numbers:list[int]
 class CoverPromptOut(BaseModel): prompt:str
-class CoverGenerateRequest(BaseModel): provider:str; prompt:str
-class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str
-class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool
+class CoverPromptRequest(BaseModel): style:str=''; custom_style:str=''
+class CoverStateIn(BaseModel): prompt:str|None=None; style:str|None=None; custom_style:str|None=None; provider:str|None=None
+class CoverStateOut(BaseModel): prompt:str; style:str; custom_style:str; provider:str
+class CoverStyleOut(BaseModel): key:str; label:str
+class CoverStylesOut(BaseModel): default:str; styles:list[CoverStyleOut]
+class CoverGenerateRequest(BaseModel): provider:str; prompt:str; style:str=''; custom_style:str=''
+class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str; style:str=''; custom_style:str=''
+class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool; style:str=''; prompt:str=''
 class CoverSelectRequest(BaseModel): filename:str

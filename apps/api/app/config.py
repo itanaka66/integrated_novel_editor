@@ -70,6 +70,9 @@ class Settings(BaseSettings):
  # Higgsfield needs "<api-key>:<api-secret>" from cloud.higgsfield.ai and the
  # optional `higgsfield-client` package; the key stays env/.env-only.
  covers_dir:str='./covers'
+ # Image models/settings per art style, hot-reloaded on every request and
+ # created with defaults if missing (see app/cover.py DEFAULT_CONFIG).
+ cover_config_path:str='./cover_config.json'
  comfyui_url:str='http://localhost:8188'; comfyui_checkpoint:str=''
  higgsfield_key:str=''; higgsfield_model:str='bytedance/seedream/v4/text-to-image'
 settings=Settings()

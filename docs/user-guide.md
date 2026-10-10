@@ -161,3 +161,12 @@ To restore, use `scripts/restore.sh <backup-dir>` at the repo root, run from a m
 ## Mobile
 
 Below 700px width the sidebar collapses into a wrapping horizontal bar at the top instead of a fixed left column, and grids (icon grid, entity-edit forms) drop to fewer columns. It's usable but optimized for desktop use, given the amount of text entry the app requires.
+
+## Cover images and digests: what is saved
+
+- **Cover look and prompt.** Before generating, pick the look — アニメ風 (anime), 劇画風 (gekiga), 実写風 (photorealistic) or その他 (type your own, e.g. watercolor) — and the prompt, and the image model/settings for that look, follow from it. The prompt, look and engine are saved to disk as you type and are still there after leaving the screen or reloading; your own edits to the prompt are what gets sent to the image model.
+- **Generated images** are saved automatically on the server's disk (`COVERS_DIR/<project id>/`, with a small `.json` beside each recording the prompt, look and settings used) and listed on the cover panel; click one to enlarge it or to use it as the EPUB cover.
+- **Image models and settings** are not built into the app: they are in `cover_config.json` (`COVER_CONFIG_PATH`; created with defaults on first use). Per look you can set the ComfyUI checkpoint, size, steps, CFG, sampler, scheduler, negative prompt, the Higgsfield model, and the wording that steers the prompt. The file is re-read whenever it changes, so edits apply to the next generation without restarting; if you save a broken file the last good one keeps being used.
+- **Digest (総集編).** The digest is its own work (open it from "総集編を開く"), saved like any other, and its episode files are mirrored to disk. The cover/digest panel remembers the last digest made from a work, and its size is read live, so edits you make to the digest show up.
+
+With Docker Compose these live in the `covers` volume (`/covers` in the `api` container, including `cover_config.json`), so they survive rebuilds. To edit the config: `docker compose exec api vi /covers/cover_config.json`, or copy it out and back with `docker compose cp`. `COMFYUI_URL` defaults to `http://host.docker.internal:8188` there (ComfyUI running on the Docker host).
