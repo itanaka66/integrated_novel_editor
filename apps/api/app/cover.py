@@ -141,6 +141,64 @@ def list_styles() -> dict:
             'styles': [{'key': k, 'label': v.get('label', k)} for k, v in cfg['styles'].items()]}
 
 
+# ---- settings screen (edit cover_config.json from the UI) -------------------
+
+COMFY_FIELDS = {'checkpoint': str, 'width': int, 'height': int, 'steps': int, 'cfg': float,
+                'sampler_name': str, 'scheduler': str, 'negative': str, 'negative_extra': str}
+HIGGS_FIELDS = {'model': str, 'resolution': str, 'aspect_ratio': str}
+STYLE_TEXT_FIELDS = ('label', 'prompt_style', 'prompt_suffix')
+
+
+def _clean(src: dict, fields: dict) -> dict:
+    out = {}
+    for k, typ in fields.items():
+        if k not in (src or {}) or src[k] in (None, ''):
+            continue  # blank = inherit / use the default
+        try:
+            out[k] = typ(src[k]) if typ is not str else str(src[k]).strip()
+        except (TypeError, ValueError):
+            raise CoverError(f'設定値が不正です: {k}={src[k]!r}')
+        if typ is not str and out[k] <= 0:
+            raise CoverError(f'設定値は正の数で指定してください: {k}')
+    return out
+
+
+def editable_config() -> dict:
+    """The part of the config the settings screen edits. Style entries hold only
+    their own overrides (blank = inherits the common value), so saving what was
+    read does not copy common values into every style."""
+    cfg = load_config()
+    return {'default_style': cfg.get('default_style', 'anime'), 'comfyui': cfg['comfyui'], 'higgsfield': cfg['higgsfield'],
+            'styles': {k: {'label': v.get('label', k), 'prompt_style': v.get('prompt_style', ''), 'prompt_suffix': v.get('prompt_suffix', ''),
+                           'comfyui': v.get('comfyui') or {}, 'higgsfield': v.get('higgsfield') or {}} for k, v in cfg['styles'].items()}}
+
+
+def save_editable_config(data: dict) -> dict:
+    """Validate and write the edited settings into cover_config.json, keeping
+    any other keys in the file (e.g. overlay). The running app picks the file up
+    on the next generation (it is hot-reloaded)."""
+    p = config_path()
+    try:
+        raw = json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+    except (ValueError, OSError):
+        raw = {}
+    cur = load_config()
+    raw['comfyui'] = {**(raw.get('comfyui') or {}), **_clean(data.get('comfyui') or {}, {k: v for k, v in COMFY_FIELDS.items() if k != 'negative_extra'})}
+    raw['higgsfield'] = {**(raw.get('higgsfield') or {}), **_clean(data.get('higgsfield') or {}, HIGGS_FIELDS)}
+    styles = {}
+    for key in cur['styles']:
+        sd = (data.get('styles') or {}).get(key) or {}
+        entry = {f: str(sd.get(f, '')).strip() for f in STYLE_TEXT_FIELDS}
+        entry['label'] = entry['label'] or cur['styles'][key].get('label', key)
+        entry['comfyui'] = _clean(sd.get('comfyui') or {}, COMFY_FIELDS)
+        entry['higgsfield'] = _clean(sd.get('higgsfield') or {}, HIGGS_FIELDS)
+        styles[key] = entry
+    raw['styles'] = styles
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding='utf-8')
+    return editable_config()
+
+
 def style_settings(style: str, custom: str = '') -> dict:
     """Everything one generation needs, resolved from the freshly read config:
     the prompt direction plus ComfyUI / Higgsfield settings for this style."""

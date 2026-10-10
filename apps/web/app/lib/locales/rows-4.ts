@@ -89,4 +89,26 @@ export const ROWS_4: Row[] = [
 
   // studio
   ["確認中...", "Checking...", "确认中...", "確認中...", "확인 중...", "Comprobando...", "Vérification...", "Wird geprüft..."],
+
+  // cover settings
+  ["表紙画像", "Cover image", "封面图片", "封面圖片", "표지 이미지", "Imagen de portada", "Image de couverture", "Titelbild"],
+  ["読み込めませんでした", "Could not load", "无法读取", "無法讀取", "불러오지 못했습니다", "No se pudo cargar", "Chargement impossible", "Konnte nicht geladen werden"],
+  ["保存しました。次の生成から反映されます。", "Saved. Applies from the next generation.", "已保存。下次生成时生效。", "已儲存。下次產生時生效。", "저장했습니다. 다음 생성부터 적용됩니다.", "Guardado. Se aplica desde la próxima generación.", "Enregistré. Appliqué dès la prochaine génération.", "Gespeichert. Gilt ab der nächsten Erzeugung."],
+  ["保存できませんでした", "Could not save", "无法保存", "無法儲存", "저장하지 못했습니다", "No se pudo guardar", "Enregistrement impossible", "Speichern fehlgeschlagen"],
+  ["イメージごとに使う ComfyUI / Higgsfield の設定です。空欄は共通設定を使います。", "ComfyUI / Higgsfield settings used for each look. Blank fields use the common settings.", "每种风格使用的 ComfyUI / Higgsfield 设置。留空则使用通用设置。", "每種風格使用的 ComfyUI / Higgsfield 設定。留空則使用共通設定。", "이미지 스타일별로 사용하는 ComfyUI / Higgsfield 설정입니다. 비워 두면 공통 설정을 사용합니다.", "Ajustes de ComfyUI / Higgsfield para cada estilo. Los campos vacíos usan los ajustes comunes.", "Réglages ComfyUI / Higgsfield pour chaque style. Un champ vide utilise les réglages communs.", "ComfyUI-/Higgsfield-Einstellungen für jeden Stil. Leere Felder nutzen die gemeinsamen Einstellungen."],
+  ["共通設定", "Common settings", "通用设置", "共通設定", "공통 설정", "Ajustes comunes", "Réglages communs", "Gemeinsame Einstellungen"],
+  ["チェックポイント", "Checkpoint", "检查点", "檢查點", "체크포인트", "Checkpoint", "Checkpoint", "Checkpoint"],
+  ["幅", "Width", "宽度", "寬度", "너비", "Ancho", "Largeur", "Breite"],
+  ["高さ", "Height", "高度", "高度", "높이", "Alto", "Hauteur", "Höhe"],
+  ["ステップ数", "Steps", "步数", "步數", "스텝 수", "Pasos", "Étapes", "Schritte"],
+  ["CFG", "CFG", "CFG", "CFG", "CFG", "CFG", "CFG", "CFG"],
+  ["サンプラー", "Sampler", "采样器", "取樣器", "샘플러", "Sampler", "Échantillonneur", "Sampler"],
+  ["スケジューラ", "Scheduler", "调度器", "排程器", "스케줄러", "Scheduler", "Planificateur", "Scheduler"],
+  ["ネガティブプロンプト", "Negative prompt", "负面提示词", "負面提示詞", "네거티브 프롬프트", "Prompt negativo", "Prompt négatif", "Negativ-Prompt"],
+  ["モデル", "Model", "模型", "模型", "모델", "Modelo", "Modèle", "Modell"],
+  ["解像度", "Resolution", "分辨率", "解析度", "해상도", "Resolución", "Résolution", "Auflösung"],
+  ["縦横比", "Aspect ratio", "宽高比", "長寬比", "종횡비", "Relación de aspecto", "Format", "Seitenverhältnis"],
+  ["プロンプトの方向づけ", "Prompt direction", "提示词方向", "提示詞方向", "프롬프트 방향", "Dirección del prompt", "Orientation du prompt", "Prompt-Richtung"],
+  ["プロンプト末尾に付ける語句", "Words appended to the prompt", "附加在提示词末尾的词语", "附加在提示詞末尾的詞語", "프롬프트 끝에 붙일 문구", "Texto añadido al final del prompt", "Termes ajoutés à la fin du prompt", "An den Prompt angehängte Wörter"],
+  ["ネガティブに追加", "Added to negative", "追加到负面提示词", "追加到負面提示詞", "네거티브에 추가", "Añadido al negativo", "Ajouté au négatif", "Zum Negativ hinzugefügt"],
 ];
