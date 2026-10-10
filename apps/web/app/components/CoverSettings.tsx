@@ -21,10 +21,18 @@ export default function CoverSettings() {
   const [err, setErr] = useState("");
   const [test, setTest] = useState<{ ok: boolean; message: string; checkpoints: string[] } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [installed, setInstalled] = useState<string[]>([]);
 
   useEffect(() => {
     api("/cover/config").then((r) => { if (r?.styles) setCfg(r); else setErr(r?.detail || t("読み込めませんでした")); }).catch(() => setErr(t("読み込めませんでした")));
   }, []);
+
+  // Offer the checkpoints ComfyUI actually has as suggestions (still free text).
+  useEffect(() => {
+    if (!cfg) return;
+    api("/cover/test-comfyui", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ url: String(cfg.comfyui.url ?? "") }) })
+      .then((r) => { if (Array.isArray(r?.checkpoints)) setInstalled(r.checkpoints); }).catch(() => {});
+  }, [cfg !== null]);
 
   if (!cfg) return <p style={{ marginTop: 14 }}>{err || t("読み込み中...")}</p>;
 
@@ -44,6 +52,7 @@ export default function CoverSettings() {
     setTesting(true); setTest(null);
     try {
       const r = await api("/cover/test-comfyui", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ url: String(cfg!.comfyui.url ?? ""), checkpoint: String(cfg!.comfyui.checkpoint ?? "") }) });
+      if (Array.isArray(r?.checkpoints)) setInstalled(r.checkpoints);
       setTest(r?.message ? r : { ok: false, message: r?.detail || t("接続テストに失敗しました"), checkpoints: [] });
     } catch (e) { setTest({ ok: false, message: e instanceof Error ? e.message : t("接続テストに失敗しました"), checkpoints: [] }); }
     finally { setTesting(false); }
@@ -65,7 +74,7 @@ export default function CoverSettings() {
           {test && test.checkpoints.length > 0 && <div style={{ fontSize: 12, color: "#566273", marginTop: 4 }}>{t("利用可能なチェックポイント")}: {test.checkpoints.join(", ")}</div>}
         </div>
         {COMFY.map(([k, label, num]) => (
-          <label key={k}>ComfyUI {label}<input type={num ? "number" : "text"} value={cfg.comfyui[k] ?? ""} onChange={(e) => setBase("comfyui", k, e.target.value)} /></label>
+          <label key={k}>ComfyUI {label}<input type={num ? "number" : "text"} list={k === "checkpoint" ? "cover-ckpts" : undefined} value={cfg.comfyui[k] ?? ""} onChange={(e) => setBase("comfyui", k, e.target.value)} /></label>
         ))}
         <label style={{ gridColumn: "1/-1" }}>ComfyUI {t("ネガティブプロンプト")}<textarea value={String(cfg.comfyui.negative ?? "")} onChange={(e) => setBase("comfyui", "negative", e.target.value)} /></label>
         {HIGGS.map(([k, label]) => (
@@ -83,7 +92,7 @@ export default function CoverSettings() {
           <label style={{ gridColumn: "1/-1" }}>{t("プロンプトの方向づけ")}<textarea value={s.prompt_style} onChange={(e) => setStyle(open, { prompt_style: e.target.value })} /></label>
           <label style={{ gridColumn: "1/-1" }}>{t("プロンプト末尾に付ける語句")}<input value={s.prompt_suffix} onChange={(e) => setStyle(open, { prompt_suffix: e.target.value })} /></label>
           {COMFY.map(([k, label, num]) => (
-            <label key={k}>ComfyUI {label}<input type={num ? "number" : "text"} value={s.comfyui[k] ?? ""} placeholder={String(cfg.comfyui[k] ?? "")} onChange={(e) => setOver(open, "comfyui", k, e.target.value)} /></label>
+            <label key={k}>ComfyUI {label}<input type={num ? "number" : "text"} list={k === "checkpoint" ? "cover-ckpts" : undefined} value={s.comfyui[k] ?? ""} placeholder={k === "checkpoint" ? String(cfg.comfyui[k] || t("共通設定を使用")) : String(cfg.comfyui[k] ?? "")} onChange={(e) => setOver(open, "comfyui", k, e.target.value)} /></label>
           ))}
           <label style={{ gridColumn: "1/-1" }}>ComfyUI {t("ネガティブに追加")}<input value={s.comfyui.negative_extra ?? ""} onChange={(e) => setOver(open, "comfyui", "negative_extra", e.target.value)} /></label>
           {HIGGS.map(([k, label]) => (
@@ -92,6 +101,7 @@ export default function CoverSettings() {
         </div>
       )}
 
+      <datalist id="cover-ckpts">{installed.map((c) => <option key={c} value={c} />)}</datalist>
       <div style={{ marginTop: 10 }}>
         <button className="primary" onClick={save}>{t("保存")}</button>
         {msg && <span style={{ marginLeft: 10, color: "#2e7d32" }}>{msg}</span>}
