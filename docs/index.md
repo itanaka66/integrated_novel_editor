@@ -13,6 +13,7 @@ This is the published version of the documentation that also lives in the [`docs
 - [Installation Manual](installation.md) — Docker Compose, the desktop installer, or a native setup
 - [Software Requirements](requirements.md) — hardware, Ollama models, ports
 - [User Guide (operation manual)](user-guide.md) — a screen-by-screen reference
+- [ComfyUI Guide](comfyui.md) — setting up cover image generation
 
 ## 日本語
 
@@ -20,6 +21,7 @@ This is the published version of the documentation that also lives in the [`docs
 - [インストールマニュアル](installation.ja.md) — Docker Compose・デスクトップインストーラ・ネイティブ構築
 - [動作要件](requirements.ja.md) — ハードウェア・Ollamaモデル・使用ポート
 - [操作マニュアル](user-guide.ja.md) — 画面ごとの詳細リファレンス
+- [ComfyUIガイド](comfyui.ja.md) — 表紙画像生成のセットアップと設定
 
 ---
 
