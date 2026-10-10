@@ -387,12 +387,12 @@ async def cover_prompt(pid:int,x:CoverPromptRequest=CoverPromptRequest(),db:Sess
  cover_mod.save_state(pid,prompt=prompt,style=x.style or None,custom_style=x.custom_style)
  return CoverPromptOut(prompt=prompt)
 @app.post('/api/v1/projects/{pid}/cover/generate',response_model=CoverJobOut)
-async def cover_generate(pid:int,x:CoverGenerateRequest,db:Session=Depends(get_db)):
+async def cover_generate(pid:int,x:CoverGenerateRequest,request:Request,db:Session=Depends(get_db)):
  crud_get_or_404(db,Project,pid,'Project')
  if x.provider not in cover_mod.PROVIDERS:raise HTTPException(400,'provider must be one of: '+', '.join(cover_mod.PROVIDERS))
  if not x.prompt.strip():raise HTTPException(400,'prompt is required')
  p=db.get(Project,pid)
- job=cover_mod.new_job(pid,x.provider,x.prompt.strip(),x.style,x.custom_style,overlay=x.overlay,title=p.name,author=p.author or '')
+ job=cover_mod.new_job(pid,x.provider,x.prompt.strip(),x.style,x.custom_style,overlay=x.overlay,title=p.name,author=(p.author or '').strip() or getattr(request.state,'username','') or '')
  cover_mod.save_state(pid,prompt=x.prompt.strip(),style=x.style or None,custom_style=x.custom_style,provider=x.provider,overlay=x.overlay)
  cover_mod.running[job['id']]=asyncio.create_task(cover_mod.run_cover_job(job))
  return job
