@@ -10,6 +10,7 @@ Jobs are tracked in memory only (same trade-off as translator.py).
 """
 import asyncio
 import itertools
+import json
 import logging
 import random
 import re
@@ -24,11 +25,6 @@ from .ollama import generate
 logger = logging.getLogger(__name__)
 
 PROVIDERS = ('comfyui', 'higgsfield')
-# Portrait ~2:3, the usual trade-paperback / e-book cover ratio. 832x1216 is
-# an SDXL-native bucket close to 2:3.
-COMFY_WIDTH, COMFY_HEIGHT = 832, 1216
-NEGATIVE = ('text, letters, typography, title, watermark, signature, logo, border, frame, '
-            'low quality, blurry, deformed, extra fingers, cropped')
 IMAGE_EXTS = ('.png', '.jpg', '.jpeg', '.webp')
 SAFE_NAME = re.compile(r'^[\w.-]+\.(png|jpg|jpeg|webp)$', re.I)
 
@@ -47,11 +43,110 @@ def covers_dir(pid: int) -> Path:
     return d
 
 
-def new_job(pid: int, provider: str, prompt: str) -> dict:
+def new_job(pid: int, provider: str, prompt: str, style: str = '', custom_style: str = '') -> dict:
     job = {'id': next(_ids), 'project_id': pid, 'provider': provider, 'prompt': prompt, 'status': 'queued',
-           'filename': None, 'last_message': 'キューに追加しました'}
+           'style': style, 'custom_style': custom_style, 'filename': None, 'last_message': 'キューに追加しました'}
     jobs[job['id']] = job
     return job
+
+
+# ---- settings file (hot-reloaded) ---------------------------------------
+#
+# Image models and generation settings live in a JSON file
+# (settings.cover_config_path), not in code. It is re-read whenever its
+# modification time changes, so editing it takes effect on the next request
+# without restarting. A missing file is created from DEFAULT_CONFIG so there
+# is always something to edit; a broken one is reported on first load, and
+# once a good copy has been read, later breakage keeps using that copy.
+
+DEFAULT_CONFIG: dict = {
+    'default_style': 'anime',
+    'comfyui': {
+        'checkpoint': '',  # blank = COMFYUI_CHECKPOINT, else the first installed one
+        'width': 832, 'height': 1216,  # portrait ~2:3; 832x1216 is an SDXL-native bucket
+        'steps': 28, 'cfg': 6.5, 'sampler_name': 'euler', 'scheduler': 'normal',
+        'negative': ('text, letters, typography, title, watermark, signature, logo, border, frame, '
+                     'low quality, blurry, deformed, extra fingers, cropped'),
+    },
+    'higgsfield': {'model': '', 'resolution': '2K', 'aspect_ratio': '2:3'},  # blank model = HIGGSFIELD_MODEL
+    # Per-style overrides: any key under "comfyui"/"higgsfield" in a style
+    # replaces the base value above for that style ("negative_extra" is added
+    # to the negative prompt instead). "prompt_style" steers the generated
+    # prompt; "prompt_suffix" is appended to the prompt sent to the image model.
+    'styles': {
+        'anime': {'label': 'アニメ風',
+                  'prompt_style': 'Japanese anime / light-novel cover illustration, clean line art, vibrant cel shading, expressive characters',
+                  'prompt_suffix': 'anime style, masterpiece, best quality',
+                  'comfyui': {'negative_extra': 'photorealistic, photo, 3d render'}, 'higgsfield': {}},
+        'gekiga': {'label': '劇画風',
+                   'prompt_style': 'gekiga / dramatic Japanese manga illustration, bold ink lines, heavy hatching and shadow, gritty realistic anatomy',
+                   'prompt_suffix': 'gekiga, dramatic ink illustration, high contrast',
+                   'comfyui': {'negative_extra': 'cute, chibi, pastel, photorealistic'}, 'higgsfield': {}},
+        'photo': {'label': '実写風',
+                  'prompt_style': 'photorealistic cinematic photograph, natural lighting, real people and locations, shallow depth of field',
+                  'prompt_suffix': 'photorealistic, 35mm film, ultra detailed',
+                  'comfyui': {'negative_extra': 'anime, cartoon, illustration, painting'}, 'higgsfield': {}},
+        'other': {'label': 'その他', 'prompt_style': '', 'prompt_suffix': '',
+                  'comfyui': {}, 'higgsfield': {}},
+    },
+}
+
+_config_cache: dict = {'path': None, 'mtime': None, 'data': None}
+
+
+def config_path() -> Path:
+    return Path(settings.cover_config_path)
+
+
+def _merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in (over or {}).items():
+        out[k] = _merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
+def load_config() -> dict:
+    p = config_path()
+    if not p.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding='utf-8')
+    mtime = p.stat().st_mtime_ns
+    c = _config_cache
+    if c['path'] == str(p) and c['mtime'] == mtime and c['data'] is not None:
+        return c['data']
+    try:
+        data = _merge(DEFAULT_CONFIG, json.loads(p.read_text(encoding='utf-8')))
+    except (ValueError, OSError) as ex:
+        if c['data'] is not None and c['path'] == str(p):
+            logger.warning('Cover config %s is invalid (%s); keeping the previous version', p, ex)
+            return c['data']
+        raise CoverError(f'表紙の設定ファイル {p} を読み込めません: {ex}')
+    c.update(path=str(p), mtime=mtime, data=data)
+    return data
+
+
+def list_styles() -> dict:
+    cfg = load_config()
+    return {'default': cfg.get('default_style', 'anime'),
+            'styles': [{'key': k, 'label': v.get('label', k)} for k, v in cfg['styles'].items()]}
+
+
+def style_settings(style: str, custom: str = '') -> dict:
+    """Everything one generation needs, resolved from the freshly read config:
+    the prompt direction plus ComfyUI / Higgsfield settings for this style."""
+    cfg = load_config()
+    key = style if style in cfg['styles'] else cfg.get('default_style', 'anime')
+    st = cfg['styles'].get(key, {})
+    over = dict(st.get('comfyui') or {})
+    extra = over.pop('negative_extra', '')
+    comfy = _merge(cfg['comfyui'], over)
+    comfy['negative'] = ', '.join(x for x in (comfy.get('negative', ''), extra) if x)
+    hf = _merge(cfg['higgsfield'], st.get('higgsfield') or {})
+    direction = (st.get('prompt_style') or '').strip()
+    if key == 'other' and custom.strip():
+        direction = custom.strip()
+    return {'style': key, 'label': st.get('label', key), 'direction': direction,
+            'suffix': (st.get('prompt_suffix') or '').strip(), 'comfyui': comfy, 'higgsfield': hf}
 
 
 # ---- prompt -------------------------------------------------------------
@@ -70,39 +165,43 @@ def _digest_context(project, episodes, characters) -> str:
     return '\n'.join(lines)
 
 
-def fallback_prompt(project) -> str:
+def fallback_prompt(project, direction: str = '') -> str:
     base = (project.description or project.genre or project.name or 'a story').strip()
-    return (f'book cover illustration, {project.genre or "fantasy"}, {base[:200]}, cinematic composition, '
+    lead = f'{direction}, ' if direction else ''
+    return (f'{lead}book cover illustration, {project.genre or "fantasy"}, {base[:200]}, cinematic composition, '
             'dramatic lighting, highly detailed, vertical poster, no text')
 
 
-async def build_prompt(project, episodes, characters) -> str:
+async def build_prompt(project, episodes, characters, style: str = '', custom_style: str = '') -> str:
+    direction = style_settings(style, custom_style)['direction']
+    style_line = f'\nArt style to use: {direction}.' if direction else ''
     ask = f'''You are an art director for a published novel. Based on the novel info below, write ONE English text-to-image prompt
 for its book-cover illustration: a single striking key scene or symbolic image that captures the story's genre, mood and protagonist.
 Requirements: vertical 2:3 composition, painterly/cinematic professional book-cover quality, leave calm space in the upper third for a title,
-and absolutely NO text, letters, or typography in the image. Output only the prompt (comma-separated phrases, under 120 words).
+and absolutely NO text, letters, or typography in the image. Output only the prompt (comma-separated phrases, under 120 words).{style_line}
 
 {_digest_context(project, episodes, characters)}'''
     try:
         t, _ = await generate(ask)
         t = (t or '').strip().strip('"')
-        return t or fallback_prompt(project)
+        return t or fallback_prompt(project, direction)
     except Exception:
         logger.exception('Cover prompt generation failed; using fallback template')
-        return fallback_prompt(project)
+        return fallback_prompt(project, direction)
 
 
 # ---- backends ------------------------------------------------------------
 
-def comfy_workflow(prompt: str, checkpoint: str, seed: int) -> dict:
+def comfy_workflow(prompt: str, checkpoint: str, seed: int, cs: dict) -> dict:
     return {
-        '3': {'class_type': 'KSampler', 'inputs': {'seed': seed, 'steps': 28, 'cfg': 6.5, 'sampler_name': 'euler',
-                                                   'scheduler': 'normal', 'denoise': 1, 'model': ['4', 0],
-                                                   'positive': ['6', 0], 'negative': ['7', 0], 'latent_image': ['5', 0]}},
+        '3': {'class_type': 'KSampler', 'inputs': {'seed': seed, 'steps': int(cs['steps']), 'cfg': float(cs['cfg']),
+                                                   'sampler_name': cs['sampler_name'], 'scheduler': cs['scheduler'],
+                                                   'denoise': 1, 'model': ['4', 0], 'positive': ['6', 0],
+                                                   'negative': ['7', 0], 'latent_image': ['5', 0]}},
         '4': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': checkpoint}},
-        '5': {'class_type': 'EmptyLatentImage', 'inputs': {'width': COMFY_WIDTH, 'height': COMFY_HEIGHT, 'batch_size': 1}},
+        '5': {'class_type': 'EmptyLatentImage', 'inputs': {'width': int(cs['width']), 'height': int(cs['height']), 'batch_size': 1}},
         '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': prompt, 'clip': ['4', 1]}},
-        '7': {'class_type': 'CLIPTextEncode', 'inputs': {'text': NEGATIVE, 'clip': ['4', 1]}},
+        '7': {'class_type': 'CLIPTextEncode', 'inputs': {'text': cs['negative'], 'clip': ['4', 1]}},
         '8': {'class_type': 'VAEDecode', 'inputs': {'samples': ['3', 0], 'vae': ['4', 2]}},
         '9': {'class_type': 'SaveImage', 'inputs': {'filename_prefix': 'ine_cover', 'images': ['8', 0]}},
     }
@@ -133,14 +232,17 @@ def resolve_checkpoint(configured: str, installed: list[str]) -> str:
         f'ファイル名は拡張子を含めて指定してください。利用可能: {", ".join(installed)}')
 
 
-async def comfyui_image(prompt: str, timeout: float = 600) -> bytes:
+async def comfyui_image(prompt: str, ss: dict, timeout: float = 600) -> bytes:
     base = settings.comfyui_url.rstrip('/')
     async with httpx.AsyncClient(timeout=60) as c:
         r = await c.get(f'{base}/object_info/CheckpointLoaderSimple')
         r.raise_for_status()
         installed = r.json()['CheckpointLoaderSimple']['input']['required']['ckpt_name'][0]
-        checkpoint = resolve_checkpoint(settings.comfyui_checkpoint, list(installed))
-        r = await c.post(f'{base}/prompt', json={'prompt': comfy_workflow(prompt, checkpoint, random.randint(0, 2**32 - 1))})
+        cs = ss['comfyui']
+        checkpoint = resolve_checkpoint(cs.get('checkpoint') or settings.comfyui_checkpoint, list(installed))
+        if ss['suffix']:
+            prompt = f"{prompt}, {ss['suffix']}"
+        r = await c.post(f'{base}/prompt', json={'prompt': comfy_workflow(prompt, checkpoint, random.randint(0, 2**32 - 1), cs)})
         if r.status_code != 200:
             raise CoverError(f'ComfyUI がワークフローを拒否しました: {r.text[:300]}')
         pid = r.json()['prompt_id']
@@ -159,7 +261,7 @@ async def comfyui_image(prompt: str, timeout: float = 600) -> bytes:
     raise CoverError('ComfyUI の生成がタイムアウトしました。')
 
 
-async def higgsfield_image(prompt: str) -> bytes:
+async def higgsfield_image(prompt: str, ss: dict) -> bytes:
     if not settings.higgsfield_key:
         raise CoverError('HIGGSFIELD_KEY が設定されていません（"<api-key>:<api-secret>" 形式）。')
     try:
@@ -168,10 +270,13 @@ async def higgsfield_image(prompt: str) -> bytes:
         raise CoverError('higgsfield-client が未インストールです（pip install higgsfield-client）。')
     import os
     os.environ.setdefault('HF_KEY', settings.higgsfield_key)
+    hf = ss['higgsfield']
+    if ss['suffix']:
+        prompt = f"{prompt}, {ss['suffix']}"
     try:
         result = await higgsfield_client.subscribe_async(
-            settings.higgsfield_model,
-            arguments={'prompt': prompt, 'resolution': '2K', 'aspect_ratio': '2:3'})
+            hf.get('model') or settings.higgsfield_model,
+            arguments={'prompt': prompt, 'resolution': hf.get('resolution', '2K'), 'aspect_ratio': hf.get('aspect_ratio', '2:3')})
     except Exception as ex:
         raise CoverError(f'Higgsfield での生成に失敗しました: {ex}')
     try:
@@ -199,9 +304,18 @@ async def run_cover_job(job: dict) -> None:
         job['status'] = 'running'
         job['last_message'] = '画像を生成中…（数分かかることがあります）'
         fn = comfyui_image if job['provider'] == 'comfyui' else higgsfield_image
-        data = await fn(job['prompt'])
+        ss = style_settings(job.get('style', ''), job.get('custom_style', ''))
+        data = await fn(job['prompt'], ss)
         name = f"{job['provider']}-{int(time.time())}{image_ext(data)}"
-        (covers_dir(job['project_id']) / name).write_bytes(data)
+        d = covers_dir(job['project_id'])
+        (d / name).write_bytes(data)
+        # What produced this image, kept beside it so it can be reproduced or
+        # compared later (the files on disk are the source of truth).
+        (d / f'{name}.json').write_text(json.dumps({
+            'provider': job['provider'], 'style': ss['style'], 'style_label': ss['label'],
+            'custom_style': job.get('custom_style', ''), 'prompt': job['prompt'],
+            'settings': ss['comfyui'] if job['provider'] == 'comfyui' else ss['higgsfield'],
+        }, ensure_ascii=False, indent=2), encoding='utf-8')
         job['filename'] = name
         job['status'] = 'completed'
         job['last_message'] = '表紙画像を生成しました。'
@@ -218,12 +332,47 @@ async def run_cover_job(job: dict) -> None:
 
 # ---- stored files --------------------------------------------------------
 
+def _meta(pid: int, name: str) -> dict:
+    p = covers_dir(pid) / f'{name}.json'
+    try:
+        return json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+    except ValueError:
+        return {}
+
+
 def list_covers(pid: int) -> list[dict]:
     d = covers_dir(pid)
     chosen = selected_name(pid)
     files = sorted((f for f in d.iterdir() if f.suffix.lower() in IMAGE_EXTS and not f.stem == 'cover'),
                    key=lambda f: f.stat().st_mtime, reverse=True)
-    return [{'filename': f.name, 'provider': f.name.split('-')[0], 'selected': f.name == chosen} for f in files]
+    out = []
+    for f in files:
+        m = _meta(pid, f.name)
+        out.append({'filename': f.name, 'provider': f.name.split('-')[0], 'selected': f.name == chosen,
+                    'style': m.get('style_label') or m.get('style') or '', 'prompt': m.get('prompt') or ''})
+    return out
+
+
+# The prompt and style the user is working on, written on every change so it
+# survives leaving the screen, a reload, or a restart.
+_STATE_FIELDS = ('prompt', 'style', 'custom_style', 'provider')
+
+
+def load_state(pid: int) -> dict:
+    p = covers_dir(pid) / 'prompt.json'
+    try:
+        raw = json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
+    except ValueError:
+        raw = {}
+    return {'prompt': raw.get('prompt', ''), 'style': raw.get('style') or list_styles()['default'],
+            'custom_style': raw.get('custom_style', ''), 'provider': raw.get('provider') or 'comfyui'}
+
+
+def save_state(pid: int, **fields) -> dict:
+    state = load_state(pid)
+    state.update({k: v for k, v in fields.items() if k in _STATE_FIELDS and v is not None})
+    (covers_dir(pid) / 'prompt.json').write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding='utf-8')
+    return state
 
 
 def _selected_marker(pid: int) -> Path:

@@ -55,6 +55,10 @@ services:
       OAUTH_REDIRECT_BASE_URL: ${OAUTH_REDIRECT_BASE_URL:-http://localhost:8000}
       OAUTH_LOGIN_REDIRECT_URL: ${OAUTH_LOGIN_REDIRECT_URL:-http://localhost:3000}
       NOVEL_STORAGE_DIR: /novel_storage
+      COVERS_DIR: /covers
+      COVER_CONFIG_PATH: /covers/cover_config.json
+      COMFYUI_URL: ${COMFYUI_URL:-http://host.docker.internal:8188}
+      COMFYUI_CHECKPOINT: ${COMFYUI_CHECKPOINT:-}
       GIT_REMOTE_URL: ${GIT_REMOTE_URL:-}
       GIT_AUTOSYNC_INTERVAL_SECONDS: ${GIT_AUTOSYNC_INTERVAL_SECONDS:-300}
       BACKUP_ENABLED: ${BACKUP_ENABLED:-false}
@@ -69,6 +73,7 @@ services:
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
     volumes:
       - novel_storage:/novel_storage
+      - covers:/covers
       - backups:/backups
     ports:
       - "8000:8000"
@@ -97,4 +102,5 @@ volumes:
   qdrant_data:
   ollama_data:
   novel_storage:
+  covers:
   backups:

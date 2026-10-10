@@ -111,7 +111,6 @@ export const ROWS_1: Row[] = [
   // CoverPanel
   ["ComfyUI（ローカル）", "ComfyUI (local)", "ComfyUI（本地）", "ComfyUI（本機）", "ComfyUI (로컬)", "ComfyUI (local)", "ComfyUI (local)", "ComfyUI (lokal)"],
   ["Higgsfield（クラウド）", "Higgsfield (cloud)", "Higgsfield（云端）", "Higgsfield（雲端）", "Higgsfield (클라우드)", "Higgsfield (nube)", "Higgsfield (cloud)", "Higgsfield (Cloud)"],
-  ["採用中の表紙", "Current cover", "当前使用的封面", "目前使用的封面", "사용 중인 표지", "Portada actual", "Couverture actuelle", "Aktuelles Cover"],
   ["この画像を表紙にする", "Use this image as the cover", "将此图片设为封面", "將此圖片設為封面", "이 이미지를 표지로 사용", "Usar esta imagen como portada", "Utiliser cette image comme couverture", "Dieses Bild als Cover verwenden"],
   ["✓ 採用中", "✓ In use", "✓ 使用中", "✓ 使用中", "✓ 사용 중", "✓ En uso", "✓ Utilisée", "✓ Aktiv"],
   ["進捗の取得に失敗しました", "Failed to get progress", "获取进度失败", "取得進度失敗", "진행 상황을 가져오지 못했습니다", "No se pudo obtener el progreso", "Impossible d'obtenir la progression", "Der Fortschritt konnte nicht abgerufen werden"],
