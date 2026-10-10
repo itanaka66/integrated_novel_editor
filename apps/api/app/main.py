@@ -339,7 +339,7 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
  plots=db.scalars(select(Plot).where(Plot.project_id==pid)).all()
  fores=db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all()
  chosen=digest_mod.select_climax(eps,plots,fores,x.ratio)
- d=Project(name=x.name.strip() or f'{p.name} 総集編',description=p.description,genre=p.genre,rules=p.rules,episode_goal=len(chosen),style_guide=p.style_guide,language=p.language)
+ d=Project(name=x.name.strip() or f'{p.name} 総集編',description=p.description,genre=p.genre,rules=p.rules,episode_goal=len(chosen),style_guide=p.style_guide,language=p.language,author=p.author)
  db.add(d);db.flush()
  for c in db.scalars(select(Character).where(Character.project_id==pid)).all():
   db.add(Character(project_id=d.id,name=c.name,role=c.role,personality=c.personality,speech_style=c.speech_style,goal=c.goal,status=c.status,description=c.description))
@@ -380,8 +380,9 @@ async def cover_generate(pid:int,x:CoverGenerateRequest,db:Session=Depends(get_d
  crud_get_or_404(db,Project,pid,'Project')
  if x.provider not in cover_mod.PROVIDERS:raise HTTPException(400,'provider must be one of: '+', '.join(cover_mod.PROVIDERS))
  if not x.prompt.strip():raise HTTPException(400,'prompt is required')
- job=cover_mod.new_job(pid,x.provider,x.prompt.strip(),x.style,x.custom_style)
- cover_mod.save_state(pid,prompt=x.prompt.strip(),style=x.style or None,custom_style=x.custom_style,provider=x.provider)
+ p=db.get(Project,pid)
+ job=cover_mod.new_job(pid,x.provider,x.prompt.strip(),x.style,x.custom_style,overlay=x.overlay,title=p.name,author=p.author or '')
+ cover_mod.save_state(pid,prompt=x.prompt.strip(),style=x.style or None,custom_style=x.custom_style,provider=x.provider,overlay=x.overlay)
  cover_mod.running[job['id']]=asyncio.create_task(cover_mod.run_cover_job(job))
  return job
 @app.get('/api/v1/cover-jobs/{job_id}',response_model=CoverJobOut)

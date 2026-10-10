@@ -94,6 +94,7 @@ def build_epub(project, episodes, cover=None) -> bytes:
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">{book_id}</dc:identifier>
 <dc:title>{html.escape(project.name)}</dc:title>
+{('<dc:creator>' + html.escape(project.author) + '</dc:creator>') if getattr(project, 'author', '') else ''}
 <dc:language>{lang}</dc:language>
 {cover_meta}
 </metadata>

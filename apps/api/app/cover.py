@@ -43,9 +43,10 @@ def covers_dir(pid: int) -> Path:
     return d
 
 
-def new_job(pid: int, provider: str, prompt: str, style: str = '', custom_style: str = '') -> dict:
+def new_job(pid: int, provider: str, prompt: str, style: str = '', custom_style: str = '',
+            overlay: bool = False, title: str = '', author: str = '') -> dict:
     job = {'id': next(_ids), 'project_id': pid, 'provider': provider, 'prompt': prompt, 'status': 'queued',
-           'style': style, 'custom_style': custom_style, 'filename': None, 'last_message': 'キューに追加しました'}
+           'style': style, 'custom_style': custom_style, 'overlay': overlay, 'title': title, 'author': author, 'filename': None, 'last_message': 'キューに追加しました'}
     jobs[job['id']] = job
     return job
 
@@ -69,6 +70,15 @@ DEFAULT_CONFIG: dict = {
                      'low quality, blurry, deformed, extra fingers, cropped'),
     },
     'higgsfield': {'model': '', 'resolution': '2K', 'aspect_ratio': '2:3'},  # blank model = HIGGSFIELD_MODEL
+    # Title/author lettering drawn onto the finished image (see overlay_text).
+    # Sizes are fractions of the image width, positions of its height. "font"
+    # blank = the first installed CJK-capable font found; a path pins one.
+    'overlay': {
+        'font': '',
+        'title_size': 0.085, 'author_size': 0.045, 'max_title_lines': 3,
+        'text_color': '#ffffff', 'stroke_color': '#101018', 'stroke_ratio': 0.09,
+        'title_y': 0.07, 'author_y': 0.95, 'side_margin': 0.07,
+    },
     # Per-style overrides: any key under "comfyui"/"higgsfield" in a style
     # replaces the base value above for that style ("negative_extra" is added
     # to the negative prompt instead). "prompt_style" steers the generated
@@ -147,6 +157,113 @@ def style_settings(style: str, custom: str = '') -> dict:
         direction = custom.strip()
     return {'style': key, 'label': st.get('label', key), 'direction': direction,
             'suffix': (st.get('prompt_suffix') or '').strip(), 'comfyui': comfy, 'higgsfield': hf}
+
+
+# ---- title / author lettering ----------------------------------------------
+
+_FONT_CANDIDATES = (
+    # Windows
+    'C:/Windows/Fonts/meiryob.ttc', 'C:/Windows/Fonts/YuGothB.ttc', 'C:/Windows/Fonts/meiryo.ttc', 'C:/Windows/Fonts/msgothic.ttc',
+    # macOS
+    '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc', '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
+    '/Library/Fonts/Arial Unicode.ttf',
+    # Linux (fonts-ipafont-gothic is what the Docker image installs)
+    '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+    '/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf', '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf',
+    '/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf', '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf',
+    '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',
+)
+_CJK = re.compile(r'[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]')
+
+
+def find_font(configured: str = '') -> str | None:
+    for p in ([configured] if configured else []) + list(_FONT_CANDIDATES):
+        if p and Path(p).exists():
+            return p
+    return None
+
+
+def _wrap(draw, text: str, font, max_w: float) -> list[str]:
+    words = text.split(' ') if ' ' in text.strip() else list(text)
+    sep = ' ' if ' ' in text.strip() else ''
+    lines, cur = [], ''
+    for w in words:
+        trial = f'{cur}{sep}{w}' if cur else w
+        if draw.textlength(trial, font=font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def overlay_text(data: bytes, title: str, author: str, cfg: dict) -> tuple[bytes, str]:
+    """Draw the title near the top (where the prompt asks the model to leave
+    calm space) and the author at the bottom. Returns (image bytes, note);
+    note is empty on success, or says why the lettering was left off so the
+    image is still kept rather than lost."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return data, 'Pillow が未インストールのため、タイトルと著者名を入れられませんでした。'
+    title, author = (title or '').strip(), (author or '').strip()
+    if not title and not author:
+        return data, ''
+    ov = cfg
+    font_path = find_font(ov.get('font', ''))
+    if not font_path:
+        if _CJK.search(title + author):
+            return data, ('日本語フォントが見つからないため、タイトルと著者名を入れられませんでした。'
+                          'cover_config.json の overlay.font にフォントのパスを指定してください。')
+        font_path = None
+    try:
+        img = Image.open(BytesIO(data))
+        fmt = img.format or 'PNG'
+        img = img.convert('RGBA')
+    except Exception:
+        return data, '画像として読み込めないため、タイトルと著者名を入れられませんでした。'
+    w, h = img.size
+    layer = ImageDraw.Draw(img)
+
+    def font_at(size: int):
+        return ImageFont.truetype(font_path, size) if font_path else ImageFont.load_default(size)
+
+    def stroke_for(size: int) -> int:
+        return max(1, round(size * float(ov['stroke_ratio'])))
+
+    max_w = w * (1 - 2 * float(ov['side_margin']))
+
+    def draw_block(text: str, size: int, y: float, anchor_bottom: bool, max_lines: int) -> None:
+        if not text:
+            return
+        while True:
+            f = font_at(size)
+            lines = _wrap(layer, text, f, max_w)
+            if len(lines) <= max_lines or size <= 14:
+                break
+            size = int(size * 0.9)
+        sw = stroke_for(size)
+        line_h = int(size * 1.25)
+        block_h = line_h * len(lines)
+        top = y - block_h if anchor_bottom else y
+        for i, line in enumerate(lines):
+            layer.text((w / 2, top + i * line_h), line, font=f, fill=ov['text_color'], anchor='ma',
+                       stroke_width=sw, stroke_fill=ov['stroke_color'])
+
+    draw_block(title, round(w * float(ov['title_size'])), h * float(ov['title_y']), False, int(ov['max_title_lines']))
+    draw_block(author, round(w * float(ov['author_size'])), h * float(ov['author_y']), True, 1)
+
+    out = BytesIO()
+    if fmt.upper() in ('JPEG', 'JPG'):
+        img.convert('RGB').save(out, 'JPEG', quality=95)
+    elif fmt.upper() == 'WEBP':
+        img.save(out, 'WEBP', quality=95)
+    else:
+        img.save(out, 'PNG')
+    return out.getvalue(), ''
 
 
 # ---- prompt -------------------------------------------------------------
@@ -308,17 +425,26 @@ async def run_cover_job(job: dict) -> None:
         data = await fn(job['prompt'], ss)
         name = f"{job['provider']}-{int(time.time())}{image_ext(data)}"
         d = covers_dir(job['project_id'])
+        note = ''
+        if job.get('overlay'):
+            # Keep the untouched image too, so the lettering can be redone later.
+            (d / 'raw').mkdir(exist_ok=True)
+            (d / 'raw' / name).write_bytes(data)
+            data, note = await asyncio.to_thread(overlay_text, data, job.get('title', ''), job.get('author', ''), load_config()['overlay'])
         (d / name).write_bytes(data)
         # What produced this image, kept beside it so it can be reproduced or
         # compared later (the files on disk are the source of truth).
         (d / f'{name}.json').write_text(json.dumps({
             'provider': job['provider'], 'style': ss['style'], 'style_label': ss['label'],
             'custom_style': job.get('custom_style', ''), 'prompt': job['prompt'],
+            'title': job.get('title', '') if job.get('overlay') else '', 'author': job.get('author', '') if job.get('overlay') else '',
             'settings': ss['comfyui'] if job['provider'] == 'comfyui' else ss['higgsfield'],
         }, ensure_ascii=False, indent=2), encoding='utf-8')
         job['filename'] = name
         job['status'] = 'completed'
-        job['last_message'] = '表紙画像を生成しました。'
+        job['last_message'] = '表紙画像を生成しました。' + (' ' + note if note else '')
+        if job.get('overlay') and not note and not (job.get('author') or '').strip():
+            job['last_message'] += '（著者名が未設定のため、タイトルのみ入れました。設定の基本設定で著者名を入力できます）'
     except CoverError as ex:
         job['status'] = 'error'
         job['last_message'] = str(ex)
@@ -355,7 +481,7 @@ def list_covers(pid: int) -> list[dict]:
 
 # The prompt and style the user is working on, written on every change so it
 # survives leaving the screen, a reload, or a restart.
-_STATE_FIELDS = ('prompt', 'style', 'custom_style', 'provider')
+_STATE_FIELDS = ('prompt', 'style', 'custom_style', 'provider', 'overlay')
 
 
 def load_state(pid: int) -> dict:
@@ -365,7 +491,8 @@ def load_state(pid: int) -> dict:
     except ValueError:
         raw = {}
     return {'prompt': raw.get('prompt', ''), 'style': raw.get('style') or list_styles()['default'],
-            'custom_style': raw.get('custom_style', ''), 'provider': raw.get('provider') or 'comfyui'}
+            'custom_style': raw.get('custom_style', ''), 'provider': raw.get('provider') or 'comfyui',
+            'overlay': raw.get('overlay', True)}
 
 
 def save_state(pid: int, **fields) -> dict:

@@ -58,7 +58,7 @@ def test_generate_select_and_epub_embeds_cover(client, project, monkeypatch):
     monkeypatch.setattr(cover, "comfyui_image", fake)
     pid = project["id"]
     client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "t", "content": "本文"})
-    j = wait(client, client.post(f"/api/v1/projects/{pid}/cover/generate", json={"provider": "comfyui", "prompt": "x"}).json()["id"])
+    j = wait(client, client.post(f"/api/v1/projects/{pid}/cover/generate", json={"provider": "comfyui", "prompt": "x", "overlay": False}).json()["id"])
     assert j["status"] == "completed" and j["filename"].startswith("comfyui-")
 
     covers = client.get(f"/api/v1/projects/{pid}/covers").json()
@@ -192,7 +192,7 @@ def test_prompt_state_survives_and_user_edits_are_saved(client, project):
     client.put(f"/api/v1/projects/{pid}/cover/state", json={"prompt": "my own words", "style": "other", "custom_style": "ukiyo-e"})
     client.put(f"/api/v1/projects/{pid}/cover/state", json={"provider": "higgsfield"})  # partial update keeps the rest
     s = client.get(f"/api/v1/projects/{pid}/cover/state").json()
-    assert s == {"prompt": "my own words", "style": "other", "custom_style": "ukiyo-e", "provider": "higgsfield"}
+    assert s == {"prompt": "my own words", "style": "other", "custom_style": "ukiyo-e", "provider": "higgsfield", "overlay": True}
     assert (cover.covers_dir(pid) / "prompt.json").exists()
 
 
@@ -205,7 +205,7 @@ def test_generated_image_is_saved_with_its_prompt_and_style(client, project, mon
     monkeypatch.setattr(cover, "comfyui_image", fake)
     pid = project["id"]
     j = wait(client, client.post(f"/api/v1/projects/{pid}/cover/generate",
-                                 json={"provider": "comfyui", "prompt": "castle", "style": "photo"}).json()["id"])
+                                 json={"provider": "comfyui", "prompt": "castle", "style": "photo", "overlay": False}).json()["id"])
     assert j["status"] == "completed"
     assert seen["ss"]["style"] == "photo"
     img = client.get(f"/api/v1/projects/{pid}/covers").json()[0]
@@ -233,3 +233,26 @@ def test_digest_is_remembered_and_reflects_later_edits(client, project):
     eps = client.get(f"/api/v1/projects/{made['project']['id']}/episodes").json()
     client.put(f"/api/v1/episodes/{eps[0]['id']}", json={"content": "x" * 500})
     assert client.get(f"/api/v1/projects/{pid}/digest").json()["chars"] > made["chars"]
+
+
+def test_overlay_text_draws_title_and_author(tmp_path):
+    from io import BytesIO
+    from PIL import Image
+    buf = BytesIO()
+    Image.new('RGB', (400, 600), (20, 20, 20)).save(buf, 'PNG')
+    out, note = cover.overlay_text(buf.getvalue(), 'Test Title', 'Author', cover.DEFAULT_CONFIG['overlay'])
+    assert note == ''
+    img = Image.open(BytesIO(out)).convert('RGB')
+    assert img.size == (400, 600)
+    assert any(px != (20, 20, 20) for px in img.crop((0, 0, 400, 120)).getdata())
+    assert any(px != (20, 20, 20) for px in img.crop((0, 500, 400, 600)).getdata())
+
+
+def test_overlay_text_without_cjk_font_keeps_image(monkeypatch):
+    from io import BytesIO
+    from PIL import Image
+    monkeypatch.setattr(cover, 'find_font', lambda configured='': None)
+    buf = BytesIO()
+    Image.new('RGB', (200, 300), (0, 0, 0)).save(buf, 'PNG')
+    out, note = cover.overlay_text(buf.getvalue(), '日本語タイトル', '著者', cover.DEFAULT_CONFIG['overlay'])
+    assert out == buf.getvalue() and 'フォント' in note
