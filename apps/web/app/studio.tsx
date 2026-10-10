@@ -81,7 +81,7 @@ function Workspace({ onLogout }: { onLogout: () => void }) {
         {section === "search" && <SearchPanel projectId={project.id} />}
         {section === "chat" && <ChatPanel projectId={project.id} />}
         {section === "autowrite" && <AutoWritePanel projectId={project.id} />}
-        {section === "settings" && <SettingsPanel project={project} onSaved={setProject} />}
+        {section === "settings" && <SettingsPanel project={project} onSaved={setProject} onDeleted={() => setProject(null)} />}
       </main>
     </div>
   );

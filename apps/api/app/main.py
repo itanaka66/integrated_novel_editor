@@ -463,7 +463,32 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
   return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
   return Response(export_mod.build_epub(p,eps,cover_mod.selected_cover(pid)),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
- raise HTTPException(400,'format must be one of: txt, md, epub')
+ if format=='json':
+  return Response(json.dumps(_project_dump(db,p),ensure_ascii=False,indent=1,default=str),media_type='application/json',headers={'Content-Disposition':content_disposition(name,'json')})
+ raise HTTPException(400,'format must be one of: txt, md, epub, json')
+def _project_tables():
+ from .db import Base
+ return [t for t in Base.metadata.sorted_tables if 'project_id' in t.c and t.name!='projects']
+def _project_dump(db,p):
+ # Everything stored for the work (every table that hangs off a project), so a
+ # deleted work can be reconstructed from the file. Vector indexes are derived
+ # data and are not included.
+ tables={}
+ for t in _project_tables():
+  tables[t.name]=[dict(r._mapping) for r in db.execute(t.select().where(t.c.project_id==p.id))]
+ proj={c.name:getattr(p,c.name) for c in Project.__table__.columns}
+ return {'format':'ine-project-backup','version':1,'project':proj,'publishing':_publishing_out(p).model_dump(),'tables':tables}
+@app.delete('/api/v1/projects/{pid}',status_code=204)
+def project_delete(pid:int,db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ kids=db.scalars(select(Project).where(Project.source_project_id==pid)).all()
+ if kids:raise HTTPException(409,'子作品（翻訳・総集編）が残っています。先に子作品をすべて削除してください: '+'、'.join(k.name for k in kids))
+ for t in reversed(_project_tables()):  # explicit: SQLite does not enforce ON DELETE CASCADE
+  db.execute(t.delete().where(t.c.project_id==pid))
+ import shutil
+ dirs=[file_sync.project_dir(p),cover_mod.covers_dir(pid)]
+ db.delete(p);db.commit()
+ for d in dirs:shutil.rmtree(d,ignore_errors=True)
 
 def _system_settings_out(db):
  row=db.get(RuntimeConfig,rc.SINGLETON_ID)
