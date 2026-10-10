@@ -36,7 +36,7 @@ function Thumb({ projectId, image, onOpen }: { projectId: number; image: CoverIm
   );
 }
 
-function Viewer({ projectId, image, onClose, onSelect }: { projectId: number; image: CoverImage; onClose: () => void; onSelect: () => void }) {
+function Viewer({ projectId, image, onClose, onSelect, onDelete }: { projectId: number; image: CoverImage; onClose: () => void; onSelect: () => void; onDelete: () => void }) {
   const src = useImageUrl(projectId, image.filename);
   return (
     <div className="modalOverlay" onClick={onClose}>
@@ -45,6 +45,7 @@ function Viewer({ projectId, image, onClose, onSelect }: { projectId: number; im
         <small>{image.filename}{image.style ? ` · ${image.style}` : ""}</small>
         {image.prompt && <p style={{ fontSize: 12, color: "#566273", margin: 0 }}>{image.prompt}</p>}
         <div className="modalActions">
+          <button onClick={onDelete} style={{ color: "#c0392b" }}>{t("この画像を削除")}</button>
           <button onClick={onClose}>{t("閉じる")}</button>
           <button onClick={onSelect} disabled={image.selected}>{image.selected ? t("✓ 採用中") : t("この画像を表紙にする")}</button>
         </div>
@@ -125,6 +126,11 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
     const r = await api(`/projects/${projectId}/cover`, { method: "PUT", headers: JSON_HEADERS, body: JSON.stringify({ filename }) });
     if (Array.isArray(r)) setImages(r);
   }
+  async function remove(filename: string) {
+    if (!confirm(t("この画像を削除しますか？"))) return;
+    const r = await api(`/projects/${projectId}/covers/${encodeURIComponent(filename)}`, { method: "DELETE" });
+    if (Array.isArray(r)) { setImages(r); setViewing(null); } else setError(r?.detail || t("削除できませんでした"));
+  }
   const open = images.find((im) => im.filename === viewing) ?? null;
 
   return (
@@ -167,7 +173,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
           </div>
         </>
       )}
-      {open && <Viewer projectId={projectId} image={open} onClose={() => setViewing(null)} onSelect={() => select(open.filename)} />}
+      {open && <Viewer projectId={projectId} image={open} onClose={() => setViewing(null)} onSelect={() => select(open.filename)} onDelete={() => remove(open.filename)} />}
     </div>
   );
 }

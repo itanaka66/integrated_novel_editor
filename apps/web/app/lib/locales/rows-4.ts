@@ -117,4 +117,9 @@ export const ROWS_4: Row[] = [
   ["空欄の場合は環境変数 COMFYUI_URL（既定 http://localhost:8188）", "If blank, the COMFYUI_URL environment variable is used (default http://localhost:8188)", "留空则使用环境变量 COMFYUI_URL（默认 http://localhost:8188）", "留空則使用環境變數 COMFYUI_URL（預設 http://localhost:8188）", "비워 두면 환경 변수 COMFYUI_URL을 사용합니다(기본 http://localhost:8188)", "Si se deja vacío, se usa la variable COMFYUI_URL (por defecto http://localhost:8188)", "Si vide, la variable COMFYUI_URL est utilisée (par défaut http://localhost:8188)", "Leer: Umgebungsvariable COMFYUI_URL (Standard http://localhost:8188)"],
   ["接続テストに失敗しました", "Connection test failed", "连接测试失败", "連線測試失敗", "연결 테스트에 실패했습니다", "Falló la prueba de conexión", "Échec du test de connexion", "Verbindungstest fehlgeschlagen"],
   ["利用可能なチェックポイント", "Available checkpoints", "可用的检查点", "可用的檢查點", "사용 가능한 체크포인트", "Checkpoints disponibles", "Checkpoints disponibles", "Verfügbare Checkpoints"],
+
+  // cover delete
+  ["この画像を削除", "Delete this image", "删除此图片", "刪除此圖片", "이 이미지 삭제", "Eliminar esta imagen", "Supprimer cette image", "Dieses Bild löschen"],
+  ["この画像を削除しますか？", "Delete this image?", "要删除此图片吗？", "要刪除此圖片嗎？", "이 이미지를 삭제할까요?", "¿Eliminar esta imagen?", "Supprimer cette image ?", "Dieses Bild löschen?"],
+  ["削除できませんでした", "Could not delete", "无法删除", "無法刪除", "삭제하지 못했습니다", "No se pudo eliminar", "Suppression impossible", "Löschen fehlgeschlagen"],
 ];
