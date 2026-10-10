@@ -4,7 +4,7 @@ from .db import SessionLocal
 from .models import Project, Episode, AutoWriteJob, SeriesPlan, ArcPlan, MiniArcPlan, EpisodePlan
 from .context import build
 from .ollama import controller_generate, generate
-from .llm_queue import purpose
+from .llm_queue import purpose, set_project
 from .continuity import update_character_states, check_continuity
 from .rag import index
 from .planner.planner_service import PlannerService
@@ -63,6 +63,7 @@ async def run_job(job_id,premise='',overwrite=False):
     db=SessionLocal(); job=db.get(AutoWriteJob,job_id)
     if not job: db.close(); return
     try:
+        set_project(job.project_id)
         job.status='running'; db.commit()
         planner=PlannerService()
         # Generate the 500-episode hierarchy once, then lazily refine it.

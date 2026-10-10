@@ -16,6 +16,7 @@ from .db import SessionLocal
 from .models import ImportJob, Project, Episode
 from . import narou_import as ni
 from . import file_sync
+from .llm_queue import set_project
 from .revisions import snapshot_revision
 from .rag import index
 from .continuity import update_character_states, check_continuity
@@ -93,6 +94,7 @@ async def run_import_job(job_id: int, text: str) -> None:
                 job.last_message = 'インポート先のプロジェクトが見つかりませんでした。'
                 db.commit()
                 return
+        set_project(project.id)
 
         for parsed_ep in sorted(parsed.episodes, key=lambda x: x.number):
             job.last_message = f'第{parsed_ep.number}話を取り込み中…'

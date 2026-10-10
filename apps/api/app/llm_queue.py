@@ -28,6 +28,18 @@ from .config import settings
 # PurposeMiddleware for HTTP calls and by auto_writer for job steps.
 purpose: contextvars.ContextVar[str | None] = contextvars.ContextVar('llm_purpose', default=None)
 
+# Which novel the current request/job works on, so the queue can say "which
+# novel is doing what". Set from the URL by PurposeMiddleware, from the request
+# body by endpoints that carry a project_id, and by background jobs. An episode
+# id is enough when that is all the URL has (resolved to its project on listing).
+project_id_ctx: contextvars.ContextVar[int | None] = contextvars.ContextVar('llm_project_id', default=None)
+episode_id_ctx: contextvars.ContextVar[int | None] = contextvars.ContextVar('llm_episode_id', default=None)
+
+
+def set_project(pid: int | None) -> None:
+    project_id_ctx.set(pid)
+
+
 _KIND_LABELS = {'writer': 'Writer', 'controller': 'Controller', 'embed': '埋め込み'}
 
 # Mirrors apps/web/app/lib/llmActivity.ts's table, for the manual endpoints.
@@ -43,6 +55,10 @@ _PATH_PURPOSES: list[tuple[re.Pattern, str]] = [
 ]
 
 
+_PROJECT_PATH = re.compile(r'^/api/v1/projects/(\d+)(/|$)')
+_EPISODE_PATH = re.compile(r'^/api/v1/episodes/(\d+)(/|$)')
+
+
 @dataclass
 class Entry:
     id: int
@@ -53,6 +69,8 @@ class Entry:
     state: str  # 'waiting' | 'running'
     enqueued_at: float
     started_at: float | None = None
+    project_id: int | None = None
+    episode_id: int | None = None
 
 
 _ids = itertools.count(1)
@@ -77,7 +95,8 @@ def _semaphore(url: str, model: str) -> asyncio.Semaphore | None:
 async def slot(*, kind: str, model: str, url: str):
     """Hold a place in the queue for one Ollama call. Waits (visibly) until
     fewer than the limit are running for this (server, model)."""
-    entry = Entry(next(_ids), kind, model, url, purpose.get(), 'waiting', time.time())
+    entry = Entry(next(_ids), kind, model, url, purpose.get(), 'waiting', time.time(),
+                  project_id=project_id_ctx.get(), episode_id=episode_id_ctx.get())
     _entries[entry.id] = entry
     sem = _semaphore(url, model)
     try:
@@ -94,8 +113,32 @@ async def slot(*, kind: str, model: str, url: str):
         _entries.pop(entry.id, None)
 
 
+def _project_names(entries: list[Entry]) -> dict[int, str]:
+    """Names of the novels the listed calls belong to (one small query)."""
+    ids = {e.project_id for e in entries if e.project_id}
+    eps = {e.episode_id for e in entries if e.episode_id and not e.project_id}
+    if not ids and not eps:
+        return {}
+    from sqlalchemy import select
+    from .db import SessionLocal
+    from .models import Episode, Project
+    db = SessionLocal()
+    try:
+        ep_project = {r.id: r.project_id for r in db.execute(select(Episode.id, Episode.project_id).where(Episode.id.in_(eps)))} if eps else {}
+        for e in entries:
+            if not e.project_id and e.episode_id:
+                e.project_id = ep_project.get(e.episode_id)
+        ids = {e.project_id for e in entries if e.project_id}
+        return {r.id: r.name for r in db.execute(select(Project.id, Project.name).where(Project.id.in_(ids)))} if ids else {}
+    except Exception:
+        return {}
+    finally:
+        db.close()
+
+
 def snapshot() -> list[dict]:
     now = time.time()
+    names = _project_names(list(_entries.values()))
     running = sorted((e for e in _entries.values() if e.state == 'running'), key=lambda e: e.started_at or 0)
     waiting = sorted((e for e in _entries.values() if e.state == 'waiting'), key=lambda e: e.enqueued_at)
     out = []
@@ -108,6 +151,8 @@ def snapshot() -> list[dict]:
             'kind_label': _KIND_LABELS.get(e.kind, e.kind),
             'model': e.model,
             'purpose': e.purpose,
+            'project_id': e.project_id,
+            'project_name': names.get(e.project_id) if e.project_id else None,
             'elapsed_seconds': int(now - (e.started_at if e.state == 'running' and e.started_at else e.enqueued_at)),
         })
     return out
@@ -121,6 +166,12 @@ class PurposeMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
+        if scope['type'] == 'http':
+            m = _PROJECT_PATH.match(scope['path'])
+            if m:
+                project_id_ctx.set(int(m.group(1)))
+            elif (m := _EPISODE_PATH.match(scope['path'])):
+                episode_id_ctx.set(int(m.group(1)))
         if scope['type'] == 'http' and scope.get('method') == 'POST':
             for pattern, label in _PATH_PURPOSES:
                 if pattern.match(scope['path']):
