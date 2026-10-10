@@ -35,6 +35,40 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   }
   useEffect(() => { load(); }, []);
 
+  // Translations hang under the work they were made from (parent = original).
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const ids = new Set(projects.map((p) => p.id));
+  const childrenOf = (id: number) => projects.filter((c) => c.source_project_id === id);
+  const roots = projects.filter((p) => !p.source_project_id || !ids.has(p.source_project_id));
+  const toggle = (id: number) => setCollapsed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  function renderWork(p: Project, depth: number, seen: Set<number>): React.ReactNode {
+    const goal = p.episode_goal || 500;
+    const eps = twins[p.id]?.metrics.episodes ?? 0;
+    const pct = Math.min(100, Math.round((eps / goal) * 100));
+    const kids = seen.has(p.id) ? [] : childrenOf(p.id);
+    const open = !collapsed.has(p.id);
+    return (
+      <div key={p.id} style={{ marginLeft: depth * 22 }}>
+        <div className="workCard" onClick={() => onOpen(p)} style={depth > 0 ? { borderLeft: "3px solid #8aa4c8" } : undefined}>
+          <div className="workCardHead">
+            <b>
+              {kids.length > 0 && (
+                <button type="button" aria-label={open ? t("折りたたむ") : t("展開")} onClick={(e) => { e.stopPropagation(); toggle(p.id); }}
+                  style={{ marginRight: 6, padding: "0 6px" }}>{open ? "▾" : "▸"}</button>
+              )}
+              {depth > 0 && "└ "}{p.name}
+            </b>
+            <span>{depth > 0 && p.language ? `${p.language} · ` : ""}{p.genre || t("未設定")}</span>
+          </div>
+          <div className="progress"><i style={{ width: `${pct}%` }} /></div>
+          <div className="workCardFoot"><span>{t("進捗 {pct}%", { pct })}</span><span>{t("({eps}/{goal}話)", { eps, goal })}</span></div>
+        </div>
+        {open && kids.map((c) => renderWork(c, depth + 1, new Set(seen).add(p.id)))}
+      </div>
+    );
+  }
+
   const focus = projects[0];
   const focusTwin = focus ? twins[focus.id] : null;
 
@@ -55,18 +89,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
         <div className="dashboardWorks">
           <small>{t("マイ作品")}</small>
           {projects.length === 0 && !busy && <div className="card"><b>{t("まだ作品がありません")}</b><p>{t("「新規作品作成」から最初の作品を作りましょう。")}</p></div>}
-          {projects.map((p) => {
-            const goal = p.episode_goal || 500;
-            const eps = twins[p.id]?.metrics.episodes ?? 0;
-            const pct = Math.min(100, Math.round((eps / goal) * 100));
-            return (
-              <div className="workCard" key={p.id} onClick={() => onOpen(p)}>
-                <div className="workCardHead"><b>{p.name}</b><span>{p.genre || t("未設定")}</span></div>
-                <div className="progress"><i style={{ width: `${pct}%` }} /></div>
-                <div className="workCardFoot"><span>{t("進捗 {pct}%", { pct })}</span><span>{t("({eps}/{goal}話)", { eps, goal })}</span></div>
-              </div>
-            );
-          })}
+          {roots.map((p) => renderWork(p, 0, new Set()))}
         </div>
         {focus && focusTwin && (
           <div className="dashboardStats card">

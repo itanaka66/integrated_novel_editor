@@ -8,6 +8,7 @@ export type Project = {
   language?: string;
   style_guide?: string;
   author?: string;
+  source_project_id?: number | null;
 };
 export type Episode = { id: number; project_id: number; number: number; title: string; summary: string; content: string; updated_at: string };
 export type Item = {
