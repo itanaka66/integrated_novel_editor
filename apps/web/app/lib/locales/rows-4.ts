@@ -125,4 +125,10 @@ export const ROWS_4: Row[] = [
 
   // checkpoint list
   ["共通設定を使用", "Use the common setting", "使用通用设置", "使用共通設定", "공통 설정 사용", "Usar el ajuste común", "Utiliser le réglage commun", "Gemeinsame Einstellung verwenden"],
+
+  // translate all
+  ["作品全編を{n}言語（{labels}）に順番に翻訳し、それぞれ新しい作品として作成します（元の作品は変更されません）。時間がかかります。よろしいですか？", "Translate the whole work into {n} languages ({labels}) one after another, creating a new work for each (the original is not changed). This takes a while. Continue?", "将作品全文依次翻译成 {n} 种语言（{labels}），各自创建为新作品（原作品不变）。需要较长时间。是否继续？", "將作品全文依序翻譯成 {n} 種語言（{labels}），各自建立為新作品（原作品不變）。需要較長時間。是否繼續？", "작품 전체를 {n}개 언어({labels})로 차례로 번역해 각각 새 작품으로 만듭니다(원본은 변경되지 않습니다). 시간이 걸립니다. 계속할까요?", "Se traducirá la obra completa a {n} idiomas ({labels}) uno tras otro, creando una obra nueva por cada uno (el original no cambia). Tardará un rato. ¿Continuar?", "L'œuvre entière sera traduite en {n} langues ({labels}) l'une après l'autre, avec une nouvelle œuvre pour chacune (l'original n'est pas modifié). Cela prend du temps. Continuer ?", "Das ganze Werk wird nacheinander in {n} Sprachen ({labels}) übersetzt, jeweils als neues Werk (das Original bleibt unverändert). Das dauert eine Weile. Fortfahren?"],
+  ["翻訳に失敗した言語: {labels}", "Languages that failed to translate: {labels}", "翻译失败的语言：{labels}", "翻譯失敗的語言：{labels}", "번역에 실패한 언어: {labels}", "Idiomas con error de traducción: {labels}", "Langues dont la traduction a échoué : {labels}", "Sprachen mit fehlgeschlagener Übersetzung: {labels}"],
+  ["全翻訳中 {i}/{n}（{label}）", "Translating all {i}/{n} ({label})", "全部翻译中 {i}/{n}（{label}）", "全部翻譯中 {i}/{n}（{label}）", "전체 번역 중 {i}/{n}({label})", "Traduciendo todo {i}/{n} ({label})", "Tout traduire {i}/{n} ({label})", "Alles übersetzen {i}/{n} ({label})"],
+  ["全翻訳", "Translate all", "全部翻译", "全部翻譯", "전체 번역", "Traducir todo", "Tout traduire", "Alles übersetzen"],
 ];
