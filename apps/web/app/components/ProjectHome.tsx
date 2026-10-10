@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
@@ -31,11 +31,14 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [tJob, setTJob] = useState<TranslateJob | null>(null);
   const [tError, setTError] = useState("");
-  const tBusy = !!tJob && (tJob.status === "queued" || tJob.status === "running");
+  const [allRun, setAllRun] = useState<{ index: number; total: number; label: string } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const tBusy = !!allRun || (!!tJob && (tJob.status === "queued" || tJob.status === "running"));
 
   // Poll the background translation job until it finishes.
   useEffect(() => {
-    if (!tJob || !tBusy) return;
+    if (!tJob || allRun || !tBusy) return;
     const timer = setInterval(async () => {
       try {
         const j = await api(`/translate-jobs/${tJob.id}`);
@@ -43,7 +46,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
       } catch { /* transient; retry on next tick */ }
     }, 2000);
     return () => clearInterval(timer);
-  }, [tJob, tBusy]);
+  }, [tJob, tBusy, allRun]);
 
   async function translate(code: string, label: string) {
     if (!window.confirm(t("作品全編を「{label}」に翻訳し、新しい作品として作成します（元の作品は変更されません）。エピソード数が多いと時間がかかります。よろしいですか？", { label }))) return;
@@ -52,6 +55,32 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
       const j = await api(`/projects/${project.id}/translate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: code }) });
       if (j?.id) setTJob(j); else setTError(j?.detail || t("翻訳を開始できませんでした"));
     } catch (e) { setTError(e instanceof Error ? e.message : t("翻訳を開始できませんでした")); }
+  }
+  // One button for every language button: translate into each of the other
+  // languages one after another (each becomes its own new work), carrying on
+  // past a language that fails.
+  async function translateAll() {
+    const targets = LANGUAGES.filter((l) => l.code !== (project.language || "ja"));
+    if (!window.confirm(t("作品全編を{n}言語（{labels}）に順番に翻訳し、それぞれ新しい作品として作成します（元の作品は変更されません）。時間がかかります。よろしいですか？", { n: targets.length, labels: targets.map((l) => l.label).join("・") }))) return;
+    setTError(""); setTJob(null);
+    const failed: string[] = [];
+    for (let i = 0; i < targets.length && alive.current; i++) {
+      const l = targets[i];
+      setAllRun({ index: i + 1, total: targets.length, label: l.label });
+      try {
+        let j = await api(`/projects/${project.id}/translate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: l.code }) });
+        if (!j?.id) { failed.push(l.label); continue; }
+        setTJob(j);
+        while (alive.current && (j.status === "queued" || j.status === "running")) {
+          await new Promise((r) => setTimeout(r, 2000));
+          try { const n = await api(`/translate-jobs/${j.id}`); if (n?.id) { j = n; setTJob(n); } } catch { /* retry next tick */ }
+        }
+        if (j.status === "error") failed.push(l.label);
+      } catch { failed.push(l.label); }
+    }
+    if (!alive.current) return;
+    setAllRun(null);
+    if (failed.length) setTError(t("翻訳に失敗した言語: {labels}", { labels: failed.join("・") }));
   }
   async function openTranslated() {
     if (!tJob?.project_id || !onOpenProject) return;
@@ -99,6 +128,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <small>{t("多言語化（全編翻訳）")}</small>
         <p>{t("作品全編を選択した言語に翻訳し、新しい作品として作成します。")}</p>
         <div className="exportButtons">
+          <button className="primary" onClick={translateAll} disabled={tBusy || episodes.length === 0}>{allRun ? t("全翻訳中 {i}/{n}（{label}）", { i: allRun.index, n: allRun.total, label: allRun.label }) : t("全翻訳")}</button>
           {LANGUAGES.map((l) => <button key={l.code} onClick={() => translate(l.code, l.label)} disabled={tBusy || episodes.length === 0}>{l.label}</button>)}
         </div>
         {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
