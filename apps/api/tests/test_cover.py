@@ -273,3 +273,32 @@ def test_cover_config_can_be_edited_and_is_used(client):
     assert cover.style_settings("anime")["comfyui"]["checkpoint"] == ""
     bad = client.put("/api/v1/cover/config", json={"comfyui": {"steps": "abc"}})
     assert bad.status_code == 400
+
+
+def test_comfyui_url_setting_and_connection_test(client, monkeypatch):
+    seen = {}
+
+    class FakeResp:
+        def __init__(self, data): self._d = data
+        def raise_for_status(self): pass
+        def json(self): return self._d
+
+    class FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        async def get(self, url, **k):
+            seen["url"] = url
+            if "bad" in url:
+                raise OSError("refused")
+            return FakeResp({"CheckpointLoaderSimple": {"input": {"required": {"ckpt_name": [["NoobAI-XL.safetensors"]]}}}})
+    monkeypatch.setattr(cover.httpx, "AsyncClient", FakeClient)
+    ok = client.post("/api/v1/cover/test-comfyui", json={"url": "http://good:8188/", "checkpoint": "noobai-xl"}).json()
+    assert ok["ok"] and ok["checkpoints"] == ["NoobAI-XL.safetensors"] and seen["url"] == "http://good:8188/object_info/CheckpointLoaderSimple"
+    assert not client.post("/api/v1/cover/test-comfyui", json={"url": "http://bad:1"}).json()["ok"]
+    assert not client.post("/api/v1/cover/test-comfyui", json={"url": "http://good", "checkpoint": "nope"}).json()["ok"]
+    cfg = client.get("/api/v1/cover/config").json()
+    cfg["comfyui"]["url"] = "http://saved:8188"
+    client.put("/api/v1/cover/config", json=cfg)
+    client.post("/api/v1/cover/test-comfyui", json={})
+    assert seen["url"].startswith("http://saved:8188/")

@@ -26,6 +26,8 @@ The editor generates book covers by calling a **ComfyUI** server over HTTP. Comf
 - Docker-free Windows installer: `localhost` works as-is.
 - The checkpoint name may be written with or without extension and in any case (`NoobAI-XL` matches `NoobAI-XL.safetensors`).
 
+The URL can also be set (and tested) in **Settings → 表紙画像**: enter it in "ComfyUI server URL" and press "接続テスト" (Test connection) to see whether ComfyUI is reachable and which checkpoints it lists. A URL saved there (`comfyui.url` in `cover_config.json`) takes precedence over `COMFYUI_URL`; leave it blank to use the environment variable.
+
 ## 3. Generate a cover
 
 Open a project → cover panel → choose the look (アニメ風 / 劇画風 / 実写風 / その他) → "作品内容からプロンプトを作成" → edit the prompt if you like → select **ComfyUI** → "表紙を生成". Images are saved under `COVERS_DIR/<project id>/` (Docker: the `covers` volume) together with a `.json` of the prompt and settings used. The prompt, look and engine are remembered per project.
