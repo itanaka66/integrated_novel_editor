@@ -76,7 +76,7 @@ DEFAULT_CONFIG: dict = {
     # blank = the first installed CJK-capable font found; a path pins one.
     'overlay': {
         'font': '',
-        'title_size': 0.085, 'author_size': 0.045, 'max_title_lines': 3,
+        'title_size': 0.045, 'author_size': 0.04, 'max_title_lines': 3,
         'text_color': '#ffffff', 'stroke_color': '#101018', 'stroke_ratio': 0.09,
         'title_y': 0.07, 'author_y': 0.95, 'side_margin': 0.07,
     },

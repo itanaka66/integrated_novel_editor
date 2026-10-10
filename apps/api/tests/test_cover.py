@@ -302,3 +302,14 @@ def test_comfyui_url_setting_and_connection_test(client, monkeypatch):
     client.put("/api/v1/cover/config", json=cfg)
     client.post("/api/v1/cover/test-comfyui", json={})
     assert seen["url"].startswith("http://saved:8188/")
+
+
+def test_author_falls_back_to_login_name_when_unset(client, project, monkeypatch):
+    async def fake(prompt, ss):
+        return PNG
+    monkeypatch.setattr(cover, "comfyui_image", fake)
+    pid = project["id"]
+    j = wait(client, client.post(f"/api/v1/projects/{pid}/cover/generate", json={"provider": "comfyui", "prompt": "x"}).json()["id"])
+    assert j["status"] == "completed"
+    assert client.get(f"/api/v1/projects/{pid}/covers").json()[0].get("author", "x") != ""
+    assert cover.DEFAULT_CONFIG["overlay"]["title_size"] <= 0.05
