@@ -6,7 +6,7 @@ import { t } from "../lib/i18n";
 type CoverImage = { filename: string; provider: string; selected: boolean; style: string; prompt: string };
 type CoverJob = { id: number; status: string; filename: string | null; last_message: string };
 type StyleOption = { key: string; label: string };
-type CoverState = { prompt: string; style: string; custom_style: string; provider: string };
+type CoverState = { prompt: string; style: string; custom_style: string; provider: string; overlay: boolean };
 
 const PROVIDERS = [
   { key: "comfyui", label: t("ComfyUI（ローカル）") },
@@ -55,7 +55,7 @@ function Viewer({ projectId, image, onClose, onSelect }: { projectId: number; im
 
 export default function CoverPanel({ projectId }: { projectId: number }) {
   const [styles, setStyles] = useState<StyleOption[]>([]);
-  const [state, setState] = useState<CoverState>({ prompt: "", style: "", custom_style: "", provider: "comfyui" });
+  const [state, setState] = useState<CoverState>({ prompt: "", style: "", custom_style: "", provider: "comfyui", overlay: true });
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [images, setImages] = useState<CoverImage[]>([]);
@@ -116,7 +116,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
     try {
       const j = await api(`/projects/${projectId}/cover/generate`, {
         method: "POST", headers: JSON_HEADERS,
-        body: JSON.stringify({ provider: state.provider, prompt: state.prompt, style: state.style, custom_style: state.custom_style }),
+        body: JSON.stringify({ provider: state.provider, prompt: state.prompt, style: state.style, custom_style: state.custom_style, overlay: state.overlay }),
       });
       if (j?.id) setJob(j); else setError(j?.detail || t("生成を開始できませんでした"));
     } catch (e) { setError(e instanceof Error ? e.message : t("生成を開始できませんでした")); }
@@ -150,6 +150,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
         placeholder={t("表紙のイメージ（英語プロンプト）。自動作成後に編集できます。")} />
       <small className="searchSource">{saved ? t("自動保存しました") : t("編集は自動保存されます")}</small>
 
+      <label style={{ display: "block", marginTop: 8 }}><input type="checkbox" checked={state.overlay} onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
       <div className="exportButtons">
         {PROVIDERS.map((p) => (
           <label key={p.key}><input type="radio" name={`cover-provider-${projectId}`} checked={state.provider === p.key} onChange={() => persist({ ...state, provider: p.key })} /> {p.label}</label>

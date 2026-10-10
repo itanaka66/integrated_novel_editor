@@ -59,7 +59,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
   const [importBusy, setImportBusy] = useState(false);
   const importTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500, style_guide: project.style_guide ?? "" });
+  const [form, setForm] = useState({ name: project.name, genre: project.genre, description: project.description, rules: project.rules, episode_goal: project.episode_goal ?? 500, style_guide: project.style_guide ?? "", author: project.author ?? "" });
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [styleGuideBusy, setStyleGuideBusy] = useState(false);
@@ -234,6 +234,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
       {tab === "basic" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
           <label>{t("作品名")}<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+          <label>{t("著者名")}<input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} placeholder={t("表紙画像に入れる名前")} /></label>
           <label>{t("ジャンル")}<input value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })} /></label>
           <label>{t("総話数目標")}<input type="number" value={form.episode_goal} onChange={(e) => setForm({ ...form, episode_goal: Number(e.target.value) })} /></label>
           <label>{t("あらすじ")}<textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>

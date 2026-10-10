@@ -82,6 +82,11 @@ export const ROWS_4: Row[] = [
   ["クリックで拡大", "Click to enlarge", "点击放大", "點擊放大", "클릭하면 확대", "Haz clic para ampliar", "Cliquer pour agrandir", "Zum Vergrößern klicken"],
   ["生成した画像はサーバーのディスクに自動保存されます。クリックで拡大します。", "Generated images are saved automatically to the server's disk. Click one to enlarge it.", "生成的图片会自动保存到服务器磁盘。点击可放大。", "產生的圖片會自動儲存到伺服器磁碟。點擊可放大。", "생성한 이미지는 서버 디스크에 자동 저장됩니다. 클릭하면 확대됩니다.", "Las imágenes generadas se guardan automáticamente en el disco del servidor. Haz clic para ampliarlas.", "Les images générées sont enregistrées automatiquement sur le disque du serveur. Cliquez pour agrandir.", "Erzeugte Bilder werden automatisch auf der Festplatte des Servers gespeichert. Zum Vergrößern anklicken."],
 
+  // cover lettering
+  ["著者名", "Author", "作者", "作者", "저자", "Autor", "Auteur", "Autor"],
+  ["表紙画像に入れる名前", "Name shown on the cover image", "显示在封面图片上的名字", "顯示在封面圖片上的名字", "표지 이미지에 넣을 이름", "Nombre que aparece en la imagen de portada", "Nom affiché sur l'image de couverture", "Name auf dem Titelbild"],
+  ["タイトルと著者名を画像に入れる", "Put the title and author name on the image", "在图片上加入标题和作者名", "在圖片上加入標題和作者名", "제목과 저자명을 이미지에 넣기", "Poner el título y el autor en la imagen", "Ajouter le titre et l'auteur sur l'image", "Titel und Autor ins Bild setzen"],
+
   // studio
   ["確認中...", "Checking...", "确认中...", "確認中...", "확인 중...", "Comprobando...", "Vérification...", "Wird geprüft..."],
 ];

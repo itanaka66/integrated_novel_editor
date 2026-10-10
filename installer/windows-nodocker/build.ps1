@@ -61,6 +61,7 @@ try {
         --collect-submodules app `
         --hidden-import qdrant_client `
         --hidden-import psycopg2 `
+        --hidden-import PIL `
         --hidden-import editor_common `
         desktop_main.py 2>&1 | Out-String | Write-Host
     $ErrorActionPreference = "Stop"
