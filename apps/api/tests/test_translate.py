@@ -36,3 +36,44 @@ def test_translate_creates_new_project(client, project, monkeypatch, db_session_
 
 def test_translate_rejects_unknown_language(client, project):
     assert client.post(f"/api/v1/projects/{project['id']}/translate", json={"language": "xx"}).status_code == 400
+
+
+def test_retranslate_only_fills_missing_or_short_parts(client, project, monkeypatch, db_session_factory):
+    calls = []
+
+    async def fake_generate(prompt, *a, **k):
+        text = prompt.rsplit("\n\n", 1)[-1]
+        calls.append(text)
+        return "EN:" + text, "m"
+    monkeypatch.setattr(translator, "generate", fake_generate)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    long_text = "少年は目覚めた。" * 20
+    for n in (1, 2, 3):
+        client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": f"題{n}", "content": long_text})
+
+    def run():
+        jid = client.post(f"/api/v1/projects/{pid}/translate", json={"language": "en"}).json()["id"]
+        for _ in range(80):
+            j = client.get(f"/api/v1/translate-jobs/{jid}").json()
+            if j["status"] in ("completed", "error"):
+                return j
+            time.sleep(0.1)
+        return j
+    first = run()
+    assert first["status"] == "completed"
+    dst = first["project_id"]
+    eps = {e["number"]: e for e in client.get(f"/api/v1/projects/{dst}/episodes").json()}
+    # Episode 2 was cut off, episode 3 was deleted from the translation.
+    from app.models import Episode
+    with db_session_factory() as db:
+        db.get(Episode, eps[2]["id"]).content = "EN:少"
+        db.delete(db.get(Episode, eps[3]["id"]))
+        db.commit()
+    calls.clear()
+    second = run()
+    assert second["status"] == "completed" and second["project_id"] == dst
+    assert not any(c == "題1" or c == long_text and False for c in calls)
+    assert "題1" not in calls and "題2" not in calls and "題3" in calls
+    after = {e["number"]: e for e in client.get(f"/api/v1/projects/{dst}/episodes").json()}
+    assert set(after) == {1, 2, 3} and after[2]["content"] == "EN:" + long_text and after[3]["content"] == "EN:" + long_text
