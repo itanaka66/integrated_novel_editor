@@ -101,3 +101,17 @@ def test_queue_endpoint_requires_auth_and_returns_entries(client):
     body = r.json()
     assert body["entries"] == []
     assert body["max_concurrency"] == settings.ollama_max_concurrency
+
+
+def test_queue_entries_name_the_novel(client, project, monkeypatch, db_session_factory):
+    from app import db as app_db
+    monkeypatch.setattr(app_db, 'SessionLocal', db_session_factory)
+    import asyncio
+    from app import llm_queue
+
+    async def go():
+        llm_queue.set_project(project["id"])
+        async with llm_queue.slot(kind="writer", model="m", url="u"):
+            return llm_queue.snapshot()
+    snap = asyncio.run(go())
+    assert snap[0]["project_id"] == project["id"] and snap[0]["project_name"] == project["name"]

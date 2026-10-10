@@ -14,7 +14,7 @@ from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
-from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot
+from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot, set_project as llm_set_project
 from .cors import DynamicCORSMiddleware
 from . import export as export_mod
 from . import translator
@@ -734,6 +734,7 @@ async def rag_index(x:RagIndex,db:Session=Depends(get_db)):
   raise HTTPException(503,f'RAG index rebuild failed: {ex}') from ex
 @app.post('/api/v1/rag/search')
 async def rag_search(x:RagSearch,db:Session=Depends(get_db)):
+ llm_set_project(x.project_id)
  try:
   return {'source':'qdrant','results':await search(x.project_id,x.query,x.limit)}
  except Exception:
@@ -751,6 +752,7 @@ async def rag_search_all(x:RagSearchAll,db:Session=Depends(get_db)):
   return {'source':'postgresql','results':[{'episode_id':e.id,'project_id':e.project_id,'project_name':projects.get(e.project_id,''),'title':e.title,'text':e.content} for e in rows]}
 @app.post('/api/v1/ai/generate')
 async def ai(x:AIGenerate,db:Session=Depends(get_db)):
+ llm_set_project(x.project_id)
  e=db.get(Episode,x.episode_id) if x.episode_id else None;c=await build(db,x.project_id,e,x.rag_limit)
  task={'continue':'本文の続きを書く','summary':'本文を要約する','plot':'次の展開を提案する','proofread':'設定・表現・時系列を校正する'}.get(x.mode,'依頼を実行する')
  prompt=f'''あなたは長編小説の編集長AIです。作品の正本設定を最優先してください。\n作業:{task}\n\nContext:\n{json.dumps(c,ensure_ascii=False,indent=2)}\n\n指示:{x.instruction}\n日本語で出力してください。'''
@@ -791,6 +793,7 @@ def continuity_issues(pid:int,db:Session=Depends(get_db)):
 
 @app.post('/api/v1/continuity/check')
 async def continuity_check(x:ContinuityCheck,db:Session=Depends(get_db)):
+    llm_set_project(x.project_id)
     try:
         issues=await check_continuity(db,x.project_id,x.episode_id)
         return {'count':len(issues),'issues':[ContinuityIssueOut.model_validate(i).model_dump() for i in issues]}

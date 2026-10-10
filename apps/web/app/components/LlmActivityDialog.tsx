@@ -13,6 +13,7 @@ type QueueEntry = {
   kind_label: string;
   model: string;
   purpose: string | null;
+  project_name?: string | null;
   elapsed_seconds: number;
 };
 
@@ -56,7 +57,7 @@ export default function LlmActivityDialog() {
       ? entries.map((e) => ({
           key: `s${e.id}`,
           state: e.state,
-          head: `${e.position}. ${e.purpose ?? t("AI処理")}`,
+          head: `${e.position}. ${e.project_name ? `「${e.project_name}」 ` : ""}${e.purpose ?? t("AI処理")}`,
           detail: `${e.kind_label} · ${e.model}`,
           seconds: e.elapsed_seconds,
         }))

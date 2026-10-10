@@ -15,6 +15,7 @@ from .db import SessionLocal
 from .models import Project, Episode, Character, WorldEntity
 from .ollama import generate
 from . import file_sync
+from .llm_queue import set_project
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ async def run_translation(job: dict) -> None:
     db = SessionLocal()
     try:
         job['status'] = 'running'
+        set_project(job['source_project_id'])
         src = db.get(Project, job['source_project_id'])
         lang = job['language']
         eps = db.scalars(select(Episode).where(Episode.project_id == src.id).order_by(Episode.number)).all()
