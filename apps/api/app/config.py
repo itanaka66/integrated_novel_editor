@@ -65,10 +65,14 @@ class Settings(BaseSettings):
  smtp_host:str=''; smtp_port:int=587; smtp_username:str=''; smtp_password:str=''; smtp_from:str='noreply@example.com'; smtp_use_tls:bool=True
  password_reset_max_age_seconds:int=3600
  # Book-cover generation (see app/cover.py). ComfyUI is a local server's HTTP
- # API; comfyui_checkpoint blank = use the first installed checkpoint.
+ # API; comfyui_checkpoint blank = use the first installed checkpoint; otherwise the
+ # file name as ComfyUI lists it (extension included, e.g. NoobAI-XL.safetensors).
  # Higgsfield needs "<api-key>:<api-secret>" from cloud.higgsfield.ai and the
  # optional `higgsfield-client` package; the key stays env/.env-only.
  covers_dir:str='./covers'
+ # Image models/settings per art style, hot-reloaded on every request and
+ # created with defaults if missing (see app/cover.py DEFAULT_CONFIG).
+ cover_config_path:str='./cover_config.json'
  comfyui_url:str='http://localhost:8188'; comfyui_checkpoint:str=''
  higgsfield_key:str=''; higgsfield_model:str='bytedance/seedream/v4/text-to-image'
 settings=Settings()

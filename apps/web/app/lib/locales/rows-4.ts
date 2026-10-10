@@ -73,6 +73,20 @@ export const ROWS_4: Row[] = [
 
   ["更新", "Update", "更新", "更新", "업데이트", "Actualizar", "Mettre à jour", "Aktualisieren"],
 
+  // CoverPanel (styles / auto-save)
+  ["どんなイメージにしますか？", "What look do you want?", "想要什么样的画面风格？", "想要什麼樣的畫面風格？", "어떤 이미지로 만들까요?", "¿Qué aspecto quieres?", "Quel rendu souhaitez-vous ?", "Welchen Look wünschen Sie?"],
+  ["表紙のイメージ", "Cover look", "封面风格", "封面風格", "표지 이미지", "Aspecto de la portada", "Rendu de la couverture", "Cover-Look"],
+  ["イメージを自由に記入（例：水彩画、浮世絵、ドット絵）", "Describe the look freely (e.g. watercolor, ukiyo-e, pixel art)", "请自由填写风格（例如：水彩画、浮世绘、像素画）", "請自由填寫風格（例如：水彩畫、浮世繪、像素畫）", "이미지를 자유롭게 입력하세요(예: 수채화, 우키요에, 도트 그림)", "Describe el aspecto libremente (p. ej., acuarela, ukiyo-e, pixel art)", "Décrivez librement le rendu (ex. aquarelle, ukiyo-e, pixel art)", "Look frei beschreiben (z. B. Aquarell, Ukiyo-e, Pixel-Art)"],
+  ["自動保存しました", "Saved automatically", "已自动保存", "已自動儲存", "자동 저장했습니다", "Guardado automáticamente", "Enregistré automatiquement", "Automatisch gespeichert"],
+  ["編集は自動保存されます", "Edits are saved automatically", "编辑内容会自动保存", "編輯內容會自動儲存", "편집 내용은 자동 저장됩니다", "Los cambios se guardan automáticamente", "Les modifications sont enregistrées automatiquement", "Änderungen werden automatisch gespeichert"],
+  ["クリックで拡大", "Click to enlarge", "点击放大", "點擊放大", "클릭하면 확대", "Haz clic para ampliar", "Cliquer pour agrandir", "Zum Vergrößern klicken"],
+  ["生成した画像はサーバーのディスクに自動保存されます。クリックで拡大します。", "Generated images are saved automatically to the server's disk. Click one to enlarge it.", "生成的图片会自动保存到服务器磁盘。点击可放大。", "產生的圖片會自動儲存到伺服器磁碟。點擊可放大。", "생성한 이미지는 서버 디스크에 자동 저장됩니다. 클릭하면 확대됩니다.", "Las imágenes generadas se guardan automáticamente en el disco del servidor. Haz clic para ampliarlas.", "Les images générées sont enregistrées automatiquement sur le disque du serveur. Cliquez pour agrandir.", "Erzeugte Bilder werden automatisch auf der Festplatte des Servers gespeichert. Zum Vergrößern anklicken."],
+
+  // cover lettering
+  ["著者名", "Author", "作者", "作者", "저자", "Autor", "Auteur", "Autor"],
+  ["表紙画像に入れる名前", "Name shown on the cover image", "显示在封面图片上的名字", "顯示在封面圖片上的名字", "표지 이미지에 넣을 이름", "Nombre que aparece en la imagen de portada", "Nom affiché sur l'image de couverture", "Name auf dem Titelbild"],
+  ["タイトルと著者名を画像に入れる", "Put the title and author name on the image", "在图片上加入标题和作者名", "在圖片上加入標題和作者名", "제목과 저자명을 이미지에 넣기", "Poner el título y el autor en la imagen", "Ajouter le titre et l'auteur sur l'image", "Titel und Autor ins Bild setzen"],
+
   // studio
   ["確認中...", "Checking...", "确认中...", "確認中...", "확인 중...", "Comprobando...", "Vérification...", "Wird geprüft..."],
 ];

@@ -74,6 +74,14 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
     } finally { setDigesting(false); }
   }
   useEffect(() => { api(`/projects/${project.id}/episodes`).then(setEpisodes); }, [project.id]);
+  // The last digest made from this work is remembered on the server, so it is
+  // still here after leaving the screen (its size reflects any edits since).
+  useEffect(() => {
+    let alive = true;
+    setDigest(null);
+    api(`/projects/${project.id}/digest`).then((r) => { if (alive && r?.project) setDigest(r); }).catch(() => {});
+    return () => { alive = false; };
+  }, [project.id]);
   const goal = project.episode_goal || 500;
   const pct = Math.min(100, Math.round((episodes.length / goal) * 100));
   const recent = [...episodes].sort((a, b) => b.number - a.number).slice(0, 5);

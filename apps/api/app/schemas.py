@@ -1,7 +1,7 @@
 from pydantic import BaseModel,ConfigDict
-class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500; style_guide:str=''; language:str='ja'
+class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rules:str=''; episode_goal:int=500; style_guide:str=''; language:str='ja'; author:str=''
 class ProjectOut(ProjectCreate): id:int; model_config=ConfigDict(from_attributes=True)
-class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None; language:str|None=None
+class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None; language:str|None=None; author:str|None=None
 class StyleGuideOut(BaseModel): style_guide:str
 class StyleGuideGenerateRequest(BaseModel): category:str=''; detail:str=''
 class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''
@@ -194,7 +194,12 @@ class TranslateJobOut(BaseModel):
 class DigestRequest(BaseModel): ratio:float=0.5; name:str=''
 class DigestResult(BaseModel): project:ProjectOut; source_episode_count:int; episode_count:int; source_chars:int; chars:int; source_numbers:list[int]
 class CoverPromptOut(BaseModel): prompt:str
-class CoverGenerateRequest(BaseModel): provider:str; prompt:str
-class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str
-class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool
+class CoverPromptRequest(BaseModel): style:str=''; custom_style:str=''
+class CoverStateIn(BaseModel): prompt:str|None=None; style:str|None=None; custom_style:str|None=None; provider:str|None=None; overlay:bool|None=None
+class CoverStateOut(BaseModel): prompt:str; style:str; custom_style:str; provider:str; overlay:bool=True
+class CoverStyleOut(BaseModel): key:str; label:str
+class CoverStylesOut(BaseModel): default:str; styles:list[CoverStyleOut]
+class CoverGenerateRequest(BaseModel): provider:str; prompt:str; style:str=''; custom_style:str=''; overlay:bool=True
+class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str; style:str=''; custom_style:str=''
+class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool; style:str=''; prompt:str=''
 class CoverSelectRequest(BaseModel): filename:str
