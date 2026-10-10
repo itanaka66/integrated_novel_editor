@@ -77,3 +77,20 @@ def test_retranslate_only_fills_missing_or_short_parts(client, project, monkeypa
     assert "題1" not in calls and "題2" not in calls and "題3" in calls
     after = {e["number"]: e for e in client.get(f"/api/v1/projects/{dst}/episodes").json()}
     assert set(after) == {1, 2, 3} and after[2]["content"] == "EN:" + long_text and after[3]["content"] == "EN:" + long_text
+
+
+def test_project_out_exposes_source_project_id(client, project, monkeypatch, db_session_factory):
+    async def fake_generate(prompt, *a, **k):
+        return "EN", "m"
+    monkeypatch.setattr(translator, "generate", fake_generate)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "a", "content": "b"})
+    jid = client.post(f"/api/v1/projects/{pid}/translate", json={"language": "en"}).json()["id"]
+    for _ in range(80):
+        j = client.get(f"/api/v1/translate-jobs/{jid}").json()
+        if j["status"] in ("completed", "error"):
+            break
+        time.sleep(0.1)
+    assert client.get(f"/api/v1/projects/{j['project_id']}").json()["source_project_id"] == pid
+    assert client.get(f"/api/v1/projects/{pid}").json()["source_project_id"] is None
