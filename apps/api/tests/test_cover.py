@@ -256,3 +256,20 @@ def test_overlay_text_without_cjk_font_keeps_image(monkeypatch):
     Image.new('RGB', (200, 300), (0, 0, 0)).save(buf, 'PNG')
     out, note = cover.overlay_text(buf.getvalue(), '日本語タイトル', '著者', cover.DEFAULT_CONFIG['overlay'])
     assert out == buf.getvalue() and 'フォント' in note
+
+
+def test_cover_config_can_be_edited_and_is_used(client):
+    cfg = client.get("/api/v1/cover/config").json()
+    assert set(cfg["styles"]) == {"anime", "gekiga", "photo", "other"}
+    cfg["comfyui"]["steps"] = 40
+    cfg["styles"]["gekiga"]["comfyui"] = {"checkpoint": "dark-xl", "width": 640}
+    cfg["styles"]["gekiga"]["higgsfield"] = {"model": "hf-x"}
+    cfg["styles"]["gekiga"]["prompt_suffix"] = "ink!"
+    r = client.put("/api/v1/cover/config", json=cfg)
+    assert r.status_code == 200
+    ss = cover.style_settings("gekiga")
+    assert ss["comfyui"]["steps"] == 40 and ss["comfyui"]["checkpoint"] == "dark-xl" and ss["comfyui"]["width"] == 640
+    assert ss["higgsfield"]["model"] == "hf-x" and ss["suffix"] == "ink!"
+    assert cover.style_settings("anime")["comfyui"]["checkpoint"] == ""
+    bad = client.put("/api/v1/cover/config", json={"comfyui": {"steps": "abc"}})
+    assert bad.status_code == 400

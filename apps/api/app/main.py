@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Request
+from fastapi import FastAPI,Depends,HTTPException,Response,UploadFile,File,Request,Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -356,6 +356,14 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
 def cover_styles():
  try:return cover_mod.list_styles()
  except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+@app.get('/api/v1/cover/config')
+def cover_config_get():
+ try:return cover_mod.editable_config()
+ except cover_mod.CoverError as ex:raise HTTPException(500,str(ex))
+@app.put('/api/v1/cover/config')
+def cover_config_put(x:dict=Body(...),admin:User=Depends(require_admin)):
+ try:return cover_mod.save_editable_config(x)
+ except cover_mod.CoverError as ex:raise HTTPException(400,str(ex))
 @app.get('/api/v1/projects/{pid}/cover/state',response_model=CoverStateOut)
 def cover_state_get(pid:int,db:Session=Depends(get_db)):
  crud_get_or_404(db,Project,pid,'Project')
