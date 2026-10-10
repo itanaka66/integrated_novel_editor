@@ -15,7 +15,6 @@ export const ROWS_4: Row[] = [
   ["エピソードがまだありません。", "There are no episodes yet.", "还没有章节。", "尚無章節。", "아직 에피소드가 없습니다.", "Todavía no hay episodios.", "Il n'y a pas encore d'épisode.", "Es gibt noch keine Episoden."],
   ["＋ エピソードを追加", "+ Add episode", "＋ 添加章节", "＋ 新增章節", "+ 에피소드 추가", "+ Añadir episodio", "+ Ajouter un épisode", "+ Episode hinzufügen"],
   ["＋ 新規エピソード", "+ New episode", "＋ 新章节", "＋ 新章節", "+ 새 에피소드", "+ Nuevo episodio", "+ Nouvel épisode", "+ Neue Episode"],
-  ["削除中...", "Deleting...", "删除中...", "刪除中...", "삭제 중...", "Eliminando...", "Suppression...", "Wird gelöscht..."],
   ["選択した{n}件を削除（話数を自動調整）", "Delete {n} selected (renumber automatically)", "删除所选的 {n} 项（自动调整话数）", "刪除所選的 {n} 項（自動調整話數）", "선택한 {n}건 삭제(화수 자동 조정)", "Eliminar {n} seleccionados (renumerar automáticamente)", "Supprimer les {n} sélectionnés (renumérotation automatique)", "{n} ausgewählte löschen (automatisch neu nummerieren)"],
   ["品質チェック", "Quality check", "质量检查", "品質檢查", "품질 점검", "Revisión de calidad", "Contrôle qualité", "Qualitätsprüfung"],
   ["🕘 履歴", "🕘 History", "🕘 历史", "🕘 歷史", "🕘 이력", "🕘 Historial", "🕘 Historique", "🕘 Verlauf"],
@@ -155,4 +154,11 @@ export const ROWS_4: Row[] = [
   ["まとめてコピー", "Copy all", "全部复制", "全部複製", "모두 복사", "Copiar todo", "Tout copier", "Alles kopieren"],
   ["コピーしました", "Copied", "已复制", "已複製", "복사했습니다", "Copiado", "Copié", "Kopiert"],
   ["コピーできませんでした", "Could not copy", "无法复制", "無法複製", "복사하지 못했습니다", "No se pudo copiar", "Copie impossible", "Kopieren fehlgeschlagen"],
+
+  // delete work
+  ["作品の削除", "Delete work", "删除作品", "刪除作品", "작품 삭제", "Eliminar obra", "Supprimer l'œuvre", "Werk löschen"],
+  ["この作品を削除", "Delete this work", "删除此作品", "刪除此作品", "이 작품 삭제", "Eliminar esta obra", "Supprimer cette œuvre", "Dieses Werk löschen"],
+  ["この作品のエピソード・設定・表紙画像などをすべて削除します。削除の直前に、全データをJSONファイルとして自動ダウンロードします。", "Deletes all of this work's episodes, settings, cover images and more. Right before deleting, all of its data is downloaded automatically as a JSON file.", "将删除此作品的所有章节、设定、封面图片等。删除前会自动将全部数据下载为 JSON 文件。", "將刪除此作品的所有章節、設定、封面圖片等。刪除前會自動將全部資料下載為 JSON 檔案。", "이 작품의 에피소드, 설정, 표지 이미지 등을 모두 삭제합니다. 삭제 직전에 모든 데이터를 JSON 파일로 자동 다운로드합니다.", "Elimina todos los episodios, ajustes e imágenes de portada de esta obra. Justo antes, todos sus datos se descargan automáticamente como archivo JSON.", "Supprime tous les épisodes, réglages et images de couverture de cette œuvre. Juste avant, toutes ses données sont téléchargées automatiquement en fichier JSON.", "Löscht alle Episoden, Einstellungen und Titelbilder dieses Werks. Unmittelbar davor werden alle Daten automatisch als JSON-Datei heruntergeladen."],
+  ["先に子作品（翻訳・総集編）をすべて削除してください", "Delete all child works (translations / digests) first", "请先删除所有子作品（翻译・总集篇）", "請先刪除所有子作品（翻譯・總集篇）", "먼저 모든 하위 작품(번역·총집편)을 삭제하세요", "Elimina primero todas las obras hijas (traducciones / resúmenes)", "Supprimez d'abord toutes les œuvres enfants (traductions / condensés)", "Löschen Sie zuerst alle untergeordneten Werke (Übersetzungen / Zusammenfassungen)"],
+  ["「{name}」を削除します。削除前にバックアップ（JSON）を自動でダウンロードします。この操作は取り消せません。よろしいですか？", "Delete \"{name}\"? A JSON backup is downloaded automatically first. This cannot be undone. Continue?", "将删除「{name}」。删除前会自动下载备份（JSON）。此操作无法撤销。是否继续？", "將刪除「{name}」。刪除前會自動下載備份（JSON）。此操作無法復原。是否繼續？", "「{name}」을(를) 삭제합니다. 삭제 전에 백업(JSON)을 자동으로 다운로드합니다. 이 작업은 되돌릴 수 없습니다. 계속할까요?", "Se eliminará «{name}». Antes se descarga automáticamente una copia (JSON). No se puede deshacer. ¿Continuar?", "« {name} » va être supprimée. Une sauvegarde (JSON) est d'abord téléchargée automatiquement. Action irréversible. Continuer ?", "„{name}“ wird gelöscht. Zuvor wird automatisch eine JSON-Sicherung heruntergeladen. Das lässt sich nicht rückgängig machen. Fortfahren?"],
 ];

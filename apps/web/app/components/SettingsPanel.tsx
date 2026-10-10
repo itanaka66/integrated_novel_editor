@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import CoverSettings from "./CoverSettings";
+import DeleteProjectPanel from "./DeleteProjectPanel";
 import { api, downloadFile, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
 import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
@@ -53,8 +54,8 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
 ];
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
 
-export default function SettingsPanel({ project, onSaved }: { project: Project; onSaved: (p: Project) => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover">("basic");
+export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
+  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -232,6 +233,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>{t("バックアップ")}</button>
         <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>{t("エクスポート")}</button>
         <button className={tab === "cover" ? "on" : ""} onClick={() => setTab("cover")}>{t("表紙画像")}</button>
+        {onDeleted && <button className={tab === "delete" ? "on" : ""} onClick={() => setTab("delete")}>{t("作品の削除")}</button>}
       </div>
       {tab === "basic" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
@@ -384,6 +386,7 @@ export default function SettingsPanel({ project, onSaved }: { project: Project; 
         </div>
       )}
       {tab === "cover" && <CoverSettings />}
+      {tab === "delete" && onDeleted && <DeleteProjectPanel project={project} onDeleted={onDeleted} />}
       {tab === "import" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
           <p style={{ gridColumn: "1/-1" }}>
