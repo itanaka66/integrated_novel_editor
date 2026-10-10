@@ -108,7 +108,8 @@ async def run_translation(job: dict) -> None:
         # An earlier translation of this work into the same language is continued
         # rather than duplicated: only what is missing or far too short is
         # translated again.
-        dst = db.scalars(select(Project).where(Project.source_project_id == src.id, Project.language == lang)
+        dst = db.scalars(select(Project).where(Project.source_project_id == src.id, Project.language == lang,
+                                Project.language != src.language)
                          .order_by(Project.id.desc())).first()
         resume = dst is not None
         if not resume:
