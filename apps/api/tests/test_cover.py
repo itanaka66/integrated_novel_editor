@@ -313,3 +313,19 @@ def test_author_falls_back_to_login_name_when_unset(client, project, monkeypatch
     assert j["status"] == "completed"
     assert client.get(f"/api/v1/projects/{pid}/covers").json()[0].get("author", "x") != ""
     assert cover.DEFAULT_CONFIG["overlay"]["title_size"] <= 0.05
+
+
+def test_delete_cover_removes_files_and_selection(client, project, monkeypatch):
+    async def fake(prompt, ss):
+        return PNG
+    monkeypatch.setattr(cover, "comfyui_image", fake)
+    pid = project["id"]
+    j = wait(client, client.post(f"/api/v1/projects/{pid}/cover/generate", json={"provider": "comfyui", "prompt": "x"}).json()["id"])
+    fn = j["filename"]
+    client.put(f"/api/v1/projects/{pid}/cover", json={"filename": fn})
+    assert client.delete(f"/api/v1/projects/{pid}/covers/{fn}").json() == []
+    d = cover.covers_dir(pid)
+    assert not (d / fn).exists() and not (d / f"{fn}.json").exists() and not (d / "raw" / fn).exists()
+    assert cover.selected_name(pid) is None
+    assert client.delete(f"/api/v1/projects/{pid}/covers/{fn}").status_code == 404
+    assert client.delete(f"/api/v1/projects/{pid}/covers/..%2Fx.png").status_code in (400, 404)

@@ -418,6 +418,12 @@ def cover_select(pid:int,x:CoverSelectRequest,db:Session=Depends(get_db)):
  try:cover_mod.select_cover(pid,x.filename)
  except FileNotFoundError:raise HTTPException(404,'Cover not found')
  return cover_mod.list_covers(pid)
+@app.delete('/api/v1/projects/{pid}/covers/{filename}',response_model=list[CoverImageOut])
+def cover_delete(pid:int,filename:str,db:Session=Depends(get_db)):
+ crud_get_or_404(db,Project,pid,'Project')
+ try:cover_mod.delete_cover(pid,filename)
+ except FileNotFoundError:raise HTTPException(404,'Cover not found')
+ return cover_mod.list_covers(pid)
 @app.get('/api/v1/projects/{pid}/export')
 def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')

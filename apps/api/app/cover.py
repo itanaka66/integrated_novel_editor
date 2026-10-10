@@ -595,6 +595,17 @@ def select_cover(pid: int, filename: str) -> None:
     _selected_marker(pid).write_text(filename, encoding='utf-8')
 
 
+def delete_cover(pid: int, filename: str) -> None:
+    """Remove one generated image with its sidecar and the untouched original."""
+    d = covers_dir(pid)
+    if not SAFE_NAME.match(filename) or not (d / filename).exists():
+        raise FileNotFoundError(filename)
+    if selected_name(pid) == filename:
+        _selected_marker(pid).unlink(missing_ok=True)
+    for f in (d / filename, d / f'{filename}.json', d / 'raw' / filename):
+        f.unlink(missing_ok=True)
+
+
 def selected_cover(pid: int) -> tuple[bytes, str] | None:
     """(bytes, extension) of the project's chosen cover, or None."""
     name = selected_name(pid)
