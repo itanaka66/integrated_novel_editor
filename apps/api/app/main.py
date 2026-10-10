@@ -307,6 +307,34 @@ def translate_job_get(job_id:int):
  job=translator.jobs.get(job_id)
  if not job:raise HTTPException(404,'Translate job not found')
  return _translate_job_out(job)
+MAX_KEYWORDS=7
+def _publishing_path(p):
+ d=file_sync.project_dir(p);d.mkdir(parents=True,exist_ok=True)
+ return d/'publishing.json'
+def _publishing_out(p):
+ # Title and author live on the project itself; the rest of the sales-page
+ # details are kept in a file beside the episode files (on disk, and in the git
+ # mirror if one is configured). The blurb falls back to the synopsis.
+ meta={}
+ f=_publishing_path(p)
+ if f.exists():
+  try:meta=json.loads(f.read_text(encoding='utf-8'))
+  except ValueError:meta={}
+ return PublishingIO(title=p.name,subtitle=meta.get('subtitle',''),author=p.author or '',description=meta.get('description') or p.description or '',keywords=meta.get('keywords') or [],category=meta.get('category',''),adult=bool(meta.get('adult')),age_min=str(meta.get('age_min','')),age_max=str(meta.get('age_max','')))
+@app.get('/api/v1/projects/{pid}/publishing',response_model=PublishingIO)
+def publishing_get(pid:int,db:Session=Depends(get_db)):
+ return _publishing_out(crud_get_or_404(db,Project,pid,'Project'))
+@app.put('/api/v1/projects/{pid}/publishing',response_model=PublishingIO)
+def publishing_put(pid:int,x:PublishingIO,db:Session=Depends(get_db)):
+ p=crud_get_or_404(db,Project,pid,'Project')
+ kws=[k.strip() for k in x.keywords if k and k.strip()]
+ if not x.title.strip():raise HTTPException(400,'タイトルを入力してください')
+ if len(kws)>MAX_KEYWORDS:raise HTTPException(400,f'キーワードは最大{MAX_KEYWORDS}つまでです')
+ if any(len(k)>50 for k in kws):raise HTTPException(400,'キーワードは1つあたり50文字までです')
+ if len(x.description)>4000:raise HTTPException(400,'内容紹介文は4000文字までです')
+ p.name=x.title.strip();p.author=x.author.strip();db.commit();db.refresh(p)
+ _publishing_path(p).write_text(json.dumps({'subtitle':x.subtitle.strip(),'description':x.description,'keywords':kws,'category':x.category.strip(),'adult':x.adult,'age_min':x.age_min.strip(),'age_max':x.age_max.strip()},ensure_ascii=False,indent=2),encoding='utf-8')
+ return _publishing_out(p)
 def _digest_meta_path(p):
  d=file_sync.project_dir(p);d.mkdir(parents=True,exist_ok=True)
  return d/'digest.json'

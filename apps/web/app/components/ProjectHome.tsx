@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import PublishingDialog from "./PublishingDialog";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
 import CoverPanel from "./CoverPanel";
@@ -31,6 +32,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [tJob, setTJob] = useState<TranslateJob | null>(null);
   const [tError, setTError] = useState("");
+  const [showPub, setShowPub] = useState(false);
   const [allRun, setAllRun] = useState<{ index: number; total: number; label: string } | null>(null);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -124,6 +126,13 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
       <div className="iconGrid">
         {ICONS.map((x) => <button key={x.key} className="iconGridItem" onClick={() => onSection(x.key)}>{x.label}</button>)}
       </div>
+      <div className="card">
+        <small>{t("出版情報")}</small>
+        <p>{t("タイトル・著者名・内容紹介文・キーワード・カテゴリー・読者対象をまとめて確認・編集します。")}</p>
+        <button onClick={() => setShowPub(true)}>{t("出版情報を開く")}</button>
+      </div>
+      {showPub && <PublishingDialog projectId={project.id} onClose={() => setShowPub(false)}
+        onSaved={async () => { const p = await api(`/projects/${project.id}`); if (p?.id && onOpenProject) onOpenProject(p); }} />}
       <div className="card">
         <small>{t("多言語化（全編翻訳）")}</small>
         <p>{t("作品全編を選択した言語に翻訳し、新しい作品として作成します。")}</p>
