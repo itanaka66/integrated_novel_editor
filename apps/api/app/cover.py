@@ -76,7 +76,7 @@ DEFAULT_CONFIG: dict = {
     # blank = the first installed CJK-capable font found; a path pins one.
     'overlay': {
         'font': '',
-        'title_size': 0.045, 'author_size': 0.04, 'max_title_lines': 3,
+        'title_size': 0.045, 'author_size': 0.04, 'max_title_lines': 4, 'max_title_chars': 12,
         'text_color': '#ffffff', 'stroke_color': '#101018', 'stroke_ratio': 0.09,
         'title_y': 0.07, 'author_y': 0.95, 'side_margin': 0.07,
     },
@@ -242,6 +242,41 @@ def find_font(configured: str = '') -> str | None:
     return None
 
 
+_BREAK_AFTER = set('、。・〜～！？!?」』）】 　')
+_NO_START = set('、。・！？!?」』）】ー')
+
+
+def split_title(text: str, max_chars: int = 12, max_lines: int = 4) -> list[str]:
+    """Split a CJK title into balanced lines of at most `max_chars` characters
+    (up to `max_lines` lines), breaking after punctuation/spaces when one is
+    close to the ideal position. A title too long for max_lines x max_chars
+    still gets max_lines lines (the caller shrinks the font to fit)."""
+    text = ' '.join((text or '').split())
+    if len(text) <= max_chars:
+        return [text] if text else []
+    n = min(max_lines, -(-len(text) // max_chars))
+    lines, pos = [], 0
+    for k in range(n):
+        left = n - k
+        if left == 1:
+            lines.append(text[pos:].strip())
+            break
+        ideal = -(-(len(text) - pos) // left)
+        best = ideal
+        for off in (0, -1, 1, -2, 2):
+            p = ideal + off
+            if p < 1 or pos + p >= len(text) or text[pos + p] in _NO_START and text[pos + p - 1] not in _BREAK_AFTER:
+                continue
+            if p > max_chars or len(text) - (pos + p) > (left - 1) * max(max_chars, ideal):
+                continue
+            if text[pos + p - 1] in _BREAK_AFTER:
+                best = p
+                break
+        lines.append(text[pos:pos + best].strip())
+        pos += best
+    return [ln for ln in lines if ln]
+
+
 def _wrap(draw, text: str, font, max_w: float) -> list[str]:
     words = text.split(' ') if ' ' in text.strip() else list(text)
     sep = ' ' if ' ' in text.strip() else ''
@@ -295,13 +330,19 @@ def overlay_text(data: bytes, title: str, author: str, cfg: dict) -> tuple[bytes
 
     max_w = w * (1 - 2 * float(ov['side_margin']))
 
-    def draw_block(text: str, size: int, y: float, anchor_bottom: bool, max_lines: int) -> None:
+    def draw_block(text: str, size: int, y: float, anchor_bottom: bool, max_lines: int, max_chars: int = 0) -> None:
         if not text:
             return
+        fixed = split_title(text, max_chars, max_lines) if max_chars and _CJK.search(text) else None
         while True:
             f = font_at(size)
-            lines = _wrap(layer, text, f, max_w)
-            if len(lines) <= max_lines or size <= 14:
+            if fixed is not None:
+                lines = fixed
+                fits = all(layer.textlength(ln, font=f) <= max_w for ln in lines)
+            else:
+                lines = _wrap(layer, text, f, max_w)
+                fits = len(lines) <= max_lines
+            if fits or size <= 14:
                 break
             size = int(size * 0.9)
         sw = stroke_for(size)
@@ -312,7 +353,7 @@ def overlay_text(data: bytes, title: str, author: str, cfg: dict) -> tuple[bytes
             layer.text((w / 2, top + i * line_h), line, font=f, fill=ov['text_color'], anchor='ma',
                        stroke_width=sw, stroke_fill=ov['stroke_color'])
 
-    draw_block(title, round(w * float(ov['title_size'])), h * float(ov['title_y']), False, int(ov['max_title_lines']))
+    draw_block(title, round(w * float(ov['title_size'])), h * float(ov['title_y']), False, int(ov['max_title_lines']), int(ov.get('max_title_chars', 12)))
     draw_block(author, round(w * float(ov['author_size'])), h * float(ov['author_y']), True, 1)
 
     out = BytesIO()
