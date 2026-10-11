@@ -121,4 +121,18 @@ describe("CharacterPanel (generic EntityPanel)", () => {
     expect(body).not.toHaveProperty("unknown_column");
     await waitFor(() => expect(screen.getByText(/1件を作成しました/)).toBeInTheDocument());
   });
+
+  it("skips CSV rows that already exist (width/space-insensitive) or repeat within the file", async () => {
+    vi.mocked(api).mockResolvedValue([{ id: 1, name: "田中 太郎", role: "主人公" }]);
+    vi.mocked(post).mockResolvedValue({ id: 9 });
+    const { container } = render(<CharacterPanel projectId={1} />);
+    await screen.findByDisplayValue("田中 太郎");
+    const csv = "name,role\n田中太郎,重複\nＡｌｉｃｅ,新規\nalice,ファイル内の重複\n";
+    const file = new File([csv], "c.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: () => Promise.resolve(csv) });
+    await fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [file] } });
+    await waitFor(() => expect(screen.getByText(/重複2件はスキップしました/)).toBeInTheDocument());
+    expect(post).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(post).mock.calls[0][1] as Record<string, unknown>).name).toBe("Ａｌｉｃｅ");
+  });
 });

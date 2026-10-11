@@ -27,6 +27,7 @@ const ROUTES: Route[] = [
   { method: "POST", re: /^\/projects\/\d+\/style-guide\/generate$/, label: () => t("スタイルガイドを生成しています") },
   { method: "POST", re: /^\/projects\/\d+\/chat$/, label: () => t("AIが回答を考えています") },
   { method: "POST", re: /^\/projects\/\d+\/cover\/prompt$/, label: () => t("表紙のプロンプトを作成しています") },
+  { method: "POST", re: /^\/projects\/\d+\/ai-entities$/, label: () => t("AIが設定案を考えています") },
   { method: "POST", re: /^\/rag\/search(-all)?$/, label: () => t("意味検索の準備（埋め込み生成）をしています") },
 ];
 

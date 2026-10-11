@@ -3,6 +3,7 @@ class ProjectCreate(BaseModel): name:str; description:str=''; genre:str=''; rule
 class ProjectOut(ProjectCreate): id:int; source_project_id:int|None=None; model_config=ConfigDict(from_attributes=True)
 class ProjectUpdate(BaseModel): name:str|None=None; description:str|None=None; genre:str|None=None; rules:str|None=None; episode_goal:int|None=None; style_guide:str|None=None; language:str|None=None; author:str|None=None
 class PublishingIO(BaseModel): title:str=''; subtitle:str=''; author:str=''; description:str=''; keywords:list[str]=[]; category:str=''; adult:bool=False; age_min:str=''; age_max:str=''
+class AiEntitiesRequest(BaseModel): kind:str; count:int=10
 class StyleGuideOut(BaseModel): style_guide:str
 class StyleGuideGenerateRequest(BaseModel): category:str=''; detail:str=''
 class ProofreadDiff(BaseModel): original:str; suggested:str; reason:str=''

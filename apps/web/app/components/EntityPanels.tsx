@@ -16,7 +16,16 @@ type EntityConfig = {
   // Optional client-side filter over the fetched list (used to split World
   // entities into 世界観 vs 用語集 without a separate backend endpoint).
   filter?: (item: Record<string, unknown>) => boolean;
+  // Server-side AI generation kind (POST /projects/{id}/ai-entities); omit to hide the button.
+  aiKind?: string;
+  // Fields that together identify a row, for skipping duplicates on CSV import. Defaults to [titleField].
+  keyFields?: string[];
 };
+
+// Same wording written with different width/case/spacing counts as the same row.
+function normKey(v: unknown): string {
+  return String(v ?? "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+}
 
 function emptyForm(cfg: EntityConfig) {
   // Start from cfg.defaults so hidden defaults (e.g. GlossaryPanel's
@@ -59,6 +68,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   const [newRows, setNewRows] = useState<Record<string, unknown>[]>([]);
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -120,7 +130,11 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       if (rows.length < 2) { setCsvResult("データ行が見つかりませんでした。ヘッダー行＋1行以上のデータが必要です。"); return; }
       const [header, ...dataRows] = rows;
       const keys = header.map((h) => h.trim());
-      let created = 0, failed = 0;
+      let created = 0, failed = 0, duplicates = 0;
+      const keyFields = cfg.keyFields ?? [cfg.titleField];
+      const rowKey = (o: Record<string, unknown>) => keyFields.map((k) => normKey(o[k])).join("\u0000");
+      // Rows already on screen (and rows seen earlier in this file) are not imported again.
+      const seen = new Set(items.map(rowKey));
       for (const row of dataRows) {
         if (row.every((c) => c.trim() === "")) continue;
         const obj: Record<string, unknown> = { ...cfg.defaults };
@@ -131,6 +145,9 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           obj[key] = field.type === "number" ? Number(raw) : raw;
         });
         if (!String(obj[cfg.titleField] ?? "").trim()) { failed++; continue; }
+        const key = rowKey(obj);
+        if (seen.has(key)) { duplicates++; continue; }
+        seen.add(key);
         try {
           const createdItem = await post(cfg.listPath(projectId), obj);
           if (createdItem && createdItem.id) created++; else failed++;
@@ -138,10 +155,23 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           failed++;
         }
       }
-      setCsvResult(t("{n}件を作成しました。", { n: created }) + (failed ? t("（{n}件は失敗またはスキップされました）", { n: failed }) : ""));
+      setCsvResult(t("{n}件を作成しました。", { n: created }) + (duplicates ? t("重複{n}件はスキップしました。", { n: duplicates }) : "") + (failed ? t("（{n}件は失敗またはスキップされました）", { n: failed }) : ""));
       await load();
     } finally {
       setCsvBusy(false);
+    }
+  }
+
+  async function addByAi() {
+    setAiBusy(true); setCsvResult(null);
+    try {
+      const r = await api(`/projects/${projectId}/ai-entities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: cfg.aiKind, count: 10 }) });
+      setCsvResult(typeof r?.created === "number" ? t("AIが{n}件を追加しました。", { n: r.created }) : (r?.detail || t("AIでの追加に失敗しました")));
+      await load();
+    } catch (e) {
+      setCsvResult(e instanceof Error ? e.message : t("AIでの追加に失敗しました"));
+    } finally {
+      setAiBusy(false);
     }
   }
 
@@ -152,6 +182,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       <p>{cfg.hint}</p>
       <div className="entityToolbar">
         <button className="add" onClick={addRow}>{t("＋ 行を追加")}</button>
+        {cfg.aiKind && <button type="button" onClick={addByAi} disabled={aiBusy}>{aiBusy ? t("AIが考え中...") : t("＋ AIで10個追加")}</button>}
         <button type="button" onClick={downloadTemplate}>{t("CSVテンプレート")}</button>
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={csvBusy}>
           {csvBusy ? t("取り込み中...") : t("CSVインポート")}
@@ -214,7 +245,7 @@ export function CharacterPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("キャラクター"), hint: t("作品の正本情報。AI Context Builderが生成時に参照します。"),
     listPath: (pid) => `/projects/${pid}/characters`, itemPath: (id) => `/characters/${id}`,
-    titleField: "name",
+    titleField: "name", aiKind: "characters",
     fields: [
       { key: "name", label: t("名前") }, { key: "role", label: t("役割") },
       { key: "personality", label: t("性格"), type: "textarea" }, { key: "speech_style", label: t("口調"), type: "textarea" },
@@ -230,7 +261,7 @@ export function WorldPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("世界観"), hint: t("場所・組織・技術・魔法などの世界設定。"),
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
-    titleField: "name",
+    titleField: "name", aiKind: "world",
     filter: (x) => x.entity_type !== "glossary",
     fields: [
       { key: "name", label: t("名称") },
@@ -246,7 +277,7 @@ export function GlossaryPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("用語集"), hint: t("作品固有の用語。世界観データベースに entity_type=\"glossary\" として保存されます。"),
     listPath: (pid) => `/projects/${pid}/world`, itemPath: (id) => `/world/${id}`,
-    titleField: "name",
+    titleField: "name", aiKind: "glossary",
     filter: (x) => x.entity_type === "glossary",
     fields: [{ key: "name", label: t("用語") }, { key: "description", label: t("説明"), type: "textarea" }, { key: "location", label: t("カテゴリ") }],
     defaults: { entity_type: "glossary" },
@@ -257,7 +288,7 @@ export function PlotPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("プロット"), hint: t("作品全体および各アークの構成。"),
     listPath: (pid) => `/projects/${pid}/plots`, itemPath: (id) => `/plots/${id}`,
-    titleField: "title",
+    titleField: "title", aiKind: "plots",
     fields: [
       { key: "title", label: t("タイトル") },
       { key: "plot_type", label: t("種類"), type: "select", options: ["main_arc", "arc", "subplot"] },
@@ -274,7 +305,7 @@ export function ForeshadowPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("伏線"), hint: t("設置・回収の状態を管理します。"),
     listPath: (pid) => `/projects/${pid}/foreshadowings`, itemPath: (id) => `/foreshadowings/${id}`,
-    titleField: "title",
+    titleField: "title", aiKind: "foreshadowings",
     fields: [
       { key: "title", label: t("タイトル") }, { key: "description", label: t("説明"), type: "textarea" },
       { key: "setup_episode", label: t("設置話数"), type: "number" }, { key: "payoff_episode", label: t("回収話数"), type: "number" },
@@ -288,7 +319,7 @@ export function TimelinePanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("年表"), hint: t("エピソード番号に紐づく出来事の年表。"),
     listPath: (pid) => `/projects/${pid}/timeline`, itemPath: (id) => `/timeline/${id}`,
-    titleField: "title",
+    titleField: "title", aiKind: "timeline", keyFields: ["episode_number", "title"],
     fields: [
       { key: "episode_number", label: t("話数"), type: "number" }, { key: "title", label: t("出来事") },
       { key: "world_time", label: t("世界内時間") }, { key: "description", label: t("説明"), type: "textarea" },

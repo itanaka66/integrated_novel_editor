@@ -399,7 +399,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                 <input type="file" accept=".txt" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
               </label>
               <div className="entityFormActions">
-                <button onClick={startImport} disabled={importBusy || !importFile}>{importBusy ? t("開始中...") : t("インポート開始")}</button>
+                <button className="saveButton" onClick={startImport} disabled={importBusy || !importFile}>{importBusy ? t("開始中...") : t("インポート開始")}</button>
               </div>
             </>
           )}
@@ -433,7 +433,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                 )}
               </p>
               <div className="entityFormActions">
-                <button onClick={runBackupNow} disabled={backupBusy}>{backupBusy ? t("バックアップ中...") : t("今すぐバックアップ")}</button>
+                <button className="saveButton" onClick={runBackupNow} disabled={backupBusy}>{backupBusy ? t("バックアップ中...") : t("今すぐバックアップ")}</button>
               </div>
               {backupResult && (
                 <p style={{ gridColumn: "1/-1" }} className={backupResult.postgres_ok ? "savedNote" : "errorNote"}>
