@@ -466,6 +466,16 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
  if format=='json':
   return Response(json.dumps(_project_dump(db,p),ensure_ascii=False,indent=1,default=str),media_type='application/json',headers={'Content-Disposition':content_disposition(name,'json')})
  raise HTTPException(400,'format must be one of: txt, md, epub, json')
+@app.post('/api/v1/projects/{pid}/ai-entities')
+async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
+ # The AI proposes up to `count` new rows for one of the story-knowledge
+ # tables; rows already present (by name/title) are skipped.
+ from . import ai_entities as ae
+ p=crud_get_or_404(db,Project,pid,'Project')
+ if x.kind not in ae.KINDS:raise HTTPException(400,'kind must be one of: '+', '.join(ae.KINDS))
+ try:rows=await ae.add_ai_rows(db,p,x.kind,max(1,min(x.count,30)))
+ except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
+ return {'created':len(rows),'items':[{c.name:getattr(r,c.name) for c in r.__table__.columns} for r in rows]}
 def _project_tables():
  from .db import Base
  return [t for t in Base.metadata.sorted_tables if 'project_id' in t.c and t.name!='projects']

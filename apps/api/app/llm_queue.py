@@ -51,6 +51,7 @@ _PATH_PURPOSES: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^/api/v1/projects/\d+/style-guide/generate$'), 'スタイルガイド生成'),
     (re.compile(r'^/api/v1/projects/\d+/chat$'), 'AIチャット'),
     (re.compile(r'^/api/v1/projects/\d+/cover/prompt$'), '表紙プロンプト作成'),
+    (re.compile(r'^/api/v1/projects/\d+/ai-entities$'), '設定のAI追加'),
     (re.compile(r'^/api/v1/rag/search(-all)?$'), '意味検索'),
 ]
 

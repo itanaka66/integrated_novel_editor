@@ -162,4 +162,12 @@ export const ROWS_4: Row[] = [
   ["先に子作品（翻訳・総集編）をすべて削除してください", "Delete all child works (translations / digests) first", "请先删除所有子作品（翻译・总集篇）", "請先刪除所有子作品（翻譯・總集篇）", "먼저 모든 하위 작품(번역·총집편)을 삭제하세요", "Elimina primero todas las obras hijas (traducciones / resúmenes)", "Supprimez d'abord toutes les œuvres enfants (traductions / condensés)", "Löschen Sie zuerst alle untergeordneten Werke (Übersetzungen / Zusammenfassungen)"],
   ["「{name}」を削除します。削除前にバックアップ（JSON）を自動でダウンロードします。この操作は取り消せません。よろしいですか？", "Delete \"{name}\"? A JSON backup is downloaded automatically first. This cannot be undone. Continue?", "将删除「{name}」。删除前会自动下载备份（JSON）。此操作无法撤销。是否继续？", "將刪除「{name}」。刪除前會自動下載備份（JSON）。此操作無法復原。是否繼續？", "「{name}」을(를) 삭제합니다. 삭제 전에 백업(JSON)을 자동으로 다운로드합니다. 이 작업은 되돌릴 수 없습니다. 계속할까요?", "Se eliminará «{name}». Antes se descarga automáticamente una copia (JSON). No se puede deshacer. ¿Continuar?", "« {name} » va être supprimée. Une sauvegarde (JSON) est d'abord téléchargée automatiquement. Action irréversible. Continuer ?", "„{name}“ wird gelöscht. Zuvor wird automatisch eine JSON-Sicherung heruntergeladen. Das lässt sich nicht rückgängig machen. Fortfahren?"],
   ["削除中...", "Deleting...", "删除中...", "刪除中...", "삭제 중...", "Eliminando...", "Suppression...", "Wird gelöscht..."],
+
+  // entity ai/csv
+  ["＋ AIで10個追加", "+ Add 10 with AI", "+ 用 AI 添加 10 个", "+ 用 AI 新增 10 個", "+ AI로 10개 추가", "+ Añadir 10 con IA", "+ Ajouter 10 avec l'IA", "+ 10 mit KI hinzufügen"],
+  ["AIが考え中...", "AI is thinking...", "AI 正在构思...", "AI 正在構思...", "AI가 생각 중...", "La IA está pensando...", "L'IA réfléchit...", "KI denkt nach..."],
+  ["AIが{n}件を追加しました。", "AI added {n} item(s).", "AI 已添加 {n} 项。", "AI 已新增 {n} 項。", "AI가 {n}건을 추가했습니다.", "La IA añadió {n} elemento(s).", "L'IA a ajouté {n} élément(s).", "Die KI hat {n} Eintrag/Einträge hinzugefügt."],
+  ["AIでの追加に失敗しました", "Adding with AI failed", "AI 添加失败", "AI 新增失敗", "AI 추가에 실패했습니다", "Falló la adición con IA", "L'ajout par l'IA a échoué", "Hinzufügen mit KI fehlgeschlagen"],
+  ["重複{n}件はスキップしました。", "{n} duplicate(s) skipped.", "已跳过 {n} 条重复项。", "已略過 {n} 筆重複項目。", "중복 {n}건은 건너뛰었습니다.", "Se omitieron {n} duplicado(s).", "{n} doublon(s) ignoré(s).", "{n} Duplikat(e) übersprungen."],
+  ["AIが設定案を考えています", "AI is coming up with ideas", "AI 正在构思设定方案", "AI 正在構思設定方案", "AI가 설정안을 생각하고 있습니다", "La IA está ideando propuestas", "L'IA imagine des propositions", "Die KI entwickelt Vorschläge"],
 ];
