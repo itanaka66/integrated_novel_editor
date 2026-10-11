@@ -329,3 +329,25 @@ def test_delete_cover_removes_files_and_selection(client, project, monkeypatch):
     assert cover.selected_name(pid) is None
     assert client.delete(f"/api/v1/projects/{pid}/covers/{fn}").status_code == 404
     assert client.delete(f"/api/v1/projects/{pid}/covers/..%2Fx.png").status_code in (400, 404)
+
+
+def test_split_title_limits_line_length_and_count():
+    assert cover.split_title("短い題") == ["短い題"]
+    lines = cover.split_title("恐竜文明開拓記 〜大地に咲く炎の記録〜", 12, 4)
+    assert 2 <= len(lines) <= 4 and all(len(x) <= 12 for x in lines) and "".join(lines).replace(" ", "") == "恐竜文明開拓記〜大地に咲く炎の記録〜"
+    long = "あ" * 30
+    assert len(cover.split_title(long, 12, 4)) == 3
+    assert all(len(x) <= 12 for x in cover.split_title("い" * 48, 12, 4))
+    assert len(cover.split_title("う" * 80, 12, 4)) == 4
+    assert not any(x[:1] in "、。！？」" for x in cover.split_title("あいうえおかきくけこさ、しすせそたちつてとなにぬねの", 12, 4))
+
+
+def test_overlay_long_cjk_title_stays_inside_image():
+    from io import BytesIO
+    from PIL import Image
+    buf = BytesIO()
+    Image.new("RGB", (832, 1216), (20, 20, 20)).save(buf, "PNG")
+    out, note = cover.overlay_text(buf.getvalue(), "転生したら最強の恐竜使いだった件について〜異世界文明開拓記〜", "著者", cover.DEFAULT_CONFIG["overlay"])
+    img = Image.open(BytesIO(out)).convert("RGB")
+    edge = [img.getpixel((x, y)) for y in range(0, 400, 5) for x in (0, 1, 2, 829, 830, 831)]
+    assert all(p == (20, 20, 20) for p in edge)  # nothing drawn at the left/right edges
