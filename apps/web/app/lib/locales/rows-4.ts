@@ -181,4 +181,17 @@ export const ROWS_4: Row[] = [
   // kdp package
   ["KDP出版パッケージ (.zip)", "KDP publishing package (.zip)", "KDP 出版包 (.zip)", "KDP 出版包 (.zip)", "KDP 출판 패키지 (.zip)", "Paquete de publicación KDP (.zip)", "Paquet de publication KDP (.zip)", "KDP-Veröffentlichungspaket (.zip)"],
   ["EPUB・表紙画像・登録用の情報シート（CSVとMarkdown）を1つのZIPにまとめます。KDPへの登録・公開は、KDPの画面で行ってください。", "Bundles the EPUB, cover image and the listing details (CSV and Markdown) into one ZIP. Register and publish on KDP itself.", "将 EPUB、封面图片和上架信息表（CSV 与 Markdown）打包为一个 ZIP。注册和发布请在 KDP 页面进行。", "將 EPUB、封面圖片和上架資訊表（CSV 與 Markdown）打包為一個 ZIP。註冊和發布請在 KDP 頁面進行。", "EPUB, 표지 이미지, 등록용 정보 시트(CSV와 Markdown)를 하나의 ZIP으로 묶습니다. 등록과 게시는 KDP 화면에서 하세요.", "Reúne el EPUB, la portada y la ficha de datos (CSV y Markdown) en un ZIP. El registro y la publicación se hacen en KDP.", "Regroupe l'EPUB, la couverture et la fiche d'informations (CSV et Markdown) dans un ZIP. L'enregistrement et la publication se font sur KDP.", "Bündelt EPUB, Titelbild und das Datenblatt (CSV und Markdown) in einer ZIP-Datei. Registrierung und Veröffentlichung erfolgen auf KDP selbst."],
+
+  // publish targets
+  ["投稿先", "Where to post", "投稿平台", "投稿平台", "게시처", "Dónde publicar", "Où publier", "Veröffentlichen bei"],
+  ["投稿先の詳細", "Posting destination details", "投稿平台详情", "投稿平台詳情", "게시처 상세", "Detalles de los destinos", "Détails des destinations", "Details zu den Zielplattformen"],
+  ["各サービスの対応言語や注意事項のメモです。内容は変わることがあるため、最新情報は各公式ページで確認してください。", "Notes on each service's supported languages and cautions. These can change, so check each official page for the latest.", "各服务支持语言和注意事项的备忘。内容可能变化，请以各官方页面的最新信息为准。", "各服務支援語言和注意事項的備忘。內容可能變化，請以各官方頁面的最新資訊為準。", "각 서비스의 지원 언어와 주의 사항 메모입니다. 내용은 바뀔 수 있으니 최신 정보는 각 공식 페이지에서 확인하세요.", "Notas sobre los idiomas y precauciones de cada servicio. Pueden cambiar; consulta la página oficial para lo más reciente.", "Notes sur les langues prises en charge et les précautions de chaque service. Elles peuvent changer ; consultez la page officielle.", "Notizen zu unterstützten Sprachen und Hinweisen der einzelnen Dienste. Änderungen sind möglich – aktuelle Infos auf der offiziellen Seite."],
+  ["登録・投稿ページ", "Sign-up / posting page", "注册・投稿页面", "註冊・投稿頁面", "등록·게시 페이지", "Página de registro / publicación", "Page d'inscription / de publication", "Registrierung / Veröffentlichung"],
+  ["公式サイト", "Official site", "官方网站", "官方網站", "공식 사이트", "Sitio oficial", "Site officiel", "Offizielle Website"],
+  ["公式ヘルプ", "Official help", "官方帮助", "官方說明", "공식 도움말", "Ayuda oficial", "Aide officielle", "Offizielle Hilfe"],
+  ["投稿方式", "Posting method", "投稿方式", "投稿方式", "게시 방식", "Forma de publicación", "Mode de publication", "Veröffentlichungsart"],
+  ["対応言語（8言語）", "Supported languages (the 8)", "支持的语言（8 种）", "支援的語言（8 種）", "지원 언어(8개 언어)", "Idiomas admitidos (los 8)", "Langues prises en charge (les 8)", "Unterstützte Sprachen (die 8)"],
+  ["言語指定方法", "How the language is set", "语言指定方式", "語言指定方式", "언어 지정 방법", "Cómo se elige el idioma", "Choix de la langue", "Sprachauswahl"],
+  ["翻訳配信", "Translation delivery", "翻译发布", "翻譯發佈", "번역 배포", "Distribución traducida", "Diffusion traduite", "Übersetzungsangebot"],
+  ["注意事項", "Cautions", "注意事项", "注意事項", "주의 사항", "Precauciones", "Précautions", "Hinweise"],
 ];

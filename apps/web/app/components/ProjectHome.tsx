@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import PublishingDialog from "./PublishingDialog";
+import PublishTargetsDialog from "./PublishTargetsDialog";
+import { PUBLISH_TARGETS } from "../lib/publishTargets";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
 import CoverPanel from "./CoverPanel";
@@ -33,6 +35,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [tJob, setTJob] = useState<TranslateJob | null>(null);
   const [tError, setTError] = useState("");
   const [showPub, setShowPub] = useState(false);
+  const [showTargets, setShowTargets] = useState(false);
   type AllJob = { id: number; status: string; total_languages: number; done_languages: number; failed: string[]; current_language: string; last_message: string };
   const [allJob, setAllJob] = useState<AllJob | null>(null);
   const allActive = !!allJob && (allJob.status === "queued" || allJob.status === "running");
@@ -131,7 +134,13 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <small>{t("出版情報")}</small>
         <p>{t("タイトル・著者名・内容紹介文・キーワード・カテゴリー・読者対象をまとめて確認・編集します。")}</p>
         <button onClick={() => setShowPub(true)}>{t("出版情報を開く")}</button>
+        <p style={{ margin: "10px 0 4px", fontSize: 13 }}>{t("投稿先")}</p>
+        <div className="exportButtons">
+          {PUBLISH_TARGETS.map((x) => <a key={x.name} className="button" href={x.postUrl} target="_blank" rel="noopener noreferrer">{x.name} ↗</a>)}
+          <button onClick={() => setShowTargets(true)}>{t("投稿先の詳細")}</button>
+        </div>
       </div>
+      {showTargets && <PublishTargetsDialog onClose={() => setShowTargets(false)} />}
       {showPub && <PublishingDialog projectId={project.id} onClose={() => setShowPub(false)}
         onSaved={async () => { const p = await api(`/projects/${project.id}`); if (p?.id && onOpenProject) onOpenProject(p); }} />}
       <div className="card">

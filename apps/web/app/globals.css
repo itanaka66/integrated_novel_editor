@@ -130,3 +130,5 @@ button { cursor: pointer; }
 .loginCard .loginLang{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#697586}.loginCard .loginLang select{padding:9px;border:1px solid #dbe1e8;border-radius:7px;background:#fff;font-size:13px}
 button.saveButton,.writeHead button.saveButton,.entityRowActions button.saveButton,.entityFormActions button.saveButton{background:#2563eb;color:#fff;border:0;border-radius:6px}button.saveButton:hover:not(:disabled){background:#1d4ed8}button.saveButton:disabled{background:#93b4f5;color:#fff;cursor:not-allowed}.entityRowActions{display:flex;gap:6px}tr.entityDirtyRow td{background:#eff6ff}
 .loginCard .loginNotice{font-size:12px;color:#8a5a1d;background:#fff7ed;border:1px solid #f0d9b5;border-radius:7px;padding:8px 10px}
+
+.exportButtons a.button{display:inline-block;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#1d4ed8;text-decoration:none;font-size:13px}.exportButtons a.button:hover{background:#eff6ff}
