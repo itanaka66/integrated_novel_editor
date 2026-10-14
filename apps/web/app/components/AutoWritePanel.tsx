@@ -20,6 +20,8 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   const defaults = loadModelDefaults();
   const [startEpisode, setStartEpisode] = useState(1);
   const [endEpisode, setEndEpisode] = useState(500);
+  // Default the range to the work's own episode goal (not a fixed 500).
+  useEffect(() => { api(`/projects/${projectId}`).then((p) => { if (p?.episode_goal) setEndEpisode(p.episode_goal); }).catch(() => {}); }, [projectId]);
   const [premise, setPremise] = useState("");
   const [overwrite, setOverwrite] = useState(false);
   const [writerModel, setWriterModel] = useState(defaults.writer);

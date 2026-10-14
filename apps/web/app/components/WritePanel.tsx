@@ -76,7 +76,7 @@ export default function WritePanel({ project }: { project: Project }) {
   }
 
   async function addEpisode() {
-    const number = (es[es.length - 1]?.number || 0) + 1;
+    const number = es.reduce((m, x) => Math.max(m, x.number), 0) + 1;
     const title = prompt(t("エピソードタイトル"), `第${number}話`);
     if (!title) return;
     await post(`/projects/${project.id}/episodes`, { number, title, summary: "", content: "" });

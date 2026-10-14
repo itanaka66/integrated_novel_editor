@@ -18,8 +18,6 @@ from . import narou_import as ni
 from . import file_sync
 from .llm_queue import set_project
 from .revisions import snapshot_revision
-from .rag import index
-from .continuity import update_character_states, check_continuity
 
 logger = logging.getLogger(__name__)
 running = {}
@@ -55,14 +53,9 @@ async def _import_episode(db, project, parsed_ep) -> bool:
     db.refresh(e)
     file_sync.write_episode_file(project, e)
 
-    try:
-        await index(_chunks(e))
-    except Exception:
-        logger.exception('RAG indexing failed for imported episode %s (project %s)', e.number, project.id)
-    try:
-        await update_character_states(db, project.id, e)
-    except Exception:
-        logger.exception('Character-state extraction failed for imported episode %s (project %s)', e.number, project.id)
+    # Deliberately no AI step here (embedding, character-state extraction,
+    # continuity audit): importing only stores the text. Run those from the
+    # app when wanted.
     return created
 
 
@@ -106,18 +99,6 @@ async def run_import_job(job_id: int, text: str) -> None:
             else:
                 job.updated_episodes += 1
             db.commit()
-
-        if parsed.episodes:
-            job.last_message = '連続性監査を実行中…'
-            db.commit()
-            try:
-                await check_continuity(db, project.id)
-            except Exception:
-                logger.exception('Continuity audit failed after import (project %s)', project.id)
-                job.last_message = f'{len(parsed.episodes)}話を取り込みました（連続性監査は失敗しました。設定画面から再実行できます）。'
-                job.status = 'completed'
-                db.commit()
-                return
 
         job.status = 'completed'
         job.last_message = f'{len(parsed.episodes)}話を取り込みました（新規{job.created_episodes}話・更新{job.updated_episodes}話）。'

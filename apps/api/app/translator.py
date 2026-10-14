@@ -39,6 +39,46 @@ running: dict[int, asyncio.Task] = {}
 _ids = itertools.count(1)
 
 
+all_jobs: dict[int, dict] = {}
+all_running: dict[int, asyncio.Task] = {}
+_all_ids = itertools.count(1)
+
+
+def new_all_job(project_id: int, languages: list[str]) -> dict:
+    job = {'id': next(_all_ids), 'source_project_id': project_id, 'languages': languages, 'status': 'queued',
+           'total_languages': len(languages), 'done_languages': 0, 'failed': [], 'current_language': '', 'project_ids': [],
+           'last_message': 'キューに追加しました'}
+    all_jobs[job['id']] = job
+    return job
+
+
+async def run_all(job: dict) -> None:
+    """Translate into each language in turn (each its own translated work, or the
+    existing one topped up). Runs on the server, so it carries on after the user
+    logs out; a language that fails does not stop the rest."""
+    job['status'] = 'running'
+    try:
+        for lang in job['languages']:
+            job['current_language'] = LANGUAGES[lang]
+            job['last_message'] = f'{LANGUAGES[lang]} に翻訳中…'
+            child = new_job(job['source_project_id'], lang)
+            await run_translation(child)
+            if child['status'] == 'completed':
+                if child.get('project_id'):
+                    job['project_ids'].append(child['project_id'])
+            else:
+                job['failed'].append(LANGUAGES[lang])
+            job['done_languages'] += 1
+        job['status'] = 'completed'
+        job['last_message'] = f'{job["total_languages"]}言語の翻訳が終わりました' + (f'（失敗: {"・".join(job["failed"])}）' if job['failed'] else '。')
+    except Exception as ex:
+        logger.exception('Translate-all job %s failed', job['id'])
+        job['status'] = 'error'
+        job['last_message'] = f'全翻訳に失敗しました: {ex}'
+    finally:
+        all_running.pop(job['id'], None)
+
+
 def new_job(project_id: int, language: str) -> dict:
     job = {'id': next(_ids), 'source_project_id': project_id, 'project_id': None, 'language': language,
            'status': 'queued', 'total_episodes': 0, 'processed_episodes': 0, 'last_message': 'キューに追加しました'}

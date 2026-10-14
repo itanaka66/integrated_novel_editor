@@ -182,6 +182,7 @@ def reset_password(x:ResetPasswordRequest,db:Session=Depends(get_db)):
   raise HTTPException(400,str(e))
  return {'detail':'Your password has been reset. Please sign in with the new password.'}
 MAX_PAGE_SIZE=500
+MAX_EPISODE_LIST=20000  # a work can be far longer than a page of other records
 def clamp_limit(limit):return max(1,min(limit,MAX_PAGE_SIZE))
 def crud_list(db,model,pid,limit=200,offset=0):return list(db.scalars(select(model).where(model.project_id==pid).order_by(model.id).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 def crud_get_or_404(db,model,oid,label):
@@ -302,6 +303,50 @@ async def project_translate(pid:int,x:TranslateRequest,db:Session=Depends(get_db
  job=translator.new_job(pid,x.language)
  translator.running[job['id']]=asyncio.create_task(translator.run_translation(job))
  return _translate_job_out(job)
+@app.post('/api/v1/projects/{pid}/translate-all',response_model=TranslateAllJobOut)
+async def project_translate_all(pid:int,db:Session=Depends(get_db)):
+ # Every other language, one after another, as a single server-side job.
+ p=crud_get_or_404(db,Project,pid,'Project')
+ for j in translator.all_jobs.values():
+  if j['source_project_id']==pid and j['status'] in ('queued','running'):return j
+ langs=[c for c in translator.LANGUAGES if c!=(p.language or 'ja')]
+ job=translator.new_all_job(pid,langs)
+ llm_set_project(pid)
+ translator.all_running[job['id']]=asyncio.create_task(translator.run_all(job))
+ return job
+@app.get('/api/v1/translate-all-jobs/{job_id}',response_model=TranslateAllJobOut)
+def translate_all_job_get(job_id:int):
+ job=translator.all_jobs.get(job_id)
+ if not job:raise HTTPException(404,'Translate-all job not found')
+ return job
+@app.get('/api/v1/projects/{pid}/translate-all',response_model=TranslateAllJobOut|None)
+def translate_all_active(pid:int,db:Session=Depends(get_db)):
+ # The latest all-language translation for this work (so the screen can pick it
+ # up again after the user logged out and back in).
+ crud_get_or_404(db,Project,pid,'Project')
+ js=[j for j in translator.all_jobs.values() if j['source_project_id']==pid]
+ return max(js,key=lambda j:j['id']) if js else None
+@app.get('/api/v1/background-jobs')
+def background_jobs(db:Session=Depends(get_db)):
+ # Everything still running on the server, for the dashboard: these keep going
+ # whether or not anyone is logged in.
+ names={p.id:p.name for p in db.scalars(select(Project)).all()}
+ out=[]
+ def add(kind,label,pid,status,message,done=None,total=None):
+  out.append({'kind':kind,'label':label,'project_id':pid,'project_name':names.get(pid),'status':status,'message':message,'done':done,'total':total})
+ for j in db.scalars(select(AutoWriteJob).where(AutoWriteJob.status.in_(['queued','running','stopping']))).all():
+  add('autowrite','自動執筆',j.project_id,j.status,j.last_message,max(0,j.current_episode-j.start_episode),j.end_episode-j.start_episode+1)
+ for j in db.scalars(select(ImportJob).where(ImportJob.status.in_(['queued','running']))).all():
+  add('import','インポート',j.project_id,j.status,j.last_message,j.processed_episodes,j.total_episodes)
+ for j in translator.all_jobs.values():
+  if j['status'] in ('queued','running'):add('translate_all','全翻訳',j['source_project_id'],j['status'],j['last_message'],j['done_languages'],j['total_languages'])
+ for j in translator.jobs.values():
+  if j['status'] in ('queued','running'):add('translate','翻訳',j['source_project_id'],j['status'],j['last_message'],j['processed_episodes'],j['total_episodes'])
+ for b in cover_mod.batches.values():
+  if b['status'] in ('queued','running'):add('cover_batch','複数画像作成',b['project_id'],b['status'],b['last_message'],b['done']+b['failed'],b['total'])
+ for j in cover_mod.jobs.values():
+  if j['status'] in ('queued','running'):add('cover','表紙画像生成',j['project_id'],j['status'],j['last_message'])
+ return {'jobs':out}
 @app.get('/api/v1/translate-jobs/{job_id}',response_model=TranslateJobOut)
 def translate_job_get(job_id:int):
  job=translator.jobs.get(job_id)
@@ -650,7 +695,7 @@ def import_jobs_for_project(pid:int,db:Session=Depends(get_db)):
  jobs=db.scalars(select(ImportJob).where(ImportJob.project_id==pid).order_by(ImportJob.id.desc()).limit(20)).all()
  return [_import_job_out(j) for j in jobs]
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
-def episodes(pid:int,limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(clamp_limit(limit)).offset(max(0,offset))).all())
+def episodes(pid:int,limit:int=MAX_EPISODE_LIST,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(max(1,min(limit,MAX_EPISODE_LIST))).offset(max(0,offset))).all())
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):
  e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e)
