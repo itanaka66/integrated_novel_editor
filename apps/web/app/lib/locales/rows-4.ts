@@ -194,4 +194,12 @@ export const ROWS_4: Row[] = [
   ["言語指定方法", "How the language is set", "语言指定方式", "語言指定方式", "언어 지정 방법", "Cómo se elige el idioma", "Choix de la langue", "Sprachauswahl"],
   ["翻訳配信", "Translation delivery", "翻译发布", "翻譯發佈", "번역 배포", "Distribución traducida", "Diffusion traduite", "Übersetzungsangebot"],
   ["注意事項", "Cautions", "注意事项", "注意事項", "주의 사항", "Precauciones", "Précautions", "Hinweise"],
+
+  // editable targets
+  ["編集", "Edit", "编辑", "編輯", "편집", "Editar", "Modifier", "Bearbeiten"],
+  ["初期値に戻す", "Reset to defaults", "恢复默认", "還原預設", "초기값으로 되돌리기", "Restablecer", "Réinitialiser", "Zurücksetzen"],
+  ["初期の一覧に戻しますか？", "Restore the built-in list?", "要恢复为初始列表吗？", "要還原為初始清單嗎？", "초기 목록으로 되돌릴까요?", "¿Restaurar la lista original?", "Rétablir la liste d'origine ?", "Ursprüngliche Liste wiederherstellen?"],
+  ["＋ 投稿先を追加", "+ Add destination", "+ 添加投稿平台", "+ 新增投稿平台", "+ 게시처 추가", "+ Añadir destino", "+ Ajouter une destination", "+ Ziel hinzufügen"],
+  ["この投稿先を削除", "Remove this destination", "删除此投稿平台", "刪除此投稿平台", "이 게시처 삭제", "Quitar este destino", "Supprimer cette destination", "Dieses Ziel entfernen"],
+  ["投稿先名", "Name", "平台名称", "平台名稱", "게시처 이름", "Nombre", "Nom", "Name"],
 ];

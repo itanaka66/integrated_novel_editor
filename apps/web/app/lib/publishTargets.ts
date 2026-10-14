@@ -14,6 +14,11 @@ export type PublishTarget = {
   caution: string;
 };
 
+// Only http(s) links are rendered as links (a saved value could be anything).
+export function safeUrl(u: string): string | undefined {
+  return /^https?:\/\//i.test(u || "") ? u : undefined;
+}
+
 export const PUBLISH_TARGETS: PublishTarget[] = [
   {
     name: "Kindle Direct Publishing (KDP)",

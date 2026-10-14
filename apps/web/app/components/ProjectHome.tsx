@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import PublishingDialog from "./PublishingDialog";
-import PublishTargetsDialog from "./PublishTargetsDialog";
-import { PUBLISH_TARGETS } from "../lib/publishTargets";
+import PublishTargetsDialog, { usePublishTargets } from "./PublishTargetsDialog";
+import { safeUrl } from "../lib/publishTargets";
 import { Episode, Project } from "../lib/types";
 import { Section } from "./Sidebar";
 import CoverPanel from "./CoverPanel";
@@ -36,6 +36,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [tError, setTError] = useState("");
   const [showPub, setShowPub] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
+  const [targets, setTargets] = usePublishTargets();
   type AllJob = { id: number; status: string; total_languages: number; done_languages: number; failed: string[]; current_language: string; last_message: string };
   const [allJob, setAllJob] = useState<AllJob | null>(null);
   const allActive = !!allJob && (allJob.status === "queued" || allJob.status === "running");
@@ -136,11 +137,11 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <button onClick={() => setShowPub(true)}>{t("出版情報を開く")}</button>
         <p style={{ margin: "10px 0 4px", fontSize: 13 }}>{t("投稿先")}</p>
         <div className="exportButtons">
-          {PUBLISH_TARGETS.map((x) => <a key={x.name} className="button" href={x.postUrl} target="_blank" rel="noopener noreferrer">{x.name} ↗</a>)}
+          {targets.map((x, i) => safeUrl(x.postUrl || x.officialUrl) && <a key={i} className="button" href={safeUrl(x.postUrl || x.officialUrl)} target="_blank" rel="noopener noreferrer">{x.name} ↗</a>)}
           <button onClick={() => setShowTargets(true)}>{t("投稿先の詳細")}</button>
         </div>
       </div>
-      {showTargets && <PublishTargetsDialog onClose={() => setShowTargets(false)} />}
+      {showTargets && <PublishTargetsDialog targets={targets} onChange={setTargets} onClose={() => setShowTargets(false)} />}
       {showPub && <PublishingDialog projectId={project.id} onClose={() => setShowPub(false)}
         onSaved={async () => { const p = await api(`/projects/${project.id}`); if (p?.id && onOpenProject) onOpenProject(p); }} />}
       <div className="card">

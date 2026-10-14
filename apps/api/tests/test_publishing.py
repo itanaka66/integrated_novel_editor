@@ -12,3 +12,16 @@ def test_publishing_roundtrip_and_validation(client, project):
     assert client.put(f"/api/v1/projects/{pid}/publishing", json={**body, "keywords": list("abcdefgh")}).status_code == 400
     assert client.put(f"/api/v1/projects/{pid}/publishing", json={**body, "title": " "}).status_code == 400
     assert client.put(f"/api/v1/projects/{pid}/publishing", json={**body, "description": "あ" * 4001}).status_code == 400
+
+
+def test_publish_targets_edit_and_reset(client):
+    assert client.get("/api/v1/publish-targets").json() == {"targets": None}
+    ok = {"targets": [{"name": "Site", "postUrl": "https://example.com/post", "caution": " 注意 "}]}
+    r = client.put("/api/v1/publish-targets", json=ok)
+    assert r.status_code == 200
+    got = client.get("/api/v1/publish-targets").json()["targets"]
+    assert got[0]["name"] == "Site" and got[0]["caution"] == "注意" and got[0]["helpUrl"] == ""
+    assert client.put("/api/v1/publish-targets", json={"targets": [{"name": "x", "postUrl": "javascript:alert(1)"}]}).status_code == 400
+    assert client.put("/api/v1/publish-targets", json={"targets": [{"name": " "}]}).status_code == 400
+    assert client.put("/api/v1/publish-targets", json={"targets": None}).json() == {"targets": None}
+    assert client.get("/api/v1/publish-targets").json() == {"targets": None}
