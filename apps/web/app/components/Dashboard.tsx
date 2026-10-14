@@ -69,6 +69,17 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
     );
   }
 
+  // Work that keeps running on the server whether or not anyone is logged in.
+  type BgJob = { kind: string; label: string; project_name: string | null; status: string; message: string; done: number | null; total: number | null };
+  const [bgJobs, setBgJobs] = useState<BgJob[]>([]);
+  useEffect(() => {
+    let live = true;
+    const poll = () => api("/background-jobs").then((r) => { if (live && Array.isArray(r?.jobs)) setBgJobs(r.jobs); }).catch(() => {});
+    poll();
+    const timer = setInterval(poll, 5000);
+    return () => { live = false; clearInterval(timer); };
+  }, []);
+
   const focus = projects[0];
   const focusTwin = focus ? twins[focus.id] : null;
 
@@ -87,6 +98,17 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       {busy && projects.length === 0 ? <p className="loading">{t("読み込み中...")}</p> : null}
       <div className="dashboardGrid">
         <div className="dashboardWorks">
+          {bgJobs.length > 0 && (
+            <div className="card">
+              <small>{t("サーバーで実行中の処理（ログアウトしても続行されます）")}</small>
+              {bgJobs.map((j, i) => (
+                <p key={i} style={{ margin: "4px 0" }}>
+                  <b>{j.label}</b>{j.project_name ? `「${j.project_name}」` : ""}
+                  {j.total ? ` ${j.done ?? 0}/${j.total}` : ""} <small>{j.message}</small>
+                </p>
+              ))}
+            </div>
+          )}
           <small>{t("マイ作品")}</small>
           {projects.length === 0 && !busy && <div className="card"><b>{t("まだ作品がありません")}</b><p>{t("「新規作品作成」から最初の作品を作りましょう。")}</p></div>}
           {roots.map((p) => renderWork(p, 0, new Set()))}

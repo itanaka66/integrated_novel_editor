@@ -106,3 +106,32 @@ def test_digest_is_linked_to_its_source(client, project, monkeypatch):
     r = client.post(f"/api/v1/projects/{pid}/digest", json={"ratio": 0.5})
     if r.status_code == 200:
         assert client.get(f"/api/v1/projects/{r.json()['project']['id']}").json()["source_project_id"] == pid
+
+
+def test_translate_all_runs_on_the_server_and_lists_as_background_job(client, project, monkeypatch, db_session_factory):
+    async def fake_generate(prompt, *a, **k):
+        return "X", "m"
+    monkeypatch.setattr(translator, "generate", fake_generate)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "a", "content": "b"})
+    j = client.post(f"/api/v1/projects/{pid}/translate-all").json()
+    assert j["total_languages"] == 7
+    for _ in range(150):
+        j = client.get(f"/api/v1/translate-all-jobs/{j['id']}").json()
+        if j["status"] in ("completed", "error"):
+            break
+        time.sleep(0.1)
+    assert j["status"] == "completed" and j["done_languages"] == 7 and j["failed"] == []
+    assert client.get(f"/api/v1/projects/{pid}/translate-all").json()["id"] == j["id"]
+    assert client.get("/api/v1/background-jobs").json() == {"jobs": []}
+
+
+def test_episode_list_is_not_cut_off_at_200(client, project, db_session_factory):
+    from app.models import Episode
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="") for n in range(1, 261)])
+        db.commit()
+    eps = client.get(f"/api/v1/projects/{pid}/episodes").json()
+    assert len(eps) == 260 and eps[-1]["number"] == 260
