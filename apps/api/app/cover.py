@@ -585,6 +585,10 @@ async def run_cover_job(job: dict) -> None:
         job['last_message'] = '表紙画像を生成しました。' + (' ' + note if note else '')
         if job.get('overlay') and not note and not (job.get('author') or '').strip():
             job['last_message'] += '（著者名が未設定のため、タイトルのみ入れました。設定の基本設定で著者名を入力できます）'
+    except asyncio.CancelledError:
+        job['status'] = 'cancelled'
+        job['last_message'] = 'キャンセルしました'
+        raise
     except CoverError as ex:
         job['status'] = 'error'
         job['last_message'] = str(ex)
@@ -648,6 +652,10 @@ async def run_batch(batch: dict, make_prompt) -> None:
     except CoverError as ex:
         batch['status'] = 'error'
         batch['last_message'] = str(ex)
+    except asyncio.CancelledError:
+        batch['status'] = 'cancelled'
+        batch['last_message'] = f'キャンセルしました（{batch["done"]}枚は生成済みです）'
+        raise
     except Exception as ex:
         logger.exception('Cover batch %s failed', batch['id'])
         batch['status'] = 'error'

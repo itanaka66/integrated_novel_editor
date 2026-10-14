@@ -135,3 +135,47 @@ def test_episode_list_is_not_cut_off_at_200(client, project, db_session_factory)
         db.commit()
     eps = client.get(f"/api/v1/projects/{pid}/episodes").json()
     assert len(eps) == 260 and eps[-1]["number"] == 260
+
+
+def test_translate_job_can_be_cancelled_and_resumed(client, project, monkeypatch, db_session_factory):
+    import asyncio
+    from app.models import Episode, Project
+
+    async def slow_generate(prompt, *a, **k):
+        await asyncio.sleep(0.2)
+        return "Y" * 30, "m"
+    monkeypatch.setattr(translator, "generate", slow_generate)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="本文" * 30) for n in range(1, 6)])
+        db.commit()
+
+    async def go():
+        job = translator.new_job(pid, "en")
+        task = asyncio.create_task(translator.run_translation(job))
+        translator.running[job["id"]] = task
+        await asyncio.sleep(0.7)
+        assert job["status"] == "running"
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return job
+    job = asyncio.run(go())
+    assert job["status"] == "cancelled" and "キャンセル" in job["last_message"]
+    # What was already translated stays, and a second run continues from it.
+    with db_session_factory() as db:
+        dst = db.query(Project).filter(Project.source_project_id == pid).one()
+        done_before = db.query(Episode).filter_by(project_id=dst.id).count()
+    assert 0 <= done_before < 5
+
+    async def again():
+        j2 = translator.new_job(pid, "en")
+        await translator.run_translation(j2)
+        return j2
+    j2 = asyncio.run(again())
+    assert j2["status"] == "completed" and j2["project_id"] == dst.id
+    assert client.post("/api/v1/background-jobs/cancel", json={"kind": "translate", "id": job["id"]}).status_code == 404
+    assert client.post("/api/v1/background-jobs/cancel", json={"kind": "nope", "id": 1}).status_code == 400

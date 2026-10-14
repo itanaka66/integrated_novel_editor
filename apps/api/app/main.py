@@ -332,20 +332,20 @@ def background_jobs(db:Session=Depends(get_db)):
  # whether or not anyone is logged in.
  names={p.id:p.name for p in db.scalars(select(Project)).all()}
  out=[]
- def add(kind,label,pid,status,message,done=None,total=None):
-  out.append({'kind':kind,'label':label,'project_id':pid,'project_name':names.get(pid),'status':status,'message':message,'done':done,'total':total})
+ def add(kind,label,pid,status,message,done=None,total=None,jid=None):
+  out.append({'kind':kind,'id':jid,'label':label,'project_id':pid,'project_name':names.get(pid),'status':status,'message':message,'done':done,'total':total})
  for j in db.scalars(select(AutoWriteJob).where(AutoWriteJob.status.in_(['queued','running','stopping']))).all():
-  add('autowrite','自動執筆',j.project_id,j.status,j.last_message,max(0,j.current_episode-j.start_episode),j.end_episode-j.start_episode+1)
+  add('autowrite','自動執筆',j.project_id,j.status,j.last_message,max(0,j.current_episode-j.start_episode),j.end_episode-j.start_episode+1,j.id)
  for j in db.scalars(select(ImportJob).where(ImportJob.status.in_(['queued','running']))).all():
-  add('import','インポート',j.project_id,j.status,j.last_message,j.processed_episodes,j.total_episodes)
+  add('import','インポート',j.project_id,j.status,j.last_message,j.processed_episodes,j.total_episodes,j.id)
  for j in translator.all_jobs.values():
-  if j['status'] in ('queued','running'):add('translate_all','全翻訳',j['source_project_id'],j['status'],j['last_message'],j['done_languages'],j['total_languages'])
+  if j['status'] in ('queued','running'):add('translate_all','全翻訳',j['source_project_id'],j['status'],j['last_message'],j['done_languages'],j['total_languages'],j['id'])
  for j in translator.jobs.values():
-  if j['status'] in ('queued','running'):add('translate','翻訳',j['source_project_id'],j['status'],j['last_message'],j['processed_episodes'],j['total_episodes'])
+  if j['status'] in ('queued','running'):add('translate','翻訳',j['source_project_id'],j['status'],j['last_message'],j['processed_episodes'],j['total_episodes'],j['id'])
  for b in cover_mod.batches.values():
-  if b['status'] in ('queued','running'):add('cover_batch','複数画像作成',b['project_id'],b['status'],b['last_message'],b['done']+b['failed'],b['total'])
+  if b['status'] in ('queued','running'):add('cover_batch','複数画像作成',b['project_id'],b['status'],b['last_message'],b['done']+b['failed'],b['total'],b['id'])
  for j in cover_mod.jobs.values():
-  if j['status'] in ('queued','running'):add('cover','表紙画像生成',j['project_id'],j['status'],j['last_message'])
+  if j['status'] in ('queued','running'):add('cover','表紙画像生成',j['project_id'],j['status'],j['last_message'],None,None,j['id'])
  return {'jobs':out}
 @app.get('/api/v1/translate-jobs/{job_id}',response_model=TranslateJobOut)
 def translate_job_get(job_id:int):
@@ -586,6 +586,23 @@ def publish_targets_put(x:dict=Body(...),admin:User=Depends(require_admin)):
   out.append(t)
  _publish_targets_path().write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
  return {'targets':out}
+@app.post('/api/v1/background-jobs/cancel')
+async def background_job_cancel(x:dict=Body(...),db:Session=Depends(get_db)):
+ # Cancel one running server-side job: {kind, id}. Work already done is kept.
+ kind,jid=x.get('kind'),x.get('id')
+ if not isinstance(jid,int):raise HTTPException(400,'id is required')
+ if kind=='autowrite':
+  job=crud_get_or_404(db,AutoWriteJob,jid,'Auto-write job')
+  if job.status in ('queued','running'):job.status='stopping';job.last_message='停止要求を受け付けました';db.commit()
+  return {'ok':True}
+ tasks={'import':import_running,'translate':translator.running,'translate_all':translator.all_running,'cover_batch':cover_mod.batch_tasks,'cover':cover_mod.running}
+ if kind not in tasks:raise HTTPException(400,'unknown kind')
+ task=tasks[kind].get(jid)
+ if task is None or task.done():raise HTTPException(404,'実行中の処理が見つかりません（すでに終了している可能性があります）')
+ task.cancel()
+ try:await task
+ except BaseException:pass  # the job records its own 'cancelled' state
+ return {'ok':True}
 def _project_tables():
  from .db import Base
  return [t for t in Base.metadata.sorted_tables if 'project_id' in t.c and t.name!='projects']

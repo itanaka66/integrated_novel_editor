@@ -89,6 +89,14 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
       if (j?.id) setAllJob(j); else setTError(j?.detail || t("翻訳を開始できませんでした"));
     } catch (e) { setTError(e instanceof Error ? e.message : t("翻訳を開始できませんでした")); }
   }
+  async function cancelTranslation(kind: "translate" | "translate_all", id: number) {
+    if (!window.confirm(t("翻訳をキャンセルします。翻訳済みの分は残り、次回は続きから翻訳します。よろしいですか？"))) return;
+    try { await api("/background-jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, id }) }); } catch { /* already finished */ }
+    try {
+      if (kind === "translate_all") { const j = await api(`/translate-all-jobs/${id}`); if (j?.id) setAllJob(j); }
+      else { const j = await api(`/translate-jobs/${id}`); if (j?.id) setTJob(j); }
+    } catch { /* ignore */ }
+  }
   async function openTranslated() {
     if (!tJob?.project_id || !onOpenProject) return;
     const p = await api(`/projects/${tJob.project_id}`);
@@ -152,6 +160,8 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
           {LANGUAGES.map((l) => <button key={l.code} onClick={() => translate(l.code, l.label)} disabled={tBusy || episodes.length === 0}>{l.label}</button>)}
         </div>
         {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
+        {allActive && allJob && <button type="button" style={{ color: "#c0392b" }} onClick={() => cancelTranslation("translate_all", allJob.id)}>{t("全翻訳をキャンセル")}</button>}
+        {!allActive && tBusy && tJob && <button type="button" style={{ color: "#c0392b" }} onClick={() => cancelTranslation("translate", tJob.id)}>{t("翻訳をキャンセル")}</button>}
         {allJob && <p style={{ color: allJob.status === "error" || allJob.failed.length ? "#c0392b" : undefined }}>{allJob.last_message}</p>}
         {tJob && (
           <div className="resultCard">

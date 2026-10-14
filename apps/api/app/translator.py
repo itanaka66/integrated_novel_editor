@@ -71,6 +71,10 @@ async def run_all(job: dict) -> None:
             job['done_languages'] += 1
         job['status'] = 'completed'
         job['last_message'] = f'{job["total_languages"]}言語の翻訳が終わりました' + (f'（失敗: {"・".join(job["failed"])}）' if job['failed'] else '。')
+    except asyncio.CancelledError:
+        job['status'] = 'cancelled'
+        job['last_message'] = 'キャンセルしました（翻訳済みの分は残っています）'
+        raise
     except Exception as ex:
         logger.exception('Translate-all job %s failed', job['id'])
         job['status'] = 'error'
@@ -203,6 +207,10 @@ async def run_translation(job: dict) -> None:
         job['status'] = 'completed'
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume
                                else f'{len(eps)}話の翻訳が完了しました。')
+    except asyncio.CancelledError:
+        job['status'] = 'cancelled'
+        job['last_message'] = 'キャンセルしました（翻訳済みの分は残っています。もう一度実行すると続きから翻訳します）'
+        raise
     except Exception as ex:
         logger.exception('Translation job %s failed', job['id'])
         job['status'] = 'error'
