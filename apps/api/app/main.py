@@ -556,6 +556,36 @@ def _kdp_ai_hints(db,p):
   'images':f'AI生成（表紙は {prov} で生成した画像）→ 申告が必要' if prov else ('表紙未選択、または手動で用意した画像 → AI生成画像ならば申告' if cov else '表紙が未選択'),
   'translation':'AI生成（このアプリのAI翻訳で作成）→ 申告が必要' if translated else 'このアプリの翻訳作品ではありません → AI翻訳を使ったなら申告',
  }
+PUBLISH_TARGET_TEXT=('name','method','languages','languageSetting','translation','caution')
+PUBLISH_TARGET_URLS=('officialUrl','postUrl','helpUrl')
+def _publish_targets_path():
+ d=file_sync.storage_root();d.mkdir(parents=True,exist_ok=True)
+ return d/'publish_targets.json'
+@app.get('/api/v1/publish-targets')
+def publish_targets_get():
+ # The posting destinations shown on the work home. null = never edited (the
+ # screen then shows its built-in list).
+ f=_publish_targets_path()
+ if not f.exists():return {'targets':None}
+ try:return {'targets':json.loads(f.read_text(encoding='utf-8'))}
+ except ValueError:return {'targets':None}
+@app.put('/api/v1/publish-targets')
+def publish_targets_put(x:dict=Body(...),admin:User=Depends(require_admin)):
+ items=x.get('targets')
+ if items is None:
+  _publish_targets_path().unlink(missing_ok=True)  # back to the built-in list
+  return {'targets':None}
+ if not isinstance(items,list) or len(items)>50:raise HTTPException(400,'targets must be a list of at most 50 items')
+ out=[]
+ for it in items:
+  if not isinstance(it,dict):raise HTTPException(400,'invalid target')
+  t={k:str(it.get(k) or '').strip()[:2000] for k in PUBLISH_TARGET_TEXT+PUBLISH_TARGET_URLS}
+  if not t['name']:raise HTTPException(400,'投稿先の名前を入力してください')
+  for k in PUBLISH_TARGET_URLS:
+   if t[k] and not re.match(r'^https?://',t[k],re.I):raise HTTPException(400,f'URLは http:// または https:// で始めてください: {t[k][:60]}')
+  out.append(t)
+ _publish_targets_path().write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
+ return {'targets':out}
 def _project_tables():
  from .db import Base
  return [t for t in Base.metadata.sorted_tables if 'project_id' in t.c and t.name!='projects']
