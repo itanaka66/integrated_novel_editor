@@ -6,6 +6,7 @@ the EPUB is a minimal valid EPUB3 assembled by hand with the stdlib
 structurally, a handful of static XML files plus one XHTML file per
 episode.
 """
+import csv
 import html
 import io
 import uuid
@@ -57,6 +58,76 @@ def build_markdown(project, episodes) -> str:
             parts += [f'> {e.summary}', '']
         parts += [e.content or f'*{LABELS[lang][1]}*', '', '']
     return '\n'.join(parts)
+
+
+# ---- KDP package: EPUB + cover + the details the KDP form asks for ----------
+
+# KDP's own names for the languages this app can produce.
+KDP_LANGUAGE = {'ja': '日本語 (Japanese)', 'en': '英語 (English)', 'zh-CN': '中国語・簡体字 (Chinese)', 'ko': '韓国語 (Korean)',
+                'es': 'スペイン語 (Spanish)', 'fr': 'フランス語 (French)', 'de': 'ドイツ語 (German)', 'pt-BR': 'ポルトガル語・ブラジル (Portuguese)'}
+
+
+def kdp_rows(project, pub: dict, episodes, ai: dict) -> list[tuple[str, str]]:
+    """(item, value) rows in the order the KDP "Kindle eBook details" and
+    "content" pages ask for them."""
+    chars = sum(len(e.content or '') for e in episodes)
+    return [
+        ('書籍の言語', KDP_LANGUAGE.get(project.language or 'ja', project.language or 'ja')),
+        ('本のタイトル', pub.get('title', '')),
+        ('サブタイトル', pub.get('subtitle', '')),
+        ('著者名（ペンネーム可）', pub.get('author', '')),
+        ('内容紹介（説明文・4000文字まで）', pub.get('description', '')),
+        ('キーワード（最大7つ）', ' / '.join(pub.get('keywords') or [])),
+        ('カテゴリー', pub.get('category', '')),
+        ('成人向けコンテンツ', 'はい' if pub.get('adult') else 'いいえ'),
+        ('読者対象年齢（下限）', pub.get('age_min') or '（指定なし）'),
+        ('読者対象年齢（上限）', pub.get('age_max') or '（指定なし）'),
+        ('原稿ファイル', 'book.epub'),
+        ('表紙ファイル', ai.get('cover_file') or '（表紙が未選択です。表紙パネルで採用する画像を選んでください）'),
+        ('話数 / 文字数', f'{len(episodes)}話 / {chars:,}文字'),
+        ('AI生成コンテンツ: テキスト（下書き）', ai['text']),
+        ('AI生成コンテンツ: 画像（下書き）', ai['images']),
+        ('AI生成コンテンツ: 翻訳（下書き）', ai['translation']),
+    ]
+
+
+def build_kdp_csv(rows) -> str:
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator='\r\n')
+    w.writerow(['項目', '値'])
+    w.writerows(rows)
+    return '\ufeff' + out.getvalue()  # BOM so Excel opens the Japanese text correctly
+
+
+def build_kdp_markdown(project, rows) -> str:
+    lines = [f'# KDP 登録用情報シート: {project.name}', '',
+             'Kindle Direct Publishing の登録画面に、上から順に貼り付けてください。', '']
+    for k, v in rows:
+        if '\n' in str(v) or len(str(v)) > 80:
+            lines += [f'## {k}', '', str(v), '']
+        else:
+            lines += [f'- **{k}**: {v}']
+    lines += ['', '## 注意', '',
+              '- 「AI生成コンテンツ」の欄は、このアプリの記録からの**推定の下書き**です。実際の制作方法に合わせて、KDP の「内容」タブで本人が選択・申告してください。',
+              '- AI が作ったテキスト・画像・翻訳は、人が手直ししても「AI生成」に含まれます（KDP の定義）。',
+              '- 登録・公開の操作は、KDP の画面で本人が行います。']
+    return '\n'.join(lines) + '\n'
+
+
+def build_kdp_package(project, episodes, cover, pub: dict, ai: dict) -> bytes:
+    """One ZIP per work: book.epub, cover.<ext>, kdp_info.csv, kdp_info.md."""
+    ai = dict(ai)
+    if cover:
+        ai['cover_file'] = 'cover' + cover[1]
+    rows = kdp_rows(project, pub, episodes, ai)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('book.epub', build_epub(project, episodes, cover))
+        if cover:
+            z.writestr('cover' + cover[1], cover[0])
+        z.writestr('kdp_info.csv', build_kdp_csv(rows).encode('utf-8'))
+        z.writestr('kdp_info.md', build_kdp_markdown(project, rows).encode('utf-8'))
+    return buf.getvalue()
 
 
 def _epub_xhtml(title, body, lang='ja'):

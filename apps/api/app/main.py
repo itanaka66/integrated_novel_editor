@@ -527,9 +527,13 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
   return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
   return Response(export_mod.build_epub(p,eps,cover_mod.selected_cover(pid)),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+ if format=='kdp':
+  ai=_kdp_ai_hints(db,p)
+  pub=_publishing_out(p).model_dump()
+  return Response(export_mod.build_kdp_package(p,eps,cover_mod.selected_cover(pid),pub,ai),media_type='application/zip',headers={'Content-Disposition':content_disposition(name+'_kdp','zip')})
  if format=='json':
   return Response(json.dumps(_project_dump(db,p),ensure_ascii=False,indent=1,default=str),media_type='application/json',headers={'Content-Disposition':content_disposition(name,'json')})
- raise HTTPException(400,'format must be one of: txt, md, epub, json')
+ raise HTTPException(400,'format must be one of: txt, md, epub, kdp, json')
 @app.post('/api/v1/projects/{pid}/ai-entities')
 async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
  # The AI proposes up to `count` new rows for one of the story-knowledge
@@ -540,6 +544,18 @@ async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
  try:rows=await ae.add_ai_rows(db,p,x.kind,max(1,min(x.count,30)))
  except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
  return {'created':len(rows),'items':[{c.name:getattr(r,c.name) for c in r.__table__.columns} for r in rows]}
+def _kdp_ai_hints(db,p):
+ # What the app's own records say about AI use, as a DRAFT for KDP's disclosure
+ # question (the author must confirm; AI-generated = AI made it, even if edited).
+ wrote=db.scalar(select(AutoWriteJob.id).where(AutoWriteJob.project_id==p.id)) is not None
+ translated=p.source_project_id is not None and db.get(Project,p.source_project_id) is not None and db.get(Project,p.source_project_id).language!=p.language
+ cov=cover_mod.selected_name(p.id)
+ prov=(cover_mod._meta(p.id,cov).get('provider') if cov else None)
+ return {
+  'text':'AI生成の可能性あり（自動執筆を使用した記録があります）→ 実際の制作方法に合わせて申告' if wrote else 'このアプリでは自動執筆の記録なし → 手書き・AI支援のみなら申告不要（AIが書いた本文があるなら申告）',
+  'images':f'AI生成（表紙は {prov} で生成した画像）→ 申告が必要' if prov else ('表紙未選択、または手動で用意した画像 → AI生成画像ならば申告' if cov else '表紙が未選択'),
+  'translation':'AI生成（このアプリのAI翻訳で作成）→ 申告が必要' if translated else 'このアプリの翻訳作品ではありません → AI翻訳を使ったなら申告',
+ }
 def _project_tables():
  from .db import Base
  return [t for t in Base.metadata.sorted_tables if 'project_id' in t.c and t.name!='projects']

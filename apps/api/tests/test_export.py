@@ -100,3 +100,30 @@ def test_export_defaults_to_japanese(client, project):
     client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "転移", "content": "本文"})
     z = zipfile.ZipFile(BytesIO(client.get(f"/api/v1/projects/{pid}/export", params={"format": "epub"}).content))
     assert "<dc:language>ja</dc:language>" in z.read("OEBPS/content.opf").decode()
+
+
+def test_kdp_package_has_epub_cover_and_info_sheets(client, project, monkeypatch, tmp_path):
+    import csv
+    import io
+    import zipfile
+    from app import cover
+    from app.config import settings
+    monkeypatch.setattr(settings, "covers_dir", str(tmp_path / "covers"))
+    pid = project["id"]
+    client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "一話", "content": "本文です。"})
+    client.put(f"/api/v1/projects/{pid}/publishing", json={"title": "題名", "subtitle": "副題", "author": "筆名", "description": "紹介文",
+                                                           "keywords": ["SF", "恐竜"], "category": "SF", "adult": False, "age_min": "12", "age_max": ""})
+    d = cover.covers_dir(pid)
+    (d / "comfyui-1.png").write_bytes(b"\x89PNG\r\n\x1a\nxx")
+    (d / "comfyui-1.png.json").write_text('{"provider": "comfyui"}', encoding="utf-8")
+    client.put(f"/api/v1/projects/{pid}/cover", json={"filename": "comfyui-1.png"})
+    r = client.get(f"/api/v1/projects/{pid}/export", params={"format": "kdp"})
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    assert sorted(z.namelist()) == ["book.epub", "cover.png", "kdp_info.csv", "kdp_info.md"]
+    rows = list(csv.reader(io.StringIO(z.read("kdp_info.csv").decode("utf-8-sig"))))
+    info = {k: v for k, v in rows[1:]}
+    assert info["本のタイトル"] == "題名" and info["キーワード（最大7つ）"] == "SF / 恐竜" and info["表紙ファイル"] == "cover.png"
+    assert "comfyui" in info["AI生成コンテンツ: 画像（下書き）"]
+    md = z.read("kdp_info.md").decode("utf-8")
+    assert "題名" in md and "紹介文" in md and "本人" in md
