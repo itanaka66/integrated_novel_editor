@@ -202,4 +202,12 @@ export const ROWS_4: Row[] = [
   ["＋ 投稿先を追加", "+ Add destination", "+ 添加投稿平台", "+ 新增投稿平台", "+ 게시처 추가", "+ Añadir destino", "+ Ajouter une destination", "+ Ziel hinzufügen"],
   ["この投稿先を削除", "Remove this destination", "删除此投稿平台", "刪除此投稿平台", "이 게시처 삭제", "Quitar este destino", "Supprimer cette destination", "Dieses Ziel entfernen"],
   ["投稿先名", "Name", "平台名称", "平台名稱", "게시처 이름", "Nombre", "Nom", "Name"],
+
+  // cancel jobs
+  ["すべてキャンセル", "Cancel all", "全部取消", "全部取消", "모두 취소", "Cancelar todo", "Tout annuler", "Alle abbrechen"],
+  ["全翻訳をキャンセル", "Cancel translate-all", "取消全部翻译", "取消全部翻譯", "전체 번역 취소", "Cancelar traducir todo", "Annuler la traduction complète", "Alles-Übersetzen abbrechen"],
+  ["翻訳をキャンセル", "Cancel translation", "取消翻译", "取消翻譯", "번역 취소", "Cancelar traducción", "Annuler la traduction", "Übersetzung abbrechen"],
+  ["「{label}」をキャンセルします。ここまでの結果は残ります。よろしいですか？", "Cancel \"{label}\"? Results so far are kept. Continue?", "将取消「{label}」。已完成的结果会保留。是否继续？", "將取消「{label}」。已完成的結果會保留。是否繼續？", "「{label}」을(를) 취소합니다. 지금까지의 결과는 남습니다. 계속할까요?", "¿Cancelar «{label}»? Los resultados hasta ahora se conservan. ¿Continuar?", "Annuler « {label} » ? Les résultats déjà obtenus sont conservés. Continuer ?", "„{label}“ abbrechen? Bisherige Ergebnisse bleiben erhalten. Fortfahren?"],
+  ["実行中のAI処理をすべてキャンセルします。ここまでの結果は残ります。よろしいですか？", "Cancel all running AI jobs? Results so far are kept. Continue?", "将取消所有正在运行的 AI 处理。已完成的结果会保留。是否继续？", "將取消所有正在執行的 AI 處理。已完成的結果會保留。是否繼續？", "실행 중인 AI 작업을 모두 취소합니다. 지금까지의 결과는 남습니다. 계속할까요?", "¿Cancelar todos los trabajos de IA en curso? Los resultados hasta ahora se conservan. ¿Continuar?", "Annuler toutes les tâches IA en cours ? Les résultats déjà obtenus sont conservés. Continuer ?", "Alle laufenden KI-Aufgaben abbrechen? Bisherige Ergebnisse bleiben erhalten. Fortfahren?"],
+  ["翻訳をキャンセルします。翻訳済みの分は残り、次回は続きから翻訳します。よろしいですか？", "Cancel the translation? What is translated is kept and the next run continues from it. Continue?", "将取消翻译。已翻译的部分会保留，下次从中断处继续。是否继续？", "將取消翻譯。已翻譯的部分會保留，下次從中斷處繼續。是否繼續？", "번역을 취소합니다. 번역된 부분은 남고 다음에 이어서 번역합니다. 계속할까요?", "¿Cancelar la traducción? Lo traducido se conserva y la próxima vez continuará desde ahí. ¿Continuar?", "Annuler la traduction ? Ce qui est traduit est conservé et la prochaine exécution reprendra à partir de là. Continuer ?", "Übersetzung abbrechen? Das Übersetzte bleibt erhalten, der nächste Lauf setzt dort fort. Fortfahren?"],
 ];

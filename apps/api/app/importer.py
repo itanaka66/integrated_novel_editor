@@ -8,6 +8,7 @@ Modeled directly on auto_writer.run_job: a plain asyncio task tracked in
 an ImportJob row the client polls, and its own SessionLocal() since it
 outlives any single request.
 """
+import asyncio
 import logging
 
 from sqlalchemy import select
@@ -103,6 +104,11 @@ async def run_import_job(job_id: int, text: str) -> None:
         job.status = 'completed'
         job.last_message = f'{len(parsed.episodes)}話を取り込みました（新規{job.created_episodes}話・更新{job.updated_episodes}話）。'
         db.commit()
+    except asyncio.CancelledError:
+        job.status = 'cancelled'
+        job.last_message = 'キャンセルしました（取り込み済みの話は残っています）'
+        db.commit()
+        raise
     except Exception as ex:
         logger.exception('Import job %s failed', job_id)
         job.status = 'error'

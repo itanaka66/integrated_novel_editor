@@ -70,7 +70,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   }
 
   // Work that keeps running on the server whether or not anyone is logged in.
-  type BgJob = { kind: string; label: string; project_name: string | null; status: string; message: string; done: number | null; total: number | null };
+  type BgJob = { kind: string; id: number | null; label: string; project_name: string | null; status: string; message: string; done: number | null; total: number | null };
   const [bgJobs, setBgJobs] = useState<BgJob[]>([]);
   useEffect(() => {
     let live = true;
@@ -79,6 +79,20 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
     const timer = setInterval(poll, 5000);
     return () => { live = false; clearInterval(timer); };
   }, []);
+
+  async function cancelJob(j: BgJob) {
+    if (j.id == null || !window.confirm(t("「{label}」をキャンセルします。ここまでの結果は残ります。よろしいですか？", { label: `${j.label}${j.project_name ? `「${j.project_name}」` : ""}` }))) return;
+    try { await api("/background-jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: j.kind, id: j.id }) }); } catch { /* already finished */ }
+    api("/background-jobs").then((r) => { if (Array.isArray(r?.jobs)) setBgJobs(r.jobs); }).catch(() => {});
+  }
+  async function cancelAll() {
+    if (!window.confirm(t("実行中のAI処理をすべてキャンセルします。ここまでの結果は残ります。よろしいですか？"))) return;
+    for (const j of bgJobs) {
+      if (j.id == null) continue;
+      try { await api("/background-jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: j.kind, id: j.id }) }); } catch { /* ignore */ }
+    }
+    api("/background-jobs").then((r) => { if (Array.isArray(r?.jobs)) setBgJobs(r.jobs); }).catch(() => {});
+  }
 
   const focus = projects[0];
   const focusTwin = focus ? twins[focus.id] : null;
@@ -101,10 +115,12 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
           {bgJobs.length > 0 && (
             <div className="card">
               <small>{t("サーバーで実行中の処理（ログアウトしても続行されます）")}</small>
+              {bgJobs.length > 1 && <button type="button" style={{ marginLeft: 10, color: "#c0392b" }} onClick={cancelAll}>{t("すべてキャンセル")}</button>}
               {bgJobs.map((j, i) => (
                 <p key={i} style={{ margin: "4px 0" }}>
                   <b>{j.label}</b>{j.project_name ? `「${j.project_name}」` : ""}
                   {j.total ? ` ${j.done ?? 0}/${j.total}` : ""} <small>{j.message}</small>
+                  {j.id != null && <button type="button" style={{ marginLeft: 8, color: "#c0392b" }} onClick={() => cancelJob(j)}>{t("キャンセル")}</button>}
                 </p>
               ))}
             </div>
