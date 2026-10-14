@@ -424,6 +424,25 @@ async def cover_generate(pid:int,x:CoverGenerateRequest,request:Request,db:Sessi
  cover_mod.save_state(pid,prompt=x.prompt.strip(),style=x.style or None,custom_style=x.custom_style,provider=x.provider,overlay=x.overlay)
  cover_mod.running[job['id']]=asyncio.create_task(cover_mod.run_cover_job(job))
  return job
+@app.post('/api/v1/projects/{pid}/cover/batch',response_model=CoverBatchOut)
+async def cover_batch(pid:int,x:CoverBatchRequest,request:Request,db:Session=Depends(get_db)):
+ # Many images in one go (see cover.BATCH_PLAN): one prompt per look, then each
+ # look's images in turn, as a single background job.
+ p=crud_get_or_404(db,Project,pid,'Project')
+ if x.provider not in cover_mod.PROVIDERS:raise HTTPException(400,'provider must be one of: '+', '.join(cover_mod.PROVIDERS))
+ if any(b['project_id']==pid and b['status'] in ('queued','running') for b in cover_mod.batches.values()):raise HTTPException(409,'このプロジェクトでは複数画像の生成がすでに実行中です')
+ eps=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number)).all()
+ chars=db.scalars(select(Character).where(Character.project_id==pid)).all()
+ async def make_prompt(style):return await cover_mod.build_prompt(p,eps,chars,style,'')
+ batch=cover_mod.new_batch(pid,x.provider,cover_mod.BATCH_PLAN,x.overlay,p.name,(p.author or '').strip() or getattr(request.state,'username','') or '')
+ llm_set_project(pid)
+ cover_mod.batch_tasks[batch['id']]=asyncio.create_task(cover_mod.run_batch(batch,make_prompt))
+ return batch
+@app.get('/api/v1/cover-batches/{batch_id}',response_model=CoverBatchOut)
+def cover_batch_get(batch_id:int):
+ b=cover_mod.batches.get(batch_id)
+ if not b:raise HTTPException(404,'Cover batch not found')
+ return b
 @app.get('/api/v1/cover-jobs/{job_id}',response_model=CoverJobOut)
 def cover_job_get(job_id:int):
  job=cover_mod.jobs.get(job_id)

@@ -170,4 +170,9 @@ export const ROWS_4: Row[] = [
   ["AIでの追加に失敗しました", "Adding with AI failed", "AI 添加失败", "AI 新增失敗", "AI 추가에 실패했습니다", "Falló la adición con IA", "L'ajout par l'IA a échoué", "Hinzufügen mit KI fehlgeschlagen"],
   ["重複{n}件はスキップしました。", "{n} duplicate(s) skipped.", "已跳过 {n} 条重复项。", "已略過 {n} 筆重複項目。", "중복 {n}건은 건너뛰었습니다.", "Se omitieron {n} duplicado(s).", "{n} doublon(s) ignoré(s).", "{n} Duplikat(e) übersprungen."],
   ["AIが設定案を考えています", "AI is coming up with ideas", "AI 正在构思设定方案", "AI 正在構思設定方案", "AI가 설정안을 생각하고 있습니다", "La IA está ideando propuestas", "L'IA imagine des propositions", "Die KI entwickelt Vorschläge"],
+
+  // cover batch
+  ["複数画像作成", "Create multiple images", "批量生成图片", "批次產生圖片", "여러 이미지 만들기", "Crear varias imágenes", "Créer plusieurs images", "Mehrere Bilder erstellen"],
+  ["複数画像作成中 {done}/{total}", "Creating images {done}/{total}", "批量生成中 {done}/{total}", "批次產生中 {done}/{total}", "여러 이미지 생성 중 {done}/{total}", "Creando imágenes {done}/{total}", "Création des images {done}/{total}", "Bilder werden erstellt {done}/{total}"],
+  ["複数画像を作成します（アニメ風10・劇画風10・水彩画5・浮世絵風5・ドット絵5・アダルト10 の計45枚）。時間がかかります。よろしいですか？", "Create multiple images (anime 10, gekiga 10, watercolor 5, ukiyo-e 5, pixel art 5, adult 10 — 45 in total). This takes a long time. Continue?", "将批量生成图片（动漫风10、剧画风10、水彩画5、浮世绘风5、像素画5、成人向10，共45张）。需要较长时间。是否继续？", "將批次產生圖片（動漫風10、劇畫風10、水彩畫5、浮世繪風5、像素畫5、成人向10，共45張）。需要較長時間。是否繼續？", "여러 이미지를 만듭니다(애니풍 10, 극화풍 10, 수채화 5, 우키요에풍 5, 도트 그래픽 5, 성인용 10, 총 45장). 시간이 오래 걸립니다. 계속할까요?", "Se crearán varias imágenes (anime 10, gekiga 10, acuarela 5, ukiyo-e 5, pixel art 5, adulto 10; 45 en total). Tardará mucho. ¿Continuar?", "Création de plusieurs images (anime 10, gekiga 10, aquarelle 5, ukiyo-e 5, pixel art 5, adulte 10 ; 45 au total). Cela prend du temps. Continuer ?", "Es werden mehrere Bilder erstellt (Anime 10, Gekiga 10, Aquarell 5, Ukiyo-e 5, Pixel-Art 5, Erwachsene 10 – insgesamt 45). Das dauert lange. Fortfahren?"],
 ];

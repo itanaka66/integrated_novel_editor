@@ -123,11 +123,11 @@ def _write_config(over):
     return cfg
 
 
-def test_config_file_is_created_with_the_four_styles():
+def test_config_file_is_created_with_all_styles():
     cfg = cover.load_config()
     assert cover.config_path().exists()
-    assert [s["key"] for s in cover.list_styles()["styles"]] == ["anime", "gekiga", "photo", "other"]
-    assert [s["label"] for s in cover.list_styles()["styles"]] == ["アニメ風", "劇画風", "実写風", "その他"]
+    assert [s["key"] for s in cover.list_styles()["styles"]] == ["anime", "gekiga", "photo", "watercolor", "ukiyoe", "pixel", "adult", "other"]
+    assert [s["label"] for s in cover.list_styles()["styles"]] == ["アニメ風", "劇画風", "実写風", "水彩画", "浮世絵風", "ドット絵", "アダルト", "その他"]
     assert cfg["comfyui"]["width"] == 832
 
 
@@ -217,7 +217,7 @@ def test_generated_image_is_saved_with_its_prompt_and_style(client, project, mon
 
 def test_styles_endpoint(client):
     r = client.get("/api/v1/cover/styles").json()
-    assert r["default"] == "anime" and len(r["styles"]) == 4
+    assert r["default"] == "anime" and len(r["styles"]) == 8
 
 
 def test_digest_is_remembered_and_reflects_later_edits(client, project):
@@ -260,7 +260,7 @@ def test_overlay_text_without_cjk_font_keeps_image(monkeypatch):
 
 def test_cover_config_can_be_edited_and_is_used(client):
     cfg = client.get("/api/v1/cover/config").json()
-    assert set(cfg["styles"]) == {"anime", "gekiga", "photo", "other"}
+    assert set(cfg["styles"]) == {"anime", "gekiga", "photo", "watercolor", "ukiyoe", "pixel", "adult", "other"}
     cfg["comfyui"]["steps"] = 40
     cfg["styles"]["gekiga"]["comfyui"] = {"checkpoint": "dark-xl", "width": 640}
     cfg["styles"]["gekiga"]["higgsfield"] = {"model": "hf-x"}
@@ -351,3 +351,57 @@ def test_overlay_long_cjk_title_stays_inside_image():
     img = Image.open(BytesIO(out)).convert("RGB")
     edge = [img.getpixel((x, y)) for y in range(0, 400, 5) for x in (0, 1, 2, 829, 830, 831)]
     assert all(p == (20, 20, 20) for p in edge)  # nothing drawn at the left/right edges
+
+
+def test_new_looks_exist_and_batch_plan_matches_request():
+    keys = [s["key"] for s in cover.list_styles()["styles"]]
+    for k in ("anime", "gekiga", "watercolor", "ukiyoe", "pixel", "adult", "other"):
+        assert k in keys
+    assert cover.BATCH_PLAN == [("anime", 10), ("gekiga", 10), ("watercolor", 5), ("ukiyoe", 5), ("pixel", 5), ("adult", 10)]
+    assert "non-explicit" in cover.style_settings("adult")["direction"] or "non-explicit" in cover.DEFAULT_CONFIG["styles"]["adult"]["prompt_style"]
+
+
+def test_batch_generates_every_look_with_unique_files(client, project, monkeypatch):
+    calls = []
+
+    async def fake_image(prompt, ss):
+        calls.append(ss["style"])
+        return PNG
+
+    async def fake_prompt(project_, eps, chars, style="", custom_style=""):
+        return f"prompt for {style}"
+    monkeypatch.setattr(cover, "comfyui_image", fake_image)
+    monkeypatch.setattr(cover, "build_prompt", fake_prompt)
+    monkeypatch.setattr(cover, "BATCH_PLAN", [("anime", 2), ("pixel", 1)])
+    pid = project["id"]
+    b = client.post(f"/api/v1/projects/{pid}/cover/batch", json={"provider": "comfyui", "overlay": False}).json()
+    assert b["total"] == 3
+    for _ in range(100):
+        b = client.get(f"/api/v1/cover-batches/{b['id']}").json()
+        if b["status"] in ("completed", "error"):
+            break
+        time.sleep(0.1)
+    assert b["status"] == "completed" and b["done"] == 3 and b["failed"] == 0
+    assert calls == ["anime", "anime", "pixel"]
+    covers_ = client.get(f"/api/v1/projects/{pid}/covers").json()
+    assert len(covers_) == 3 and len({c["filename"] for c in covers_}) == 3
+    assert {c["style"] for c in covers_} == {"アニメ風", "ドット絵"}
+
+
+def test_batch_aborts_when_images_keep_failing(client, project, monkeypatch):
+    async def bad_image(prompt, ss):
+        raise cover.CoverError("ComfyUI down")
+
+    async def fake_prompt(*a, **k):
+        return "p"
+    monkeypatch.setattr(cover, "comfyui_image", bad_image)
+    monkeypatch.setattr(cover, "build_prompt", fake_prompt)
+    monkeypatch.setattr(cover, "BATCH_PLAN", [("anime", 5)])
+    pid = project["id"]
+    b = client.post(f"/api/v1/projects/{pid}/cover/batch", json={"provider": "comfyui", "overlay": False}).json()
+    for _ in range(100):
+        b = client.get(f"/api/v1/cover-batches/{b['id']}").json()
+        if b["status"] in ("completed", "error"):
+            break
+        time.sleep(0.1)
+    assert b["status"] == "error" and b["failed"] == 2 and "中止" in b["last_message"]

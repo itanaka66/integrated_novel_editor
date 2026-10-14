@@ -202,6 +202,8 @@ class CoverStateOut(BaseModel): prompt:str; style:str; custom_style:str; provide
 class CoverStyleOut(BaseModel): key:str; label:str
 class CoverStylesOut(BaseModel): default:str; styles:list[CoverStyleOut]
 class CoverGenerateRequest(BaseModel): provider:str; prompt:str; style:str=''; custom_style:str=''; overlay:bool=True
+class CoverBatchRequest(BaseModel): provider:str; overlay:bool=True
+class CoverBatchOut(BaseModel): id:int; project_id:int; provider:str; status:str; total:int; done:int; failed:int; current:str=''; last_message:str
 class CoverJobOut(BaseModel): id:int; project_id:int; provider:str; prompt:str; status:str; filename:str|None=None; last_message:str; style:str=''; custom_style:str=''
 class CoverImageOut(BaseModel): filename:str; provider:str; selected:bool; style:str=''; prompt:str=''
 class CoverSelectRequest(BaseModel): filename:str
