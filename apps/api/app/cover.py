@@ -97,6 +97,24 @@ DEFAULT_CONFIG: dict = {
                   'prompt_style': 'photorealistic cinematic photograph, natural lighting, real people and locations, shallow depth of field',
                   'prompt_suffix': 'photorealistic, 35mm film, ultra detailed',
                   'comfyui': {'negative_extra': 'anime, cartoon, illustration, painting'}, 'higgsfield': {}},
+        'watercolor': {'label': '水彩画',
+                       'prompt_style': 'delicate watercolor painting, soft translucent washes, visible paper texture, gentle bleeding edges, airy pastel palette',
+                       'prompt_suffix': 'watercolor painting, soft wash, paper texture',
+                       'comfyui': {'negative_extra': 'photorealistic, 3d render, harsh outlines'}, 'higgsfield': {}},
+        'ukiyoe': {'label': '浮世絵風',
+                   'prompt_style': 'traditional Japanese ukiyo-e woodblock print, flat color areas, bold black outlines, washi paper texture, Hokusai / Hiroshige composition',
+                   'prompt_suffix': 'ukiyo-e, woodblock print, traditional japanese art',
+                   'comfyui': {'negative_extra': 'photorealistic, 3d render, modern, western painting'}, 'higgsfield': {}},
+        'pixel': {'label': 'ドット絵',
+                  'prompt_style': 'retro 16-bit pixel art illustration, limited color palette, crisp pixels, dithering, game-art key visual',
+                  'prompt_suffix': 'pixel art, 16-bit, sprite art',
+                  'comfyui': {'negative_extra': 'smooth gradients, photorealistic, blurry, anti-aliased'}, 'higgsfield': {}},
+        # Mature, adult-audience look: sensual and dramatic mood, deliberately
+        # non-explicit (edit the wording in Settings -> 表紙画像 if you want otherwise).
+        'adult': {'label': 'アダルト',
+                  'prompt_style': 'mature adult-audience romance / dark drama cover art, sensual and moody atmosphere, dramatic low-key lighting, elegant and suggestive but non-explicit, fully clothed',
+                  'prompt_suffix': 'mature themes, moody cinematic lighting, tasteful',
+                  'comfyui': {'negative_extra': 'nudity, explicit, nsfw, child, childlike'}, 'higgsfield': {}},
         'other': {'label': 'その他', 'prompt_style': '', 'prompt_suffix': '',
                   'comfyui': {}, 'higgsfield': {}},
     },
@@ -541,8 +559,12 @@ async def run_cover_job(job: dict) -> None:
         fn = comfyui_image if job['provider'] == 'comfyui' else higgsfield_image
         ss = style_settings(job.get('style', ''), job.get('custom_style', ''))
         data = await fn(job['prompt'], ss)
-        name = f"{job['provider']}-{int(time.time())}{image_ext(data)}"
         d = covers_dir(job['project_id'])
+        base, ext = f"{job['provider']}-{int(time.time())}", image_ext(data)
+        name, n = f'{base}{ext}', 1
+        while (d / name).exists():  # several images can finish within one second
+            n += 1
+            name = f'{base}-{n}{ext}'
         note = ''
         if job.get('overlay'):
             # Keep the untouched image too, so the lettering can be redone later.
@@ -572,6 +594,66 @@ async def run_cover_job(job: dict) -> None:
         job['last_message'] = f'表紙の生成に失敗しました: {ex}'
     finally:
         running.pop(job['id'], None)
+
+
+# ---- batch: several looks, several images each ------------------------------
+
+# (look key, how many) - the "複数画像作成" button runs this plan.
+BATCH_PLAN: list[tuple[str, int]] = [('anime', 10), ('gekiga', 10), ('watercolor', 5), ('ukiyoe', 5), ('pixel', 5), ('adult', 10)]
+batches: dict[int, dict] = {}
+batch_tasks: dict[int, asyncio.Task] = {}
+_batch_ids = itertools.count(1)
+
+
+def new_batch(pid: int, provider: str, plan: list[tuple[str, int]], overlay: bool, title: str, author: str) -> dict:
+    batch = {'id': next(_batch_ids), 'project_id': pid, 'provider': provider, 'overlay': overlay, 'title': title, 'author': author,
+             'plan': plan, 'status': 'queued', 'total': sum(n for _, n in plan), 'done': 0, 'failed': 0, 'current': '',
+             'last_message': 'キューに追加しました'}
+    batches[batch['id']] = batch
+    return batch
+
+
+async def run_batch(batch: dict, make_prompt) -> None:
+    """For each look: write one prompt for it (`make_prompt(style)`, an LLM call),
+    then generate its images one after another. Stops early if the first images
+    keep failing (e.g. ComfyUI is down) instead of failing all of them one by one."""
+    batch['status'] = 'running'
+    streak = 0
+    try:
+        for style, count in batch['plan']:
+            label = style_settings(style)['label']
+            batch['current'] = label
+            batch['last_message'] = f'{label}: プロンプトを作成中…'
+            try:
+                prompt = await make_prompt(style)
+            except CoverError as ex:
+                batch['failed'] += count
+                batch['last_message'] = f'{label}: プロンプトを作成できませんでした: {ex}'
+                continue
+            for i in range(count):
+                batch['last_message'] = f'{label}: {i + 1}/{count} 枚目を生成中…'
+                job = new_job(batch['project_id'], batch['provider'], prompt, style, '', batch['overlay'], batch['title'], batch['author'])
+                await run_cover_job(job)
+                if job['status'] == 'completed':
+                    batch['done'] += 1
+                    streak = 0
+                else:
+                    batch['failed'] += 1
+                    streak += 1
+                    batch['last_message'] = f'{label}: {job["last_message"]}'
+                    if streak >= 2:
+                        raise CoverError(f'連続して失敗したため中止しました: {job["last_message"]}')
+        batch['status'] = 'completed'
+        batch['last_message'] = f'{batch["done"]}枚を生成しました' + (f'（失敗 {batch["failed"]}枚）' if batch['failed'] else '。')
+    except CoverError as ex:
+        batch['status'] = 'error'
+        batch['last_message'] = str(ex)
+    except Exception as ex:
+        logger.exception('Cover batch %s failed', batch['id'])
+        batch['status'] = 'error'
+        batch['last_message'] = f'複数画像の生成に失敗しました: {ex}'
+    finally:
+        batch_tasks.pop(batch['id'], None)
 
 
 # ---- stored files --------------------------------------------------------

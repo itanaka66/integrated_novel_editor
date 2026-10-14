@@ -4,6 +4,7 @@ import { api, fetchBlobUrl } from "../lib/api";
 import { t } from "../lib/i18n";
 
 type CoverImage = { filename: string; provider: string; selected: boolean; style: string; prompt: string };
+type CoverBatch = { id: number; status: string; total: number; done: number; failed: number; current: string; last_message: string };
 type CoverJob = { id: number; status: string; filename: string | null; last_message: string };
 type StyleOption = { key: string; label: string };
 type CoverState = { prompt: string; style: string; custom_style: string; provider: string; overlay: boolean };
@@ -64,6 +65,8 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
   const [job, setJob] = useState<CoverJob | null>(null);
   const [busyPrompt, setBusyPrompt] = useState(false);
   const [error, setError] = useState("");
+  const [batch, setBatch] = useState<CoverBatch | null>(null);
+  const batching = !!batch && (batch.status === "queued" || batch.status === "running");
   const generating = !!job && (job.status === "queued" || job.status === "running");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -112,6 +115,27 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
     } catch (e) { setError(e instanceof Error ? e.message : t("プロンプトを生成できませんでした")); }
     finally { setBusyPrompt(false); }
   }
+  // Poll the multi-image job and refresh the gallery as images arrive.
+  useEffect(() => {
+    if (!batch || !batching) return;
+    const timer = setInterval(async () => {
+      try {
+        const b = await api(`/cover-batches/${batch.id}`);
+        if (b?.id) { setBatch(b); reload(); } else { setError(b?.detail || t("進捗の取得に失敗しました")); setBatch(null); }
+      } catch { /* transient; retry on next tick */ }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [batch, batching, reload]);
+
+  async function generateMany() {
+    if (!window.confirm(t("複数画像を作成します（アニメ風10・劇画風10・水彩画5・浮世絵風5・ドット絵5・アダルト10 の計45枚）。時間がかかります。よろしいですか？"))) return;
+    setError(""); setBatch(null);
+    try {
+      const b = await api(`/projects/${projectId}/cover/batch`, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ provider: state.provider, overlay: state.overlay }) });
+      if (b?.id) setBatch(b); else setError(b?.detail || t("生成を開始できませんでした"));
+    } catch (e) { setError(e instanceof Error ? e.message : t("生成を開始できませんでした")); }
+  }
+
   async function generate() {
     setError(""); setJob(null);
     try {
@@ -156,7 +180,10 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
         placeholder={t("表紙のイメージ（英語プロンプト）。自動作成後に編集できます。")} />
       <small className="searchSource">{saved ? t("自動保存しました") : t("編集は自動保存されます")}</small>
 
-      <label style={{ display: "block", marginTop: 8 }}><input type="checkbox" checked={state.overlay} onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+        <label><input type="checkbox" checked={state.overlay} onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
+        <button type="button" onClick={generateMany} disabled={batching || generating}>{batching ? t("複数画像作成中 {done}/{total}", { done: batch!.done + batch!.failed, total: batch!.total }) : t("複数画像作成")}</button>
+      </div>
       <div className="exportButtons">
         {PROVIDERS.map((p) => (
           <label key={p.key}><input type="radio" name={`cover-provider-${projectId}`} checked={state.provider === p.key} onChange={() => persist({ ...state, provider: p.key })} /> {p.label}</label>
@@ -164,6 +191,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
         <button onClick={generate} disabled={generating || !state.prompt.trim()}>{generating ? t("生成中...") : t("表紙を生成")}</button>
       </div>
       {error && <p style={{ color: "#c0392b" }}>{error}</p>}
+      {batch && <p style={{ color: batch.status === "error" ? "#c0392b" : undefined }}>{batch.last_message}</p>}
       {job && <p style={{ color: job.status === "error" ? "#c0392b" : undefined }}>{job.last_message}</p>}
       {images.length > 0 && (
         <>
