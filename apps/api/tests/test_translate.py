@@ -179,3 +179,8 @@ def test_translate_job_can_be_cancelled_and_resumed(client, project, monkeypatch
     assert j2["status"] == "completed" and j2["project_id"] == dst.id
     assert client.post("/api/v1/background-jobs/cancel", json={"kind": "translate", "id": job["id"]}).status_code == 404
     assert client.post("/api/v1/background-jobs/cancel", json={"kind": "nope", "id": 1}).status_code == 400
+
+
+def test_translation_uses_the_controller_model():
+    from app import ollama
+    assert translator.generate is ollama.controller_generate
