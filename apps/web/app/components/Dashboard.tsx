@@ -6,12 +6,14 @@ import NewProjectForm from "./NewProjectForm";
 import ImportPanel from "./ImportPanel";
 import AccountPanel from "./AccountPanel";
 import { t } from "../lib/i18n";
+import { loadDashboardCache, saveDashboardCache, Twin } from "../lib/dashboardCache";
 
-type Twin = { metrics: { episodes: number; continuity_open: number }; health: { score: number; label: string } };
+const QUIET = { headers: { "X-Quiet": "1" } };
 
 export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) => void; onLogout: () => void }) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [twins, setTwins] = useState<Record<number, Twin>>({});
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [focusTwin, setFocusTwin] = useState<{ id: number; twin: Twin } | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -21,16 +23,28 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
 
   useEffect(() => { getCurrentUser().then(setUser); }, []);
 
+  // Cached cards draw immediately; the real numbers are fetched quietly behind
+  // them (one episode-count query, plus the detailed stats for just the most
+  // recent work). With no cache yet, this is a normal blocking first load.
   async function load() {
-    setBusy(true);
+    const cached = loadDashboardCache();
+    if (cached) {
+      setProjects(cached.projects); setCounts(cached.counts); setFocusTwin(cached.focus ?? null); setBusy(false);
+    } else setBusy(true);
     setError("");
     try {
-      const list: Project[] = await api("/projects");
-      setProjects(list);
-      const entries = await Promise.all(list.map(async (p) => [p.id, await api(`/projects/${p.id}/story-twin`)] as const));
-      setTwins(Object.fromEntries(entries));
+      const opts = cached ? QUIET : undefined;
+      const [list, c]: [Project[], { counts: Record<string, number> }] = await Promise.all([api("/projects", opts), api("/projects/episode-counts", opts)]);
+      setProjects(list); setCounts(c.counts);
+      const first = list[0];
+      let focus: { id: number; twin: Twin } | null = null;
+      if (first) {
+        try { focus = { id: first.id, twin: await api(`/projects/${first.id}/story-twin`, QUIET) }; } catch { /* stats are optional */ }
+      }
+      setFocusTwin(focus);
+      saveDashboardCache({ projects: list, counts: c.counts, focus: focus ?? undefined });
     } catch {
-      setError(t("作品一覧の読み込みに失敗しました。APIに接続できているか確認してください。"));
+      if (!cached) setError(t("作品一覧の読み込みに失敗しました。APIに接続できているか確認してください。"));
     } finally { setBusy(false); }
   }
   useEffect(() => { load(); }, []);
@@ -44,7 +58,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
 
   function renderWork(p: Project, depth: number, seen: Set<number>, parent?: Project): React.ReactNode {
     const goal = p.episode_goal || 500;
-    const eps = twins[p.id]?.metrics.episodes ?? 0;
+    const eps = counts[String(p.id)] ?? 0;
     const pct = Math.min(100, Math.round((eps / goal) * 100));
     const kids = seen.has(p.id) ? [] : childrenOf(p.id);
     const open = !collapsed.has(p.id);
@@ -95,7 +109,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   }
 
   const focus = projects[0];
-  const focusTwin = focus ? twins[focus.id] : null;
+  const focusStats = focus && focusTwin && focusTwin.id === focus.id ? focusTwin.twin : null;
 
   return (
     <div className="dashboard">
@@ -129,15 +143,15 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
           {projects.length === 0 && !busy && <div className="card"><b>{t("まだ作品がありません")}</b><p>{t("「新規作品作成」から最初の作品を作りましょう。")}</p></div>}
           {roots.map((p) => renderWork(p, 0, new Set()))}
         </div>
-        {focus && focusTwin && (
+        {focus && focusStats && (
           <div className="dashboardStats card">
             <small>{t("執筆状況（{name}）", { name: focus.name })}</small>
             <div className="dashboardDonutRow">
-              <div className={`health ${focusTwin.health.label}`}><b>{Math.min(100, Math.round((focusTwin.metrics.episodes / (focus.episode_goal || 500)) * 100))}%</b><span>{t("執筆状況")}</span></div>
+              <div className={`health ${focusStats.health.label}`}><b>{Math.min(100, Math.round((focusStats.metrics.episodes / (focus.episode_goal || 500)) * 100))}%</b><span>{t("執筆状況")}</span></div>
               <div className="dashboardStatList">
-                <div><small>{t("総話数")}</small><b>{focusTwin.metrics.episodes} / {focus.episode_goal || 500}</b></div>
-                <div><small>{t("未解決の連続性課題")}</small><b>{focusTwin.metrics.continuity_open}</b></div>
-                <div><small>{t("作品健全性スコア")}</small><b>{focusTwin.health.score}</b></div>
+                <div><small>{t("総話数")}</small><b>{focusStats.metrics.episodes} / {focus.episode_goal || 500}</b></div>
+                <div><small>{t("未解決の連続性課題")}</small><b>{focusStats.metrics.continuity_open}</b></div>
+                <div><small>{t("作品健全性スコア")}</small><b>{focusStats.health.score}</b></div>
               </div>
             </div>
             <p className="dashboardNote">{t("※ AI利用状況（トークン使用量）の集計は今後実装予定です。")}</p>
