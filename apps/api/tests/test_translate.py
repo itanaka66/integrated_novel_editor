@@ -409,3 +409,40 @@ def test_reviewer_uses_the_controller_with_no_think_for_qwen3(monkeypatch):
     monkeypatch.setattr(ollama, "get_effective_config", lambda: Cfg())
     asyncio.run(ollama.reviewer_generate("check"))
     assert seen["model"] == "qwen3:14b" and seen["url"] == "http://ctrl" and seen["kind"] == "controller" and seen["prompt"].endswith("/no_think")
+
+
+def test_omission_check_retranslates_with_the_missing_sentence_named(monkeypatch):
+    import asyncio
+    from app.config import settings
+    monkeypatch.setattr(settings, "translation_omission_check", True)
+    prompts = []
+
+    async def gen(prompt, *a, **k):
+        prompts.append(prompt)
+        return (OMITTED_EN if len(prompts) == 1 else GOOD_EN), "m"
+    monkeypatch.setattr(translator, "generate", gen)
+    state = {"calls": 0}
+
+    async def fake_find(src, out, embed):
+        state["calls"] += 1
+        return ["恐竜が柵を越えた」"] if out == OMITTED_EN else []
+    monkeypatch.setattr(translator, "find_omissions", fake_find)
+    stats = {}
+    out = asyncio.run(translator.translate_text(LONG_JA, "en", "", stats=stats))
+    assert out == GOOD_EN and stats == {"omissions_fixed": 1}
+    assert "次の文が訳されていません: 恐竜が柵を越えた」" in prompts[1]
+
+
+def test_omission_check_keeps_the_first_answer_when_the_retry_is_no_better(monkeypatch):
+    import asyncio
+    from app.config import settings
+    monkeypatch.setattr(settings, "translation_omission_check", True)
+
+    async def gen(prompt, *a, **k):
+        return OMITTED_EN, "m"
+    monkeypatch.setattr(translator, "generate", gen)
+
+    async def fake_find(src, out, embed):
+        return ["恐竜が柵を越えた」"]
+    monkeypatch.setattr(translator, "find_omissions", fake_find)
+    assert asyncio.run(translator.translate_text(LONG_JA, "en")) == OMITTED_EN

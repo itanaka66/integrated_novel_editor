@@ -22,6 +22,10 @@ class Settings(BaseSettings):
  # OFF by default: in a live test qwen3:14b (/no_think) flagged a faithful
  # translation as faulty and missed a real omission, so it is opt-in for now.
  translation_review:bool=False
+ # Sentence-level omission check: embed source/translated sentences (a multilingual
+ # embedding model) and re-translate a chunk when a source sentence has no
+ # counterpart. Cheap (one embedding call per chunk); skipped if the model is missing.
+ translation_omission_check:bool=True; translation_embed_model:str='bge-m3'
  # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
  # embeddings and Controller respectively) when set — see
  # editor_common.ollama's module docstring. A bare local `ollama serve` has
