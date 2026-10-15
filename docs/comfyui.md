@@ -57,6 +57,14 @@ Models and parameters are not hard-coded. They live in `cover_config.json` (`COV
 - `prompt_style` steers the generated prompt; `prompt_suffix` is appended to the prompt sent to ComfyUI.
 - Order of precedence for the checkpoint: look override → `comfyui.checkpoint` → `COMFYUI_CHECKPOINT` → first installed.
 
+## Looks and batch generation
+
+There are eight looks: アニメ風, 劇画風, 実写風, 水彩画, 浮世絵風, ドット絵, アダルト (a mature, sensual-mood look that is deliberately **non-explicit**, with an explicit negative prompt) and その他. Each can have its own checkpoint and settings (Settings → 表紙画像 → its tab). The checkpoint fields suggest what ComfyUI actually has installed.
+
+**複数画像作成** generates 45 images in one background job (アニメ風 10, 劇画風 10, 水彩画 5, 浮世絵風 5, ドット絵 5, アダルト 10): one prompt per look, then that look's images. It stops after two consecutive failures and can be cancelled from the dashboard; images already made are kept. Individual images can be deleted from the enlarged view.
+
+The title and author are drawn on top (toggle: 「タイトルと著者名を画像に入れる」); the untouched image is kept under `covers/<id>/raw/`. Titles wrap at 12 full-width characters per line (up to 4 lines) — `overlay.max_title_chars` / `overlay.max_title_lines` in `cover_config.json`, together with the font, sizes, colors and positions.
+
 ## 5. Troubleshooting
 
 | Message | Cause / fix |

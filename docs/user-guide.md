@@ -23,7 +23,9 @@ Forgot your password? "パスワードをお忘れですか？" on the login scr
 
 ## Dashboard
 
-Lists all projects as cards, each showing genre and a progress bar (episodes written ÷ that project's episode target). The panel on the right shows detailed stats — episode count, open continuity issues, and an overall health score — for your most recently created project. Click a card to open that project. "＋ 新規作品作成" opens the new-project form.
+Lists your works as a **tree**: an original work is a parent card, and the works made from it — translations and digests (総集編) — are indented beneath it with a language/「総集編」 tag (▾/▸ collapses a parent). Each card shows genre and a progress bar (episodes written ÷ that project's episode target). Works created before the parent link existed (see below) simply appear as top-level cards. The panel on the right shows detailed stats — episode count, open continuity issues, and an overall health score — for your most recently created project. Click a card to open that project. "＋ 新規作品作成" opens the new-project form.
+
+When something is running on the server, a **「サーバーで実行中の処理」** card appears above the list: auto-write, imports, translations, "全翻訳", cover generation and 複数画像作成, each with its work name, progress and a **キャンセル** button (plus 「すべてキャンセル」 when there are several). These jobs run on the server, so they keep going after you log out (or are logged out after 10 idle minutes) and show up here again when you return. Work already done is kept when you cancel; auto-write stops after the current step, the others stop immediately. Translation and cover jobs are held in memory, so a server restart ends them.
 
 ### Account settings
 
@@ -37,7 +39,11 @@ Fields: name (required), genre, synopsis (あらすじ), free-text "rules" (詳�
 
 ## Project Home
 
-The landing screen after opening a project: header with name/genre/synopsis and progress, a 3×3 icon grid to every other screen, and a "最近の更新" (recent activity) list of the 5 highest-numbered episodes.
+The landing screen after opening a project: header with name/genre/synopsis and progress, a 3×3 icon grid to every other screen, and a "最近の更新" (recent activity) list of the 5 highest-numbered episodes. Below it are cards for:
+
+- **出版情報 (publishing info)** — opens a dialog with everything a store listing asks for (see [Publishing info and posting destinations](#publishing-info-and-posting-destinations)), and the **投稿先** links.
+- **多言語化 (translation)** — one button per language, **全翻訳** and a progress/cancel area (see [Translation](#translation)).
+- **総集編 (digest)** — creates a ~1/2-length digest as a new work, shown as a child of the original on the dashboard.
 
 ## Importing from a text file
 
@@ -46,7 +52,7 @@ Two ways in, both from a plain `.txt` file in the "なろう" (Shosetsuka ni Nar
 - **Dashboard → "ファイルからインポート"**: creates a brand-new project from a full novel export — a metadata header (title/synopsis/genre) followed by episodes delimited by `------- エピソードN開始 -------` separators. The parsed title/synopsis/genre become the new project's fields, and every episode is created.
 - **Settings → "インポート" tab, inside an existing project**: adds or updates episodes in *that* project from either the same full-export format or a headerless draft-episodes file (episodes delimited by `-------第N話「タイトル」-------`, title embedded in the separator itself). An episode number that already exists gets its content overwritten (the prior content is snapshotted to that episode's revision history first, same as any other edit); a new number is created.
 
-Both run as a background job you can watch progress on (`GET /api/v1/import-jobs/{id}`, polled every 2 seconds) rather than a single blocking request, because importing tens of episodes then triggers real AI work for each one: RAG re-indexing, then the same character-state extraction a normal save does, and — once every episode is in — one whole-project continuity audit. A large import can take several minutes; the progress bar shows episodes processed / total, and you can close the dialog without cancelling the job (Dashboard's importer; the Settings tab's importer keeps polling as long as you stay on the tab). Starting an import also asks for [desktop notification permission](#auto-write-自動執筆), and fires one when the job finishes — same caveat as auto-write: only while the tab stays open, since it's a plain browser notification, not a push one.
+Both run as a background job you can watch progress on (`GET /api/v1/import-jobs/{id}`, polled every 2 seconds) rather than a single blocking request. **Importing only stores the text — no AI runs afterwards** (no embedding/indexing, no character-state extraction, no continuity audit); an imported episode is indexed for semantic search the next time it is saved, and you can run the audit from the app whenever you want. A large import can still take a while because every episode is written to the database and the disk mirror. The progress bar shows "episodes processed / total episodes", and closing the dialog does not cancel the job (a dashboard import carries on in the background; the Settings-tab import keeps polling while that tab is open) — it can be cancelled from the dashboard's running-jobs card. Starting an import also asks for [desktop-notification permission](#auto-write-自動執筆) and notifies when the job ends, with the same caveats as auto-write (works only while this tab is open; not a push notification).
 
 The parser auto-detects which of the two formats a file is — you don't pick a mode. A file matching neither (no recognizable episode separators) is rejected up front with a 400, before any job is created.
 
@@ -76,6 +82,11 @@ These six screens share one underlying list-and-form UI (create, edit, delete), 
 **用語集 (Glossary) is not a separate data type** — it's stored as a World entity with `entity_type: "glossary"`, filtered client-side. The 世界観 screen only shows entities that are *not* tagged as glossary, so the two lists never overlap. This keeps the backend simpler at the cost of a slightly indirect implementation; if you ever query the API directly (`GET /api/v1/projects/{id}/world`), glossary terms are mixed in there too.
 
 Everything you register here is fed into the AI's context for every generation and continuity check — this is the mechanism the app uses to keep long-running stories consistent.
+
+**Two helpers on every one of these screens:**
+
+- **CSV import skips duplicates.** A row is skipped when it matches an existing row (or an earlier row in the same file) on its key — the name or title, and for 年表 the episode number plus title — compared ignoring full-/half-width, case and spaces. The result line reports how many were skipped.
+- **「＋ AIで10個追加」** asks the AI for about 10 new rows (in the work's language), using the synopsis, genre, rules, existing characters and the rows already there as context. Rows that duplicate existing ones are dropped before saving, so pressing it again adds fresh ideas. It shows up in the LLM queue as 「設定のAI追加」. Review what it adds — it is a starting point.
 
 ## Analytics (分析)
 
@@ -129,12 +140,18 @@ Every 5th episode written also triggers a full continuity audit automatically.
 
 Clicking "▶ 自動執筆を開始" also asks the browser for notification permission (if not already granted/denied) — when granted, a desktop notification fires the moment the job finishes (completed, stopped, or errored), so you don't have to keep watching the progress bar. This only works while this tab stays open; it's a plain browser `Notification`, not a push notification, so it can't reach you if the tab or browser is closed. The [file import](#importing-from-a-text-file) jobs behave the same way.
 
+The range's last episode defaults to the work's own **episode target** (総話数目標) rather than a fixed 500, and the episode list/"add episode" screens handle works of any length (the list is no longer cut off at 200). Planning beyond episode 500 is generated on demand.
+
 ## Settings (設定)
 
 - **基本設定 (Basic)**: edit the project's name, genre, synopsis, rules, and episode target. Saves immediately via the API.
 - **AI設定 (AI settings)**: sets *this browser's* default Writer/Controller model names, which prefill the Auto-write start form.
 - **接続設定 (Connection settings)**: Qdrant URL and both Ollama endpoints/models (Writer and Controller) can be changed here and take effect immediately, no restart needed — see [Connection settings](#connection-settings) below. SQL (the database itself) and the CORS allowed-origins list are shown read-only.
 - **エクスポート (Export)**: downloads every episode's prose (title + summary + body only — no characters/world/plot/foreshadowing data) as a single file in one of three formats: plain text (`.txt`), Markdown (`.md`), or a minimal but valid EPUB3 (`.epub`) you can open in any e-reader. `GET /api/v1/projects/{id}/export?format=txt|md|epub`.
+- **表紙画像 (Cover image)**: the ComfyUI server URL (with a 接続テスト that lists the installed checkpoints), the common ComfyUI/Higgsfield values, and — per look (see below) — the prompt direction/suffix and ComfyUI/Higgsfield overrides, including a checkpoint per look. Saving writes `cover_config.json`; the next generation uses it (admins only). See the [ComfyUI Guide](comfyui.md).
+- **作品の削除 (Delete work)**: deletes the work and everything in it. A JSON backup of all its data downloads first (nothing is deleted if that fails). A work that still has children (translations/digests) cannot be deleted until they are all deleted. Vector-search entries are derived data and are not removed.
+
+The エクスポート tab also offers **KDP出版パッケージ (.zip)** and the JSON backup (`GET /api/v1/projects/{id}/export?format=json`, every project table plus the publishing info) — see [Publishing info and posting destinations](#publishing-info-and-posting-destinations). 「インポート開始」 and 「今すぐバックアップ」 are blue like the other action buttons.
 
 ### Connection settings
 
@@ -143,6 +160,20 @@ Clicking "▶ 自動執筆を開始" also asks the browser for notification perm
 The database connection (`DATABASE_URL`) and the CORS allowed-origins list (`CORS_ORIGINS`) are deliberately **not** editable from here, for two different reasons: `DATABASE_URL` because the app would have to swap the very connection it's using to read this settings screen out from under itself mid-request, which isn't safe to do live; `CORS_ORIGINS` because it's a security control over which origins may talk to this API at all, and letting any signed-in user flip it open to `*` from the UI is a bigger blast radius than a wrong Ollama URL. Change either one via its environment variable ([requirements.md](requirements.md#cross-origin-access-cors_origins)) and recreate/restart the server.
 
 Every row (including the read-only SQL one) has a "接続テスト" (test connection) button — `POST /api/v1/system-settings/test-connection`. It probes the *value currently in that field*, whether or not it's been saved yet, so you can check a new URL before committing to it: a real `SELECT 1` for the database, `get_collections()` for Qdrant, and `GET /api/tags` for either Ollama endpoint (the two model fields additionally check that the named model is actually pulled, not just that the server answers). Each probe times out after 8 seconds and reports round-trip latency alongside success/failure — it never touches what's saved, only what you're about to save.
+
+## Publishing info and posting destinations
+
+**出版情報** (Project Home) gathers what a store listing such as Amazon KDP asks for: title, subtitle, author (pen name OK), description (up to 4000 characters, defaults to the synopsis), keywords (up to 7, 50 characters each), category, whether it contains adult content, and the reader age range. Title and author are the work's own fields (so they also feed the cover lettering and the EPUB); the rest is saved as `publishing.json` beside the episode files. "まとめてコピー" copies everything as text. `GET`/`PUT /api/v1/projects/{id}/publishing`.
+
+**KDP出版パッケージ** (Settings → エクスポート) builds one ZIP per work: `book.epub` (with the chosen cover), the cover image, and `kdp_info.csv` / `kdp_info.md` — the listing details in KDP's order plus a **draft** of KDP's AI-generated-content disclosure (text / images / translation) inferred from the app's own records (auto-write history, translated-from link, cover provider). KDP counts AI-made text, images and translations as AI-generated even when edited, so confirm the answers yourself. Registering and publishing stay manual on KDP — the app never logs in or posts. Translated works are separate works: export each one separately and edit its listing text.
+
+**投稿先** buttons open the posting pages of Kindle Direct Publishing, 小説家になろう, NovelMint, Unwall Library and Novela.work in a new tab, and 「投稿先の詳細」 shows notes per service (supported languages, how the language is set, translation delivery, cautions). The notes are research notes that may go out of date; 編集 lets an admin change names, URLs and notes, add or remove destinations, or 初期値に戻す (`GET`/`PUT /api/v1/publish-targets`, stored as `publish_targets.json`, http/https URLs only, shared by all users). Note that 小説家になろう requires AI-use disclosure and forbids works written entirely by AI, and there is no official posting API for it or for KDP.
+
+## Translation
+
+Project Home → 多言語化 translates the whole work into a new work (the original is untouched), one button per language. **全翻訳** translates into every other language, one after another, as a **single server-side job** (so it survives logout; `POST /api/v1/projects/{id}/translate-all`) — a failing language does not stop the rest, and failures are listed at the end.
+
+A translated work remembers its source (`source_project_id`). Translating the same work into the same language again **continues that work instead of duplicating it**: missing episodes, characters and world entries are added, and a title/summary/body that is empty or shorter than 25% of the original is translated again; complete episodes are skipped. (Translations made before this link existed are not recognised and start a new work.) **翻訳をキャンセル / 全翻訳をキャンセル** stops the job; what is already translated stays and the next run continues from it.
 
 ## Local-disk mirror and GitHub auto-save
 
@@ -164,8 +195,11 @@ Below 700px width the sidebar collapses into a wrapping horizontal bar at the to
 
 ## Cover images and digests: what is saved
 
-- **Cover look and prompt.** Before generating, pick the look — アニメ風 (anime), 劇画風 (gekiga), 実写風 (photorealistic) or その他 (type your own, e.g. watercolor) — and the prompt, and the image model/settings for that look, follow from it. The prompt, look and engine are saved to disk as you type and are still there after leaving the screen or reloading; your own edits to the prompt are what gets sent to the image model.
+- **Cover look and prompt.** Before generating, pick the look — アニメ風 (anime), 劇画風 (gekiga), 実写風 (photorealistic), 水彩画 (watercolor), 浮世絵風 (ukiyo-e), ドット絵 (pixel art), アダルト (a mature, sensual-mood look that is deliberately non-explicit) or その他 (type your own) — and the prompt, and the image model/settings for that look, follow from it. The prompt, look and engine are saved to disk as you type and are still there after leaving the screen or reloading; your own edits to the prompt are what gets sent to the image model.
 - **Generated images** are saved automatically on the server's disk (`COVERS_DIR/<project id>/`, with a small `.json` beside each recording the prompt, look and settings used) and listed on the cover panel; click one to enlarge it or to use it as the EPUB cover.
+- **複数画像作成** (next to the title/author checkbox) generates many images in one background job: アニメ風 10, 劇画風 10, 水彩画 5, 浮世絵風 5, ドット絵 5, アダルト 10 (45). It writes one prompt per look, then that look's images in turn; progress shows as n/45 and the gallery fills as images arrive. It stops early if two images in a row fail (for example ComfyUI is down). One batch per project at a time; cancellable from the dashboard. `POST /api/v1/projects/{id}/cover/batch`.
+- **Deleting images.** Click an image to enlarge it, then 「この画像を削除」 removes it (with its `.json` and its `raw/` original; if it was the adopted cover, the adoption is cleared).
+- **Lettering rules.** Titles of up to 12 full-width characters per line are split into balanced lines (3–4 lines for long titles, breaking after punctuation where possible, never starting a line with 、。！？」); if a line is still too wide the font shrinks to fit. If the project has no author, the logged-in user's name is used. Limits are `overlay.max_title_chars` / `overlay.max_title_lines` in `cover_config.json`.
 - **Title and author on the image.** When generation finishes, the project name and author (set under the project's basic settings) are drawn onto the image automatically — toggle with "タイトルと著者名を画像に入れる". The untouched original stays in `COVERS_DIR/<project id>/raw/`. Font, sizes, colors and positions are in the `overlay` section of `cover_config.json`; if no Japanese font is installed, point `overlay.font` at a font file (the Docker image ships IPAGothic).
 - **Image models and settings** are not built into the app: they are in `cover_config.json` (`COVER_CONFIG_PATH`; created with defaults on first use). Per look you can set the ComfyUI checkpoint, size, steps, CFG, sampler, scheduler, negative prompt, the Higgsfield model, and the wording that steers the prompt. The file is re-read whenever it changes, so edits apply to the next generation without restarting; if you save a broken file the last good one keeps being used.
 - **Digest (総集編).** The digest is its own work (open it from "総集編を開く"), saved like any other, and its episode files are mirrored to disk. The cover/digest panel remembers the last digest made from a work, and its size is read live, so edits you make to the digest show up.
