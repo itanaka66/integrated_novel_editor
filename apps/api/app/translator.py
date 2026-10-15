@@ -185,6 +185,7 @@ def is_short(src: str, dst: str) -> bool:
 def _prompt(language: str, glossary: str, text: str) -> str:
     return f'''You are a professional literary translator. Translate the following novel text into {_PROMPT_LANG[language]}.
 Rules: keep the paragraph/line breaks and dialogue formatting exactly; do not summarize, add, or omit anything; keep the literary tone; render proper nouns consistently{glossary}.
+The output must be written entirely in {_PROMPT_LANG[language]}; never return the source text unchanged and never leave source-language sentences untranslated.
 Output only the translation, with no preface or notes.
 
 {text}'''
@@ -229,13 +230,58 @@ def clean_translation(text: str) -> str:
     return '\n\n'.join(paras).strip()
 
 
+_KANA = re.compile(r'[\u3040-\u30ff]')
+_HAN = re.compile(r'[\u3400-\u9fff]')
+_HANGUL = re.compile(r'[\uac00-\ud7af]')
+_LATIN_TARGETS = ('en', 'es', 'fr', 'de', 'pt-BR')
+
+
+def _ratio(rx, text: str) -> float:
+    body = re.sub(r'\s', '', text)
+    return len(rx.findall(body)) / len(body) if body else 0.0
+
+
+def bad_translation(src: str, out: str, language: str) -> str:
+    """Why `out` is not a usable translation of `src` into `language` ('' = fine):
+    empty/far too short (cut off) or still mostly in the source language. Some
+    models answer with the Japanese text unchanged or translate only part of it."""
+    s, o = len(src.strip()), len(out.strip())
+    if s > 40 and o < s * SHORT_RATIO:
+        return 'too short'
+    if s <= 40:
+        return ''
+    kana = _ratio(_KANA, out)
+    if language in _LATIN_TARGETS and (kana + _ratio(_HAN, out) + _ratio(_HANGUL, out)) > 0.2:
+        return 'untranslated'
+    if language == 'ko' and (kana > 0.2 or _ratio(_HANGUL, out) < 0.2):
+        return 'untranslated'
+    if language == 'zh-CN' and kana > 0.1:
+        return 'untranslated'
+    if language == 'ja' and kana < 0.05:
+        return 'untranslated'
+    return ''
+
+
+def _retry_prompt(language: str, glossary: str, text: str) -> str:
+    return (f'IMPORTANT: your previous answer was not a complete {_PROMPT_LANG[language]} translation. '
+            f'Translate EVERY sentence of the text below into {_PROMPT_LANG[language]} and output nothing in any other language.\n\n'
+            + _prompt(language, glossary, text))
+
+
 async def translate_text(text: str, language: str, glossary: str = '') -> str:
     if not (text or '').strip():
         return text or ''
     out = []
     for chunk in split_chunks(text):
         t, _ = await generate(_prompt(language, glossary, chunk))
-        out.append(clean_translation(t))
+        cleaned = clean_translation(t)
+        if bad_translation(chunk, cleaned, language):
+            # One more try with a firmer prompt; keep whichever answer is better.
+            t2, _ = await generate(_retry_prompt(language, glossary, chunk))
+            again = clean_translation(t2)
+            if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
+                cleaned = again
+        out.append(cleaned)
     return '\n'.join(out)
 
 

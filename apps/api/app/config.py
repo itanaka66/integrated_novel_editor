@@ -14,6 +14,9 @@ class Settings(BaseSettings):
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
  # Translation model: blank = use the Controller's server/model.
  translator_ollama_url:str=''; translator_ollama_model:str=''
+ # Seconds to wait for one translation call (a chunk of ~2500 characters). Local
+ # GPUs can be slow, and the old fixed 180 s made slow models fail every time.
+ translator_timeout_seconds:int=900
  # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
  # embeddings and Controller respectively) when set — see
  # editor_common.ollama's module docstring. A bare local `ollama serve` has
