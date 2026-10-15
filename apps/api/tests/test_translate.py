@@ -255,3 +255,66 @@ def test_translate_text_cleans_each_chunk(monkeypatch):
         return "<think>x</think>Here is the translation:\nOK.\n\nNote: done", "m"
     monkeypatch.setattr(translator, "generate", noisy)
     assert asyncio.run(translator.translate_text("あ", "en")) == "OK."
+
+
+JA = ("夜明け前の集落に、乾いた風が吹いていた。\n「起きろ、ガルド。恐竜が柵を越えた」\n"
+      "リナの声に、ガルドは毛皮の寝床から跳ね起きた。槍を掴み、焚き火の残り火を蹴り散らして外へ出る。")
+
+
+def test_bad_translation_detection():
+    bad = translator.bad_translation
+    assert bad(JA, "The village before dawn was swept by a dry wind.\n“Wake up.”\nAt Lina's voice, Galdo sprang up and went out.", "en") == ""
+    assert bad(JA, JA, "ko") == "untranslated"  # model returned the Japanese unchanged
+    assert bad(JA, "« Lève-toi. »\nリナの声に、ガルドは毛皮の寝床から跳ね起きた。槍を掴み、焚き火の残り火を蹴り散らして外へ出る。", "fr") == "untranslated"
+    assert bad(JA, "Wake.", "en") == "too short"
+    assert bad(JA, "夜明け前、風が吹いていた。「起きろ」とリナが言った。ガルドは跳ね起きて外へ出た。", "zh-CN") == "untranslated"
+    assert bad(JA, "黎明前的聚落里吹着干燥的风。“起来，嘎尔德。恐龙越过了围栏。”莉娜的声音让他从毛皮床上跳了起来。", "zh-CN") == ""
+    assert bad("short", "x", "en") == ""  # too little text to judge
+    assert bad("a long english source sentence that needs translating into Japanese for the reader", "これは翻訳です。長い英語の文章が日本語になりました。", "ja") == ""
+
+
+def test_translate_text_retries_once_when_the_model_returns_the_source(monkeypatch):
+    import asyncio
+    calls = []
+
+    async def gen(prompt, *a, **k):
+        calls.append(prompt)
+        if len(calls) == 1:
+            return JA, "m"  # the lazy answer
+        return "The village before dawn was swept by a dry wind.\n“Wake up, Gard.”\nAt Lina's voice, Gard sprang up and went out.", "m"
+    monkeypatch.setattr(translator, "generate", gen)
+    out = asyncio.run(translator.translate_text(JA, "en"))
+    assert out.startswith("The village") and len(calls) == 2
+    assert "IMPORTANT" in calls[1] and "entirely in English" in calls[0]
+
+
+def test_translate_text_keeps_the_better_answer_when_retry_also_fails(monkeypatch):
+    import asyncio
+
+    async def gen(prompt, *a, **k):
+        return JA, "m"
+    monkeypatch.setattr(translator, "generate", gen)
+    assert asyncio.run(translator.translate_text(JA, "ko")) == JA.strip()
+
+
+def test_translator_adds_no_think_for_qwen3_and_uses_the_configured_timeout(monkeypatch):
+    import asyncio
+    from app import ollama
+    from app.config import settings
+    seen = {}
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        seen.update(prompt=prompt, model=model, timeout=timeout, kind=kind)
+        return "ok", model
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+    monkeypatch.setattr(settings, "translator_timeout_seconds", 321)
+
+    class Cfg:
+        translator_ollama_model = "qwen3:14b"
+        translator_ollama_url = "http://x"
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: Cfg())
+    asyncio.run(ollama.translator_generate("translate this"))
+    assert seen["prompt"].endswith("/no_think") and seen["timeout"] == 321 and seen["kind"] == "translator"
+    Cfg.translator_ollama_model = "gemma3:12b"
+    asyncio.run(ollama.translator_generate("translate this"))
+    assert not seen["prompt"].endswith("/no_think")

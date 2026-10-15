@@ -171,6 +171,8 @@ Every row (including the read-only SQL one) has a "接続テスト" (test connec
 
 ## Translation
 
+Each chunk is checked after translation: if the answer is empty, far too short, or still mostly in the source language (some models return the Japanese unchanged or translate only part), it is translated once more with a firmer prompt and the better answer is kept. One call may take up to `TRANSLATOR_TIMEOUT_SECONDS` (default 900). For Qwen3 models the app adds `/no_think`, which skips the long reasoning phase and is several times faster.
+
 Whatever model translates, its answer is cleaned the same way before saving: `<think>` reasoning, a code fence around the whole answer, an announcing first line ("Here is the translation:") and a closing remark ("Note: …", "I hope this helps") are removed. Only whole leading/trailing lines matching strict patterns are dropped, never text inside the translation.
 
 Project Home → 多言語化 translates the whole work into a new work (the original is untouched), one button per language. **全翻訳** translates into every other language, one after another, as a **single server-side job** (so it survives logout; `POST /api/v1/projects/{id}/translate-all`) — a failing language does not stop the rest, and failures are listed at the end.

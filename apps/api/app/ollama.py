@@ -56,8 +56,13 @@ async def translator_generate(prompt):
     the Controller's; same API key as the Controller (typically the same
     instance) and no options override."""
     cfg = get_effective_config()
+    model = cfg.translator_ollama_model
+    if model.lower().startswith('qwen3'):
+        # Qwen3 "thinks" for ~1000 tokens before answering, which turns a
+        # minute into many; its documented /no_think switch skips that.
+        prompt = prompt.rstrip() + ' /no_think'
     return await generate(
-        prompt, cfg.translator_ollama_model, cfg.translator_ollama_url, 180,
+        prompt, model, cfg.translator_ollama_url, env_settings.translator_timeout_seconds,
         options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
     )
 
