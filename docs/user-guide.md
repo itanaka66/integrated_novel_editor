@@ -171,6 +171,8 @@ Every row (including the read-only SQL one) has a "接続テスト" (test connec
 
 ## Translation
 
+**Optional AI check** (`TRANSLATION_REVIEW=true`, off by default): the Controller model compares each translated chunk with its source and, if it reports problems, the chunk is translated again with its findings. It adds one Controller call per chunk. In a live test with qwen3:14b it was **not reliable** — it flagged a faithful translation as faulty and missed a real omission — so treat its findings as a hint, not proof, and expect extra time.
+
 Each chunk is checked after translation: if the answer is empty, far too short, or still mostly in the source language (some models return the Japanese unchanged or translate only part), it is translated once more with a firmer prompt and the better answer is kept. One call may take up to `TRANSLATOR_TIMEOUT_SECONDS` (default 900). For Qwen3 models the app adds `/no_think`, which skips the long reasoning phase and is several times faster.
 
 Whatever model translates, its answer is cleaned the same way before saving: `<think>` reasoning, a code fence around the whole answer, an announcing first line ("Here is the translation:") and a closing remark ("Note: …", "I hope this helps") are removed. Only whole leading/trailing lines matching strict patterns are dropped, never text inside the translation.
