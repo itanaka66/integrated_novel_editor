@@ -94,6 +94,15 @@ async def controller_generate(prompt):
     )
 
 
+async def alignment_embed(texts):
+    """Multilingual sentence embeddings for the translation omission check (the
+    RAG embedding model may be English-only, so this has its own setting)."""
+    cfg = get_effective_config()
+    model = env_settings.translation_embed_model
+    async with slot(kind='embed', model=model, url=cfg.ollama_url):
+        return await _common_ollama.embed(texts, model, cfg.ollama_url, api_key=env_settings.ollama_api_key or None)
+
+
 async def embed(texts):
     cfg = get_effective_config()
     async with slot(kind='embed', model=cfg.ollama_embed_model, url=cfg.ollama_url):

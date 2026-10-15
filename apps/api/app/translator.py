@@ -20,6 +20,8 @@ from .models import Project, Episode, Character, WorldEntity
 # not compete with prose generation.
 from .ollama import translator_generate as generate
 from .ollama import reviewer_generate as review_generate
+from .ollama import alignment_embed
+from .omission import find_omissions
 from .config import settings as env_settings
 from .continuity import extract_json
 from . import file_sync
@@ -323,6 +325,20 @@ async def translate_text(text: str, language: str, glossary: str = '', stats: di
             again = clean_translation(t2)
             if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
                 cleaned = again
+        if env_settings.translation_omission_check:
+            missing = await find_omissions(chunk, cleaned, alignment_embed)
+            if missing:
+                # Translate again, naming the sentences that were left out; keep it only
+                # when it brings back at least one of them without losing quality.
+                purpose.set(f'翻訳（{LANGUAGES[language]}）抜け修正')
+                t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]))
+                again = clean_translation(t4)
+                if again and not bad_translation(chunk, again, language):
+                    left = await find_omissions(chunk, again, alignment_embed)
+                    if len(left) < len(missing):
+                        cleaned = again
+                        if stats is not None:
+                            stats['omissions_fixed'] = stats.get('omissions_fixed', 0) + len(missing) - len(left)
         if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
             issues = await review_chunk(chunk, cleaned, language, glossary)
             if stats is not None:
@@ -420,6 +436,8 @@ async def run_translation(job: dict) -> None:
         _persist()
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume
                                else f'{len(eps)}話の翻訳が完了しました。')
+        if job.get('omissions_fixed'):
+            job['last_message'] += f"（抜けていた{job['omissions_fixed']}文を補いました）"
         if job.get('reviewed'):
             job['last_message'] += f"（AIチェック{job['reviewed']}回、うち{job.get('fixed', 0)}箇所を修正）"
     except asyncio.CancelledError:

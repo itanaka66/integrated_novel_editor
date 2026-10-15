@@ -35,6 +35,7 @@ def no_translation_review_by_default(monkeypatch):
     # The AI translation check calls the Controller model; tests must never reach a
     # real Ollama. Tests of the check itself switch it on and fake the call.
     monkeypatch.setattr(settings, "translation_review", False)
+    monkeypatch.setattr(settings, "translation_omission_check", False)
 
 
 @pytest.fixture(autouse=True)
