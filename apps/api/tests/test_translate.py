@@ -184,3 +184,33 @@ def test_translate_job_can_be_cancelled_and_resumed(client, project, monkeypatch
 def test_translation_uses_the_controller_model():
     from app import ollama
     assert translator.generate is ollama.controller_generate
+
+
+def test_unfinished_translation_resumes_after_a_restart(client, project, monkeypatch, db_session_factory):
+    import asyncio
+    from app.models import Episode, Project
+
+    async def fake_generate(prompt, *a, **k):
+        return "Z" * 30, "m"
+    monkeypatch.setattr(translator, "generate", fake_generate)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="本文" * 30) for n in range(1, 4)])
+        db.commit()
+    job = translator.new_job(pid, "en")  # saved to disk, status 'queued'
+    job["status"] = "running"
+    translator._persist()
+    translator.jobs.clear()  # "the server restarted": memory is gone
+
+    async def go():
+        assert translator.resume_unfinished() == 1
+        await asyncio.gather(*list(translator.running.values()))
+        return translator.jobs[job["id"]]
+    j = asyncio.run(go())
+    assert j["status"] == "completed" and j["processed_episodes"] == 3
+    with db_session_factory() as db:
+        assert db.query(Project).filter(Project.source_project_id == pid).count() == 1
+    # a new job after the restart does not reuse the old id
+    assert translator.new_job(pid, "fr")["id"] > job["id"]
+    assert client.get(f"/api/v1/projects/{pid}/translate-jobs").json()[0]["id"] >= job["id"]

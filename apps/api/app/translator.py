@@ -7,6 +7,7 @@ server restart simply drops in-flight jobs.
 """
 import asyncio
 import itertools
+import json
 import logging
 
 from sqlalchemy import select
@@ -41,6 +42,60 @@ running: dict[int, asyncio.Task] = {}
 _ids = itertools.count(1)
 
 
+def _state_file():
+    d = file_sync.storage_root()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / 'translate_jobs.json'
+
+
+def _persist() -> None:
+    """Write the job table to disk (small) so a server restart can pick the
+    unfinished jobs up again instead of losing them."""
+    try:
+        _state_file().write_text(json.dumps({'jobs': list(jobs.values())[-200:], 'all_jobs': list(all_jobs.values())[-50:]}, ensure_ascii=False), encoding='utf-8')
+    except OSError:
+        logger.warning('Could not save translate job state', exc_info=True)
+
+
+def resume_unfinished() -> int:
+    """Called at startup: reload saved jobs and restart the ones that were still
+    queued/running. Re-running is safe — a translation continues the existing
+    translated work and only fills in what is missing (see run_translation)."""
+    global _ids, _all_ids
+    try:
+        saved = json.loads(_state_file().read_text(encoding='utf-8')) if _state_file().exists() else {}
+    except (OSError, ValueError):
+        return 0
+    n = 0
+    for j in saved.get('jobs', []):
+        jobs[j['id']] = j
+    for j in saved.get('all_jobs', []):
+        all_jobs[j['id']] = j
+    _ids = itertools.count(max(jobs, default=0) + 1)
+    _all_ids = itertools.count(max(all_jobs, default=0) + 1)
+    for j in list(all_jobs.values()):
+        if j['status'] in ('queued', 'running'):
+            j['last_message'] = 'サーバー再起動後に続きから再開します…'
+            running_all = asyncio.get_event_loop().create_task(run_all(j))
+            all_running[j['id']] = running_all
+            n += 1
+    for j in list(jobs.values()):
+        if j['status'] in ('queued', 'running') and not _belongs_to_all_job(j):
+            j['status'] = 'queued'
+            j['last_message'] = 'サーバー再起動後に続きから再開します…'
+            running[j['id']] = asyncio.get_event_loop().create_task(run_translation(j))
+            n += 1
+        elif j['status'] in ('queued', 'running'):
+            j['status'] = 'cancelled'  # its all-languages job restarts the language itself
+            j['last_message'] = 'サーバー再起動のため中断しました'
+    _persist()
+    return n
+
+
+def _belongs_to_all_job(j: dict) -> bool:
+    return any(a['status'] in ('queued', 'running') and a['source_project_id'] == j['source_project_id'] for a in all_jobs.values())
+
+
 all_jobs: dict[int, dict] = {}
 all_running: dict[int, asyncio.Task] = {}
 _all_ids = itertools.count(1)
@@ -51,6 +106,7 @@ def new_all_job(project_id: int, languages: list[str]) -> dict:
            'total_languages': len(languages), 'done_languages': 0, 'failed': [], 'current_language': '', 'project_ids': [],
            'last_message': 'キューに追加しました'}
     all_jobs[job['id']] = job
+    _persist()
     return job
 
 
@@ -59,8 +115,9 @@ async def run_all(job: dict) -> None:
     existing one topped up). Runs on the server, so it carries on after the user
     logs out; a language that fails does not stop the rest."""
     job['status'] = 'running'
+    _persist()
     try:
-        for lang in job['languages']:
+        for lang in job['languages'][job['done_languages']:]:
             job['current_language'] = LANGUAGES[lang]
             job['last_message'] = f'{LANGUAGES[lang]} に翻訳中…'
             child = new_job(job['source_project_id'], lang)
@@ -71,15 +128,19 @@ async def run_all(job: dict) -> None:
             else:
                 job['failed'].append(LANGUAGES[lang])
             job['done_languages'] += 1
+            _persist()
         job['status'] = 'completed'
+        _persist()
         job['last_message'] = f'{job["total_languages"]}言語の翻訳が終わりました' + (f'（失敗: {"・".join(job["failed"])}）' if job['failed'] else '。')
     except asyncio.CancelledError:
         job['status'] = 'cancelled'
+        _persist()
         job['last_message'] = 'キャンセルしました（翻訳済みの分は残っています）'
         raise
     except Exception as ex:
         logger.exception('Translate-all job %s failed', job['id'])
         job['status'] = 'error'
+        _persist()
         job['last_message'] = f'全翻訳に失敗しました: {ex}'
     finally:
         all_running.pop(job['id'], None)
@@ -89,6 +150,7 @@ def new_job(project_id: int, language: str) -> dict:
     job = {'id': next(_ids), 'source_project_id': project_id, 'project_id': None, 'language': language,
            'status': 'queued', 'total_episodes': 0, 'processed_episodes': 0, 'last_message': 'キューに追加しました'}
     jobs[job['id']] = job
+    _persist()
     return job
 
 
@@ -140,6 +202,7 @@ async def run_translation(job: dict) -> None:
     db = SessionLocal()
     try:
         job['status'] = 'running'
+        _persist()
         set_project(job['source_project_id'])
         src = db.get(Project, job['source_project_id'])
         lang = job['language']
@@ -191,6 +254,7 @@ async def run_translation(job: dict) -> None:
             elif not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
                 skipped += 1
                 job['processed_episodes'] += 1
+                _persist()
                 continue
             else:
                 job['last_message'] = f'第{e.number}話の不足分を翻訳中…'
@@ -206,16 +270,20 @@ async def run_translation(job: dict) -> None:
             file_sync.write_episode_file(dst, ne)
             done += 1
             job['processed_episodes'] += 1
+            _persist()
         job['status'] = 'completed'
+        _persist()
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume
                                else f'{len(eps)}話の翻訳が完了しました。')
     except asyncio.CancelledError:
         job['status'] = 'cancelled'
+        _persist()
         job['last_message'] = 'キャンセルしました（翻訳済みの分は残っています。もう一度実行すると続きから翻訳します）'
         raise
     except Exception as ex:
         logger.exception('Translation job %s failed', job['id'])
         job['status'] = 'error'
+        _persist()
         job['last_message'] = f'翻訳に失敗しました: {ex}'
     finally:
         db.close()
