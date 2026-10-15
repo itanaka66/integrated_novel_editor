@@ -205,6 +205,13 @@ def crud_update(db,model,oid,x,label):
 def crud_delete(db,model,oid,label):
  o=crud_get_or_404(db,model,oid,label)
  db.delete(o);db.commit()
+@app.get('/api/v1/projects/episode-counts')
+def project_episode_counts(db:Session=Depends(get_db)):
+ # Episodes per project in a single query - what the dashboard cards need.
+ # (Declared before /projects/{pid} routes so "episode-counts" is not read as an id.)
+ from sqlalchemy import func
+ rows=db.execute(select(Episode.project_id,func.count(Episode.id)).group_by(Episode.project_id)).all()
+ return {'counts':{str(pid):n for pid,n in rows}}
 @app.get('/api/v1/projects',response_model=list[ProjectOut])
 def projects(limit:int=200,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Project).order_by(Project.id.desc()).limit(clamp_limit(limit)).offset(max(0,offset))).all())
 @app.get('/api/v1/projects/{pid}',response_model=ProjectOut)

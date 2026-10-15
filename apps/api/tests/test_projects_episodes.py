@@ -85,3 +85,14 @@ def test_bulk_delete_with_unknown_ids_is_a_no_op_for_those_ids(client, project):
     body = r.json()
     assert body["deleted_count"] == 0
     assert [e["id"] for e in body["episodes"]] == [ep_id]
+
+
+def test_episode_counts_in_one_query(client, project):
+    pid = project["id"]
+    for n in (1, 2, 3):
+        client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": f"t{n}", "content": ""})
+    empty = client.post("/api/v1/projects", json={"name": "empty"}).json()["id"]
+    r = client.get("/api/v1/projects/episode-counts")
+    assert r.status_code == 200
+    counts = r.json()["counts"]
+    assert counts[str(pid)] == 3 and str(empty) not in counts

@@ -1,5 +1,6 @@
 import { beginActivity, endActivity } from "./llmActivity";
 import { beginPageLoad } from "./pageLoading";
+import { clearDashboardCache } from "./dashboardCache";
 import { t } from "../lib/i18n";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -60,7 +61,10 @@ export async function api(path: string, opts?: RequestInit) {
   // Registers this call with LlmActivityDialog if it's one that waits on an
   // LLM (see lib/llmActivity.ts); a no-op (null) for everything else.
   const activity = beginActivity(opts?.method || "GET", path, jsonBodyOf(opts));
-  const endLoad = beginPageLoad(opts?.method || "GET", path);
+  // X-Quiet: a background refresh (cached data is already on screen) — never lock the screen for it.
+  const quiet = headers.get("X-Quiet") === "1";
+  headers.delete("X-Quiet");
+  const endLoad = quiet ? null : beginPageLoad(opts?.method || "GET", path);
   try {
     const r = await fetch(API + path, { ...opts, headers, credentials: "include" });
     if (r.status === 401) {
@@ -109,6 +113,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 // again even if this network call itself fails.
 export async function logout(): Promise<void> {
   clearAuth();
+  clearDashboardCache(); // the cached work list belongs to the user who just left
   try {
     await fetch(`${API_ROOT}/auth/logout`, { credentials: "include" });
   } catch {
