@@ -13,7 +13,9 @@ from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import Project, Episode, Character, WorldEntity
-from .ollama import generate
+# Translation runs on the Controller model/server (the A770 in the reference
+# setup), not the Writer's, so it never competes with prose generation.
+from .ollama import controller_generate as generate
 from . import file_sync
 from .llm_queue import set_project
 
