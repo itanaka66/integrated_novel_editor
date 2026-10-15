@@ -111,6 +111,20 @@ Every logged-in user can change their own password (ダッシュボード > ⚙ 
 | `SMTP_FROM` | `noreply@example.com` | The `From:` address on reset emails |
 | `SMTP_USE_TLS` | `true` | STARTTLS — turn off only for a server that doesn't support it |
 
+## Image generation (ComfyUI / Higgsfield)
+
+Cover images are made by a ComfyUI server you run yourself (or Higgsfield). See the [ComfyUI Guide](comfyui.md).
+
+| Config | Default | Purpose |
+|---|---|---|
+| `COMFYUI_URL` | `http://localhost:8188` (Compose: `http://host.docker.internal:8188`) | ComfyUI base URL — can also be set and tested in Settings → 表紙画像, which takes precedence |
+| `COMFYUI_CHECKPOINT` | *(blank = first installed)* | Default checkpoint; per-look overrides live in `cover_config.json` |
+| `COVERS_DIR` | `./covers` (Compose: `/covers`) | Where generated images, prompts and `cover_config.json` are kept |
+| `COVER_CONFIG_PATH` | `./cover_config.json` (Compose: `/covers/cover_config.json`) | Hot-reloaded image model/settings file |
+| `HIGGSFIELD_KEY` / `HIGGSFIELD_MODEL` | *(unset)* | Optional Higgsfield engine (`<api-key>:<api-secret>`) |
+
+Lettering the title/author on images uses Pillow and a Japanese font: the Docker image installs IPAGothic; elsewhere an installed CJK font is auto-detected or set with `overlay.font`.
+
 ## Ports used
 
 | Port | Service |
@@ -120,6 +134,7 @@ Every logged-in user can change their own password (ダッシュボード > ⚙ 
 | 5432 | PostgreSQL |
 | 6333 / 6334 | Qdrant (HTTP / gRPC) |
 | 11434 | Ollama (not started by Docker Compose — runs on the host) |
+| 8188 | ComfyUI (not started by Docker Compose — runs wherever you run it) |
 
 ## Browser
 
