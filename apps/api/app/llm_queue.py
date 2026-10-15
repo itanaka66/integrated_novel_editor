@@ -40,7 +40,7 @@ def set_project(pid: int | None) -> None:
     project_id_ctx.set(pid)
 
 
-_KIND_LABELS = {'writer': 'Writer', 'controller': 'Controller', 'embed': '埋め込み'}
+_KIND_LABELS = {'writer': 'Writer', 'controller': 'Controller', 'translator': '翻訳モデル', 'embed': '埋め込み'}
 
 # Mirrors apps/web/app/lib/llmActivity.ts's table, for the manual endpoints.
 _PATH_PURPOSES: list[tuple[re.Pattern, str]] = [

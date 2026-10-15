@@ -201,6 +201,8 @@ class RuntimeConfig(Base):
     ollama_embed_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     controller_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
     controller_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    translator_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
+    translator_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 
 class User(Base, UserMixin):

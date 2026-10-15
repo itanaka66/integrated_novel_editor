@@ -14,11 +14,12 @@ from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import Project, Episode, Character, WorldEntity
-# Translation runs on the Controller model/server (the A770 in the reference
-# setup), not the Writer's, so it never competes with prose generation.
-from .ollama import controller_generate as generate
+# Translation uses its own model (Settings > 接続設定; defaults to the Controller's
+# server/model, the A770 in the reference setup), never the Writer's, so it does
+# not compete with prose generation.
+from .ollama import translator_generate as generate
 from . import file_sync
-from .llm_queue import set_project
+from .llm_queue import purpose, set_project
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,7 @@ async def run_translation(job: dict) -> None:
         job['status'] = 'running'
         _persist()
         set_project(job['source_project_id'])
+        purpose.set(f"翻訳（{LANGUAGES[job['language']]}）")
         src = db.get(Project, job['source_project_id'])
         lang = job['language']
         eps = db.scalars(select(Episode).where(Episode.project_id == src.id).order_by(Episode.number)).all()
@@ -249,6 +251,7 @@ async def run_translation(job: dict) -> None:
             ne = existing.get(e.number)
             if ne is None:
                 job['last_message'] = f'第{e.number}話を翻訳中…'
+                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
                 ne = Episode(project_id=dst.id, number=e.number, title='', summary='', content='')
                 db.add(ne)
             elif not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
@@ -258,6 +261,7 @@ async def run_translation(job: dict) -> None:
                 continue
             else:
                 job['last_message'] = f'第{e.number}話の不足分を翻訳中…'
+                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
             # Translate only the parts that are missing or too short.
             if is_short(e.title, ne.title) or not ne.title:
                 ne.title = (await translate_text(e.title, lang, glossary)).strip() or e.title

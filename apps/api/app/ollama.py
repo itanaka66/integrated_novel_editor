@@ -51,6 +51,17 @@ async def generate_stream(prompt, model=None, url=None):
                 yield event
 
 
+async def translator_generate(prompt):
+    """Translation. Its own server/model (Settings > 接続設定), which defaults to
+    the Controller's; same API key as the Controller (typically the same
+    instance) and no options override."""
+    cfg = get_effective_config()
+    return await generate(
+        prompt, cfg.translator_ollama_model, cfg.translator_ollama_url, 180,
+        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
+    )
+
+
 async def controller_generate(prompt):
     # No options override — the Controller (planning/quality-gate) model
     # runs on its own, smaller GPU; Ollama's own defaults are what that
