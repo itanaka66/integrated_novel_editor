@@ -15,6 +15,7 @@ import ChatPanel from "./components/ChatPanel";
 import AutoWritePanel from "./components/AutoWritePanel";
 import SettingsPanel from "./components/SettingsPanel";
 import LlmActivityDialog from "./components/LlmActivityDialog";
+import PageLoadingOverlay from "./components/PageLoadingOverlay";
 import { useIdleLogout } from "./lib/useIdleLogout";
 import { getLanguage, t } from "./lib/i18n";
 
@@ -53,6 +54,7 @@ export default function Studio() {
     <>
       <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />
       <LlmActivityDialog />
+      <PageLoadingOverlay />
     </>
   );
 }
