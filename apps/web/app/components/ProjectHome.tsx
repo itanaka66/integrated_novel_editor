@@ -41,6 +41,16 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [allJob, setAllJob] = useState<AllJob | null>(null);
   const allActive = !!allJob && (allJob.status === "queued" || allJob.status === "running");
   const allRun = allActive ? { index: Math.min(allJob!.done_languages + 1, allJob!.total_languages), total: allJob!.total_languages, label: allJob!.current_language } : null;
+  // The server keeps translating while this screen is closed (or you are logged
+  // out), so on opening the screen again pick up the latest single-language job.
+  useEffect(() => {
+    let live = true;
+    setTJob(null);
+    api(`/projects/${project.id}/translate-jobs`).then((r) => {
+      if (live && Array.isArray(r) && r.length > 0) setTJob(r[0]);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [project.id]);
   // Pick up an all-language translation that is (or was) running on the server.
   useEffect(() => {
     let live = true;

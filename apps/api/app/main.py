@@ -95,6 +95,14 @@ def cleanup_stale_import_jobs(d):
  if stale: d.commit()
  return len(stale)
 @app.on_event('startup')
+async def resume_translations():
+ # Translation jobs survive a restart: unfinished ones continue where they left off.
+ try:
+  n=translator.resume_unfinished()
+  if n:logger.info('Resumed %s translation job(s) after restart',n)
+ except Exception:
+  logger.exception('Could not resume translation jobs')
+@app.on_event('startup')
 def init():
  # Schema is owned by Alembic migrations (see apps/api/alembic/); run
  # `alembic upgrade head` before starting the app. We only seed demo data
@@ -347,6 +355,13 @@ def background_jobs(db:Session=Depends(get_db)):
  for j in cover_mod.jobs.values():
   if j['status'] in ('queued','running'):add('cover','表紙画像生成',j['project_id'],j['status'],j['last_message'],None,None,j['id'])
  return {'jobs':out}
+@app.get('/api/v1/projects/{pid}/translate-jobs',response_model=list[TranslateJobOut])
+def translate_jobs_for_project(pid:int,db:Session=Depends(get_db)):
+ # Recent single-language translations of this work (newest first), so the screen
+ # can pick a running one up again after logging back in.
+ crud_get_or_404(db,Project,pid,'Project')
+ js=sorted((j for j in translator.jobs.values() if j['source_project_id']==pid),key=lambda j:-j['id'])[:10]
+ return [_translate_job_out(j) for j in js]
 @app.get('/api/v1/translate-jobs/{job_id}',response_model=TranslateJobOut)
 def translate_job_get(job_id:int):
  job=translator.jobs.get(job_id)
