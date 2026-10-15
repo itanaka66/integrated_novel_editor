@@ -318,3 +318,94 @@ def test_translator_adds_no_think_for_qwen3_and_uses_the_configured_timeout(monk
     Cfg.translator_ollama_model = "gemma3:12b"
     asyncio.run(ollama.translator_generate("translate this"))
     assert not seen["prompt"].endswith("/no_think")
+
+
+LONG_JA = "夜明け前の集落に、乾いた風が吹いていた。\n「起きろ、ガルド。恐竜が柵を越えた」\nリナの声に、ガルドは毛皮の寝床から跳ね起きた。槍を掴み、焚き火の残り火を蹴り散らして外へ出る。東の空はまだ暗く、遠くで巨大な影がゆっくりと動いている。"
+GOOD_EN = "The village before dawn was swept by a dry wind.\n“Wake up, Gard. A dinosaur has crossed the fence.”\nAt Lina's voice, Gard sprang from his fur bed, grabbed his spear, kicked the embers apart and stepped outside. The eastern sky was still dark, and a huge shadow moved slowly in the distance."
+OMITTED_EN = "The village before dawn was swept by a dry wind.\n“Wake up, Gard.”\nAt Lina's voice, Gard sprang from his fur bed, grabbed his spear and stepped outside. The eastern sky was still dark and a huge shadow moved slowly in the distance."
+
+
+def test_review_finds_an_omission_and_the_chunk_is_translated_again(monkeypatch):
+    import asyncio
+    from app.config import settings
+    monkeypatch.setattr(settings, "translation_review", True)
+    gen_prompts, review_prompts = [], []
+
+    async def gen(prompt, *a, **k):
+        gen_prompts.append(prompt)
+        return (OMITTED_EN if len(gen_prompts) == 1 else GOOD_EN), "m"
+
+    async def review(prompt, *a, **k):
+        review_prompts.append(prompt)
+        return '<think></think>{"ok": false, "issues": ["「恐竜が柵を越えた」が訳されていない"]}', "m"
+    monkeypatch.setattr(translator, "generate", gen)
+    monkeypatch.setattr(translator, "review_generate", review)
+    stats = {}
+    out = asyncio.run(translator.translate_text(LONG_JA, "en", "", stats=stats))
+    assert out == GOOD_EN and stats == {"reviewed": 1, "fixed": 1}
+    assert "SOURCE:" in review_prompts[0] and "恐竜が柵を越えた" in review_prompts[0]
+    assert "reviewer found these problems" in gen_prompts[1] and "恐竜が柵を越えた」が訳されていない" in gen_prompts[1]
+
+
+def test_review_ok_keeps_the_translation_and_a_broken_checker_is_ignored(monkeypatch):
+    import asyncio
+    from app.config import settings
+    monkeypatch.setattr(settings, "translation_review", True)
+    calls = {"gen": 0}
+
+    async def gen(prompt, *a, **k):
+        calls["gen"] += 1
+        return GOOD_EN, "m"
+    monkeypatch.setattr(translator, "generate", gen)
+
+    async def ok(prompt, *a, **k):
+        return '{"ok": true}', "m"
+    monkeypatch.setattr(translator, "review_generate", ok)
+    stats = {}
+    assert asyncio.run(translator.translate_text(LONG_JA, "en", "", stats=stats)) == GOOD_EN
+    assert calls["gen"] == 1 and stats == {"reviewed": 1}
+
+    async def broken(prompt, *a, **k):
+        raise RuntimeError("controller down")
+    monkeypatch.setattr(translator, "review_generate", broken)
+    assert asyncio.run(translator.translate_text(LONG_JA, "en")) == GOOD_EN and calls["gen"] == 2
+
+    async def garbage(prompt, *a, **k):
+        return "I think it looks fine!", "m"
+    monkeypatch.setattr(translator, "review_generate", garbage)
+    assert asyncio.run(translator.translate_text(LONG_JA, "en")) == GOOD_EN and calls["gen"] == 3
+
+
+def test_review_is_skipped_for_short_text_and_when_disabled(monkeypatch):
+    import asyncio
+    from app.config import settings
+
+    async def gen(prompt, *a, **k):
+        return "Title", "m"
+
+    async def review(prompt, *a, **k):
+        raise AssertionError("must not be called")
+    monkeypatch.setattr(translator, "generate", gen)
+    monkeypatch.setattr(translator, "review_generate", review)
+    monkeypatch.setattr(settings, "translation_review", True)
+    assert asyncio.run(translator.translate_text("題名", "en")) == "Title"  # shorter than REVIEW_MIN_CHARS
+    monkeypatch.setattr(settings, "translation_review", False)
+    assert asyncio.run(translator.translate_text(LONG_JA, "en")) == "Title"  # switched off
+
+
+def test_reviewer_uses_the_controller_with_no_think_for_qwen3(monkeypatch):
+    import asyncio
+    from app import ollama
+    seen = {}
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        seen.update(prompt=prompt, model=model, url=url, kind=kind)
+        return "{}", model
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+
+    class Cfg:
+        controller_ollama_model = "qwen3:14b"
+        controller_ollama_url = "http://ctrl"
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: Cfg())
+    asyncio.run(ollama.reviewer_generate("check"))
+    assert seen["model"] == "qwen3:14b" and seen["url"] == "http://ctrl" and seen["kind"] == "controller" and seen["prompt"].endswith("/no_think")

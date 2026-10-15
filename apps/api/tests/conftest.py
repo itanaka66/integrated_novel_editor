@@ -31,6 +31,13 @@ def isolate_novel_storage_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_translation_review_by_default(monkeypatch):
+    # The AI translation check calls the Controller model; tests must never reach a
+    # real Ollama. Tests of the check itself switch it on and fake the call.
+    monkeypatch.setattr(settings, "translation_review", False)
+
+
+@pytest.fixture(autouse=True)
 def reset_cors_cache():
     # DynamicCORSMiddleware reads this module-level cache (see
     # runtime_config.get_cors_origins) instead of the database on every
