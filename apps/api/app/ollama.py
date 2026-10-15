@@ -67,6 +67,20 @@ async def translator_generate(prompt):
     )
 
 
+async def reviewer_generate(prompt):
+    """Translation check. Runs on the Controller's server/model (qwen3:14b in the
+    reference setup — a stronger judge than the translation model) with the
+    long reasoning phase switched off for Qwen3, and the translator's timeout."""
+    cfg = get_effective_config()
+    model = cfg.controller_ollama_model
+    if model.lower().startswith('qwen3'):
+        prompt = prompt.rstrip() + ' /no_think'
+    return await generate(
+        prompt, model, cfg.controller_ollama_url, env_settings.translator_timeout_seconds,
+        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='controller',
+    )
+
+
 async def controller_generate(prompt):
     # No options override — the Controller (planning/quality-gate) model
     # runs on its own, smaller GPU; Ollama's own defaults are what that

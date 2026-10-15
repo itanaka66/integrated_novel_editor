@@ -19,6 +19,9 @@ from .models import Project, Episode, Character, WorldEntity
 # server/model, the A770 in the reference setup), never the Writer's, so it does
 # not compete with prose generation.
 from .ollama import translator_generate as generate
+from .ollama import reviewer_generate as review_generate
+from .config import settings as env_settings
+from .continuity import extract_json
 from . import file_sync
 from .llm_queue import purpose, set_project
 
@@ -268,7 +271,46 @@ def _retry_prompt(language: str, glossary: str, text: str) -> str:
             + _prompt(language, glossary, text))
 
 
-async def translate_text(text: str, language: str, glossary: str = '') -> str:
+REVIEW_MIN_CHARS = 80  # titles and one-liners are not worth a review call
+
+
+def _review_prompt(language: str, glossary: str, src: str, out: str) -> str:
+    return f'''You are a meticulous bilingual proofreader. Compare the SOURCE text with its {_PROMPT_LANG[language]} TRANSLATION.
+Look for: omitted sentences or clauses, parts left untranslated, mistranslations, content that was added, and character/proper names that are rendered inconsistently{glossary}.
+Ignore style preferences. Answer with JSON only, no other text:
+{{"ok": true}} when the translation is faithful and complete, otherwise
+{{"ok": false, "issues": ["short, concrete description of each problem (max 5, in Japanese)"]}}
+
+SOURCE:
+{src}
+
+TRANSLATION:
+{out}'''
+
+
+def _fix_prompt(language: str, glossary: str, src: str, out: str, issues: list[str]) -> str:
+    listed = '\n'.join(f'- {i}' for i in issues)
+    return (f'A reviewer found these problems in a previous {_PROMPT_LANG[language]} translation of the text below:\n{listed}\n\n'
+            f'Previous translation (for reference only):\n{out}\n\n'
+            'Write a corrected, COMPLETE translation of the whole text that fixes every problem.\n\n' + _prompt(language, glossary, src))
+
+
+async def review_chunk(src: str, out: str, language: str, glossary: str) -> list[str]:
+    """Problems the checker model finds in `out` ([] = fine, or if the check itself
+    failed — a broken checker must never block a translation)."""
+    try:
+        purpose.set(f'翻訳チェック（{LANGUAGES[language]}）')
+        text, _ = await review_generate(_review_prompt(language, glossary, src, out))
+    except Exception:
+        logger.warning('Translation review call failed', exc_info=True)
+        return []
+    data = extract_json(clean_translation(text))
+    if not isinstance(data, dict) or data.get('ok') is not False:
+        return []
+    return [str(i).strip() for i in (data.get('issues') or []) if str(i).strip()][:5]
+
+
+async def translate_text(text: str, language: str, glossary: str = '', stats: dict | None = None) -> str:
     if not (text or '').strip():
         return text or ''
     out = []
@@ -281,6 +323,19 @@ async def translate_text(text: str, language: str, glossary: str = '') -> str:
             again = clean_translation(t2)
             if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
                 cleaned = again
+        if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
+            issues = await review_chunk(chunk, cleaned, language, glossary)
+            if stats is not None:
+                stats['reviewed'] = stats.get('reviewed', 0) + 1
+            if issues:
+                # Translate again with the reviewer's findings, keep it unless it is worse.
+                purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
+                t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues))
+                fixed = clean_translation(t3)
+                if fixed and not bad_translation(chunk, fixed, language):
+                    cleaned = fixed
+                    if stats is not None:
+                        stats['fixed'] = stats.get('fixed', 0) + 1
         out.append(cleaned)
     return '\n'.join(out)
 
@@ -311,8 +366,8 @@ async def run_translation(job: dict) -> None:
         resume = dst is not None
         if not resume:
             job['last_message'] = 'タイトルを翻訳中…'
-            name = (await translate_text(src.name, lang, glossary)).strip() or src.name
-            desc = await translate_text(src.description, lang, glossary)
+            name = (await translate_text(src.name, lang, glossary, stats=job)).strip() or src.name
+            desc = await translate_text(src.description, lang, glossary, stats=job)
             dst = Project(name=f'{name} [{LANGUAGES[lang]}]', description=desc, genre=src.genre, rules=src.rules,
                           episode_goal=src.episode_goal, style_guide='', language=lang, source_project_id=src.id)
             db.add(dst)
@@ -350,11 +405,11 @@ async def run_translation(job: dict) -> None:
                 purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
             # Translate only the parts that are missing or too short.
             if is_short(e.title, ne.title) or not ne.title:
-                ne.title = (await translate_text(e.title, lang, glossary)).strip() or e.title
+                ne.title = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title
             if is_short(e.summary, ne.summary):
-                ne.summary = await translate_text(e.summary, lang, glossary)
+                ne.summary = await translate_text(e.summary, lang, glossary, stats=job)
             if is_short(e.content, ne.content):
-                ne.content = await translate_text(e.content, lang, glossary)
+                ne.content = await translate_text(e.content, lang, glossary, stats=job)
             db.commit()
             db.refresh(ne)
             file_sync.write_episode_file(dst, ne)
@@ -365,6 +420,8 @@ async def run_translation(job: dict) -> None:
         _persist()
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume
                                else f'{len(eps)}話の翻訳が完了しました。')
+        if job.get('reviewed'):
+            job['last_message'] += f"（AIチェック{job['reviewed']}回、うち{job.get('fixed', 0)}箇所を修正）"
     except asyncio.CancelledError:
         job['status'] = 'cancelled'
         _persist()

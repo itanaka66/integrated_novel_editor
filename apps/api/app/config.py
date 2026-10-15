@@ -17,6 +17,9 @@ class Settings(BaseSettings):
  # Seconds to wait for one translation call (a chunk of ~2500 characters). Local
  # GPUs can be slow, and the old fixed 180 s made slow models fail every time.
  translator_timeout_seconds:int=900
+ # After translating a chunk, have the Controller model (e.g. qwen3:14b) compare it
+ # with the source and, if it finds omissions/mistranslations, translate it again.
+ translation_review:bool=True
  # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
  # embeddings and Controller respectively) when set — see
  # editor_common.ollama's module docstring. A bare local `ollama serve` has
