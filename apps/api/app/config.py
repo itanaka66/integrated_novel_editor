@@ -12,6 +12,8 @@ class Settings(BaseSettings):
  database_url:str='postgresql+psycopg2://novel:novel@localhost:5432/novel'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
  admin_username:str='admin'; admin_password:str='novel-studio-change-me'
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
+ # Translation model: blank = use the Controller's server/model.
+ translator_ollama_url:str=''; translator_ollama_model:str=''
  # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
  # embeddings and Controller respectively) when set — see
  # editor_common.ollama's module docstring. A bare local `ollama serve` has

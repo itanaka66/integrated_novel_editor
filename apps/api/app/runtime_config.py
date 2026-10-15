@@ -25,6 +25,8 @@ class EffectiveConfig:
     ollama_embed_model: str
     controller_ollama_url: str
     controller_ollama_model: str
+    translator_ollama_url: str
+    translator_ollama_model: str
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -56,6 +58,11 @@ def get_effective_config(db=None) -> EffectiveConfig:
         ollama_embed_model=_pick(row.ollama_embed_model if row else None, env_settings.ollama_embed_model),
         controller_ollama_url=_pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url),
         controller_ollama_model=_pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model),
+        # Translation falls back to the Controller's server/model when not set.
+        translator_ollama_url=_pick(row.translator_ollama_url if row else None,
+                                    env_settings.translator_ollama_url or _pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url)),
+        translator_ollama_model=_pick(row.translator_ollama_model if row else None,
+                                      env_settings.translator_ollama_model or _pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model)),
     )
 
 

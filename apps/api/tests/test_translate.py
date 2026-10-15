@@ -181,9 +181,7 @@ def test_translate_job_can_be_cancelled_and_resumed(client, project, monkeypatch
     assert client.post("/api/v1/background-jobs/cancel", json={"kind": "nope", "id": 1}).status_code == 400
 
 
-def test_translation_uses_the_controller_model():
-    from app import ollama
-    assert translator.generate is ollama.controller_generate
+
 
 
 def test_unfinished_translation_resumes_after_a_restart(client, project, monkeypatch, db_session_factory):
@@ -214,3 +212,18 @@ def test_unfinished_translation_resumes_after_a_restart(client, project, monkeyp
     # a new job after the restart does not reuse the old id
     assert translator.new_job(pid, "fr")["id"] > job["id"]
     assert client.get(f"/api/v1/projects/{pid}/translate-jobs").json()[0]["id"] >= job["id"]
+
+
+def test_translation_model_is_separate_and_defaults_to_the_controller(client):
+    s = client.get("/api/v1/system-settings").json()
+    assert s["translator_ollama_model"] == s["controller_ollama_model"] and not s["translator_ollama_model_is_override"]
+    r = client.put("/api/v1/system-settings", json={"translator_ollama_model": "trans-model", "translator_ollama_url": "http://t:11434"}).json()
+    assert r["translator_ollama_model"] == "trans-model" and r["translator_ollama_model_is_override"]
+    assert r["translator_ollama_url"] == "http://t:11434" and r["controller_ollama_model"] == s["controller_ollama_model"]
+    back = client.put("/api/v1/system-settings", json={"translator_ollama_model": "", "translator_ollama_url": ""}).json()
+    assert back["translator_ollama_model"] == s["controller_ollama_model"] and not back["translator_ollama_model_is_override"]
+
+
+def test_translation_uses_the_translator_model(monkeypatch):
+    from app import ollama
+    assert translator.generate is ollama.translator_generate

@@ -654,6 +654,8 @@ def _system_settings_out(db):
   ollama_embed_model=cfg.ollama_embed_model,ollama_embed_model_is_override=override(row.ollama_embed_model if row else None),
   controller_ollama_url=cfg.controller_ollama_url,controller_ollama_url_is_override=override(row.controller_ollama_url if row else None),
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
+  translator_ollama_url=cfg.translator_ollama_url,translator_ollama_url_is_override=override(row.translator_ollama_url if row else None),
+  translator_ollama_model=cfg.translator_ollama_model,translator_ollama_model_is_override=override(row.translator_ollama_model if row else None),
   cors_origins=','.join(rc.get_cors_origins()),
   updated_at=row.updated_at if row else None,
  )
@@ -684,7 +686,7 @@ def system_settings_test_connection(x:ConnectionTestRequest):
  elif x.target=='qdrant':
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_qdrant(x.url)
- elif x.target in ('ollama','controller_ollama'):
+ elif x.target in ('ollama','controller_ollama','translator_ollama'):
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_ollama(x.url,x.model)
  else:
