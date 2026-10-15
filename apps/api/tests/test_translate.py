@@ -227,3 +227,31 @@ def test_translation_model_is_separate_and_defaults_to_the_controller(client):
 def test_translation_uses_the_translator_model(monkeypatch):
     from app import ollama
     assert translator.generate is ollama.translator_generate
+
+
+def test_clean_translation_strips_model_wrappers_but_not_content():
+    c = translator.clean_translation
+    assert c("<think>考え中…\nstep 1</think>\n\nHello, world.") == "Hello, world."
+    assert c("reasoning without an opening tag</think>Bonjour.") == "Bonjour."
+    assert c("```text\nHallo Welt\n```") == "Hallo Welt"
+    assert c("Here is the translation:\n\nHe woke up.") == "He woke up."
+    assert c("Sure! Here's the English translation:\nHe woke up.\nShe smiled.") == "He woke up.\nShe smiled."
+    assert c("以下が翻訳です：\n\n彼は目覚めた。") == "彼は目覚めた。"
+    assert c("He woke up.\n\nNote: I kept the honorific.") == "He woke up."
+    assert c("He woke up.\n\nI hope this helps!") == "He woke up."
+    assert c("訳文です。\n\n（訳注：原文は敬語）") == "訳文です。"
+    # real content stays: a story line that merely starts like a preface, notes inside the text
+    assert c("Here is the thing: he left.") == "Here is the thing: he left."
+    assert c("Translation is hard, he said.\nShe nodded.") == "Translation is hard, he said.\nShe nodded."
+    assert c("He wrote a note: meet me.\n\nNote the time.") == "He wrote a note: meet me.\n\nNote the time."
+    assert c("Line one.\n\nLine two.") == "Line one.\n\nLine two."
+    assert c("  ") == ""
+
+
+def test_translate_text_cleans_each_chunk(monkeypatch):
+    import asyncio
+
+    async def noisy(prompt, *a, **k):
+        return "<think>x</think>Here is the translation:\nOK.\n\nNote: done", "m"
+    monkeypatch.setattr(translator, "generate", noisy)
+    assert asyncio.run(translator.translate_text("あ", "en")) == "OK."
