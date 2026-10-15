@@ -9,6 +9,7 @@ import asyncio
 import itertools
 import json
 import logging
+import re
 
 from sqlalchemy import select
 
@@ -189,13 +190,52 @@ Output only the translation, with no preface or notes.
 {text}'''
 
 
+_THINK_BLOCK = re.compile(r'<think>.*?</think>', re.S | re.I)
+_FENCE = re.compile(r'^```[\w-]*[ \t]*\n(.*?)\n?```[ \t]*$', re.S)
+# A first line that only announces the translation ("Here is the translation:").
+_PREFACE = re.compile(
+    r"^\W*(?:sure|certainly|of course|okay|ok|here(?:'s|\s+is|\s+are)|below\s+is|the\s+following\s+is|translation|translated(?:\s+text)?)\b[^\n]{0,80}[:：]\s*$"
+    r'|^\W*(?:以下(?:が|は|に)|こちらが|翻訳(?:結果|文)?(?:は|です)?)[^\n]{0,40}[:：。]?\s*$', re.I)
+# A last paragraph that only comments on the translation (kept conservative so
+# real story text is never dropped).
+_TRAILER = re.compile(
+    r"^[(（\[]?\s*(?:note|notes|translator'?s?\s+note|nb)\s*[:：)）\]]"
+    r"|^(?:i\s+hope\s+this|let\s+me\s+know\s+if|feel\s+free\s+to)\b"
+    r'|^[(（\[]?\s*(?:訳注|翻訳者注|翻訳注)\s*[:：)）\]]', re.I)
+
+
+def clean_translation(text: str) -> str:
+    """Strip what chat models wrap around a translation regardless of which model
+    produced it: <think> reasoning, a code fence around the whole answer, an
+    announcing first line ("Here is the translation:") and a closing remark
+    ("Note: ..." / "I hope this helps"). Only whole leading/trailing lines that
+    match strict patterns are removed, never text inside the translation."""
+    t = (text or '').strip()
+    if '</think>' in t.lower():
+        t = _THINK_BLOCK.sub('', t)
+        t = re.sub(r'^.*</think>', '', t, flags=re.S | re.I)  # reasoning whose opening tag was cut off
+    t = t.replace('<think>', '').strip()
+    m = _FENCE.match(t)
+    if m:
+        t = m.group(1).strip()
+    lines = t.split('\n')
+    if len(lines) > 1 and _PREFACE.match(lines[0].strip()):
+        lines = lines[1:]
+        while lines and not lines[0].strip():
+            lines = lines[1:]
+    paras = '\n'.join(lines).rstrip().split('\n\n')
+    while len(paras) > 1 and _TRAILER.match(paras[-1].strip()):
+        paras.pop()
+    return '\n\n'.join(paras).strip()
+
+
 async def translate_text(text: str, language: str, glossary: str = '') -> str:
     if not (text or '').strip():
         return text or ''
     out = []
     for chunk in split_chunks(text):
         t, _ = await generate(_prompt(language, glossary, chunk))
-        out.append(t.strip())
+        out.append(clean_translation(t))
     return '\n'.join(out)
 
 
