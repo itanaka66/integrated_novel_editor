@@ -1,4 +1,5 @@
 import { beginActivity, endActivity } from "./llmActivity";
+import { beginPageLoad } from "./pageLoading";
 import { t } from "../lib/i18n";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -59,6 +60,7 @@ export async function api(path: string, opts?: RequestInit) {
   // Registers this call with LlmActivityDialog if it's one that waits on an
   // LLM (see lib/llmActivity.ts); a no-op (null) for everything else.
   const activity = beginActivity(opts?.method || "GET", path, jsonBodyOf(opts));
+  const endLoad = beginPageLoad(opts?.method || "GET", path);
   try {
     const r = await fetch(API + path, { ...opts, headers, credentials: "include" });
     if (r.status === 401) {
@@ -69,6 +71,7 @@ export async function api(path: string, opts?: RequestInit) {
     return await r.json();
   } finally {
     endActivity(activity);
+    endLoad?.();
   }
 }
 

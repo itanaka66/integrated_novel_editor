@@ -111,6 +111,20 @@ Qdrant・OllamaのURLと異なり、この値は「設定＞接続設定」画�
 | `SMTP_FROM` | `noreply@example.com` | 再設定メールの送信元アドレス |
 | `SMTP_USE_TLS` | `true` | STARTTLS。対応していないサーバーの場合のみ無効にしてください |
 
+## 画像生成（ComfyUI／Higgsfield）
+
+表紙画像は、ご自身で用意したComfyUIサーバー（またはHiggsfield）で生成します。[ComfyUIガイド](comfyui.ja.md)を参照してください。
+
+| 設定 | 既定値 | 用途 |
+|---|---|---|
+| `COMFYUI_URL` | `http://localhost:8188`（Composeでは`http://host.docker.internal:8188`） | ComfyUIのURL。設定→表紙画像でも設定・接続テストでき、そちらが優先されます |
+| `COMFYUI_CHECKPOINT` | *(空＝最初にインストールされているもの)* | 既定のチェックポイント。イメージごとの上書きは`cover_config.json` |
+| `COVERS_DIR` | `./covers`（Composeでは`/covers`） | 生成画像・プロンプト・`cover_config.json`の保存先 |
+| `COVER_CONFIG_PATH` | `./cover_config.json`（Composeでは`/covers/cover_config.json`） | 即時に読み込まれる画像モデル・設定ファイル |
+| `HIGGSFIELD_KEY` / `HIGGSFIELD_MODEL` | *(未設定)* | 任意のHiggsfieldエンジン（`<api-key>:<api-secret>`） |
+
+画像へのタイトル・著者名の描き込みにはPillowと日本語フォントを使います。Dockerイメージには IPAゴシック を含めています。それ以外の環境では、インストール済みのCJKフォントを自動検出するか、`overlay.font`で指定します。
+
 ## 使用ポート
 
 | ポート | サービス |
@@ -120,6 +134,7 @@ Qdrant・OllamaのURLと異なり、この値は「設定＞接続設定」画�
 | 5432 | PostgreSQL |
 | 6333 / 6334 | Qdrant（HTTP / gRPC） |
 | 11434 | Ollama（Docker Composeでは起動しません。ホスト側で起動してください） |
+| 8188 | ComfyUI（Docker Composeでは起動しません。起動した場所で動作） |
 
 ## ブラウザ
 

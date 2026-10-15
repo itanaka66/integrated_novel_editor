@@ -215,4 +215,7 @@ export const ROWS_4: Row[] = [
   ["翻訳用 Ollama URL", "Translation Ollama URL", "翻译用 Ollama 地址", "翻譯用 Ollama 網址", "번역용 Ollama URL", "URL de Ollama para traducción", "URL Ollama pour la traduction", "Ollama-URL für Übersetzung"],
   ["翻訳用モデル", "Translation model", "翻译用模型", "翻譯用模型", "번역용 모델", "Modelo de traducción", "Modèle de traduction", "Übersetzungsmodell"],
   ["翻訳（全翻訳を含む）で使うモデルです。空欄の場合は Controller のサーバー・モデルを使います。", "The model used for translation (including 全翻訳). If blank, the Controller's server and model are used.", "用于翻译（包括全部翻译）的模型。留空则使用 Controller 的服务器和模型。", "用於翻譯（包括全部翻譯）的模型。留空則使用 Controller 的伺服器和模型。", "번역(전체 번역 포함)에 사용하는 모델입니다. 비워 두면 Controller의 서버와 모델을 사용합니다.", "Modelo usado para traducir (incluido traducir todo). Si está vacío, se usan el servidor y el modelo del Controller.", "Modèle utilisé pour la traduction (y compris la traduction complète). Si vide, le serveur et le modèle du Controller sont utilisés.", "Modell für Übersetzungen (auch „Alles übersetzen“). Leer: Server und Modell des Controllers."],
+  // page loading
+  ["情報を取得中...", "Loading data...", "正在获取信息...", "正在取得資訊...", "정보를 가져오는 중...", "Cargando datos...", "Chargement des données...", "Daten werden geladen..."],
+  ["読み込みが終わるまで操作できません", "You can't use the screen until loading finishes", "加载完成前无法操作", "載入完成前無法操作", "불러오기가 끝날 때까지 조작할 수 없습니다", "No se puede usar la pantalla hasta que termine la carga", "L'écran est inutilisable tant que le chargement n'est pas terminé", "Bis zum Ende des Ladevorgangs ist keine Bedienung möglich"],
 ];
