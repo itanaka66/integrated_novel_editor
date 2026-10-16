@@ -211,7 +211,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     } finally { setImportBusy(false); }
   }
 
-  async function exportAs(format: "txt" | "md" | "epub" | "kdp") {
+  async function exportAs(format: "txt" | "md" | "epub" | "docx" | "kdp") {
     setExporting(format);
     try {
       await downloadFile(`/projects/${project.id}/export?format=${format}`, `${project.name}.${format}`);
@@ -490,6 +490,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
             <button onClick={() => exportAs("txt")} disabled={!!exporting}>{exporting === "txt" ? t("書き出し中...") : t("テキスト (.txt)")}</button>
             <button onClick={() => exportAs("md")} disabled={!!exporting}>{exporting === "md" ? t("書き出し中...") : "Markdown (.md)"}</button>
             <button onClick={() => exportAs("epub")} disabled={!!exporting}>{exporting === "epub" ? t("書き出し中...") : "EPUB (.epub)"}</button>
+            <button onClick={() => exportAs("docx")} disabled={!!exporting}>{exporting === "docx" ? t("書き出し中...") : "Word (.docx)"}</button>
             <button onClick={() => exportAs("kdp")} disabled={!!exporting}>{exporting === "kdp" ? t("書き出し中...") : t("KDP出版パッケージ (.zip)")}</button>
           </div>
           <div style={{ fontSize: 12, color: "#566273", marginTop: 6 }}>

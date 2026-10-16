@@ -64,12 +64,12 @@ def test_parse_novel_export_extracts_metadata_and_episodes():
     ep1, ep2 = result.episodes
     assert ep1.number == 1
     assert ep1.title == "はじまり"
-    assert ep1.summary == "第一部 序章"
+    assert ep1.chapter == "第一部 序章" and ep1.summary == ""
     assert "一行目" in ep1.content and "二行目" in ep1.content
 
     assert ep2.number == 2
     assert ep2.title == "つづき"
-    assert ep2.summary == ""  # chapter header only appears once, on episode 1
+    assert ep2.chapter == "第一部 序章"  # the chapter label appears once; later episodes inherit it
 
 
 def test_parse_draft_episodes_extracts_number_title_content():

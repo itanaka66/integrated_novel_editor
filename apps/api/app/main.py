@@ -442,7 +442,7 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
   db.add(WorldEntity(project_id=d.id,name=w.name,entity_type=w.entity_type,description=w.description,rules=w.rules,location=w.location,era=w.era))
  new_eps=[]
  for i,e in enumerate(chosen,start=1):
-  ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,content=e.content or '');db.add(ne);new_eps.append(ne)
+  ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,chapter=e.chapter or '',content=e.content or '');db.add(ne);new_eps.append(ne)
  db.commit();db.refresh(d)
  for ne in new_eps:file_sync.write_episode_file(d,ne)
  _save_digest_meta(p,d,len(eps),sum(len(e.content or '') for e in eps),[e.number for e in chosen])
@@ -549,13 +549,15 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
   return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
   return Response(export_mod.build_epub(p,eps,cover_mod.selected_cover(pid)),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+ if format=='docx':
+  return Response(export_mod.build_docx(p,eps),media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':content_disposition(name,'docx')})
  if format=='kdp':
   ai=_kdp_ai_hints(db,p)
   pub=_publishing_out(p).model_dump()
   return Response(export_mod.build_kdp_package(p,eps,cover_mod.selected_cover(pid),pub,ai),media_type='application/zip',headers={'Content-Disposition':content_disposition(name+'_kdp','zip')})
  if format=='json':
   return Response(json.dumps(_project_dump(db,p),ensure_ascii=False,indent=1,default=str),media_type='application/json',headers={'Content-Disposition':content_disposition(name,'json')})
- raise HTTPException(400,'format must be one of: txt, md, epub, kdp, json')
+ raise HTTPException(400,'format must be one of: txt, md, epub, docx, kdp, json')
 @app.post('/api/v1/projects/{pid}/ai-entities')
 async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
  # The AI proposes up to `count` new rows for one of the story-knowledge

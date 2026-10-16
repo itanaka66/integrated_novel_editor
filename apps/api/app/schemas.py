@@ -13,9 +13,9 @@ class ProofreadResult(BaseModel): diffs:list[ProofreadDiff]
 # textarea value here so 校正 always reflects what's on screen, not the
 # last-saved content.
 class ProofreadRequest(BaseModel): content:str|None=None
-class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
+class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''; chapter:str=''
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
-class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
+class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None; chapter:str|None=None
 class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
 class EpisodeBulkDeleteRequest(BaseModel): episode_ids:list[int]
 class EpisodeBulkDeleteResult(BaseModel): deleted_count:int; renumbered_count:int; episodes:list[EpisodeOut]

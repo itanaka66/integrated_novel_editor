@@ -127,3 +127,48 @@ def test_kdp_package_has_epub_cover_and_info_sheets(client, project, monkeypatch
     assert "comfyui" in info["AI生成コンテンツ: 画像（下書き）"]
     md = z.read("kdp_info.md").decode("utf-8")
     assert "題名" in md and "紹介文" in md and "本人" in md
+
+
+def _docx_paragraphs(data):
+    import io
+    import zipfile
+    import xml.etree.ElementTree as ET
+    z = zipfile.ZipFile(io.BytesIO(data))
+    for name in z.namelist():  # every part must be well-formed XML
+        if name.endswith((".xml", ".rels")):
+            ET.fromstring(z.read(name))
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    out = []
+    for p in ET.fromstring(z.read("word/document.xml")).iter("{%s}p" % ns["w"]):
+        style = p.find("w:pPr/w:pStyle", ns)
+        out.append((style.get("{%s}val" % ns["w"]) if style is not None else None, "".join(t.text or "" for t in p.iter("{%s}t" % ns["w"]))))
+    return z, out
+
+
+def test_docx_export_chapters_are_heading1_and_episodes_heading2(client, project):
+    import io
+    import zipfile
+    pid = project["id"]
+    client.put(f"/api/v1/projects/{pid}", json={"name": "恐竜 & <文明>", "description": "あらすじ"})
+    for n, (title, chapter) in enumerate([("開始", "第一部 序章"), ("旅", "第一部 序章"), ("再会", "第二部"), ("後日談", "")], start=1):
+        client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": title, "chapter": chapter, "content": f"本文{n}\n\n二段落目 & <b>"})
+    r = client.get(f"/api/v1/projects/{pid}/export", params={"format": "docx"})
+    assert r.status_code == 200 and "wordprocessingml" in r.headers["content-type"]
+    z, paras = _docx_paragraphs(r.content)
+    styled = [(s, t) for s, t in paras if s]
+    assert styled == [("Title", "恐竜 & <文明>"),
+                      ("Heading1", "第一部 序章"), ("Heading2", "第1話 開始"), ("Heading2", "第2話 旅"),  # one H1 for two episodes
+                      ("Heading1", "第二部"), ("Heading2", "第3話 再会"),
+                      ("Heading2", "第4話 後日談")]  # no chapter -> no Heading 1
+    assert any(t == "二段落目 & <b>" for s, t in paras)  # special characters survive escaping
+    styles = z.read("word/styles.xml").decode("utf-8")
+    assert 'w:styleId="Heading1"' in styles and 'w:styleId="Heading2"' in styles and 'w:outlineLvl w:val="0"' in styles
+
+
+def test_chapter_can_be_edited_and_round_trips(client, project):
+    pid = project["id"]
+    e = client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "t", "content": ""}).json()
+    assert e["chapter"] == ""
+    got = client.put(f"/api/v1/episodes/{e['id']}", json={"chapter": "第三章"}).json()
+    assert got["chapter"] == "第三章"
+    assert client.get(f"/api/v1/projects/{pid}/episodes").json()[0]["chapter"] == "第三章"

@@ -419,6 +419,8 @@ async def run_translation(job: dict) -> None:
             else:
                 job['last_message'] = f'第{e.number}話の不足分を翻訳中…'
                 purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
+            if e.chapter and not ne.chapter:
+                ne.chapter = (await translate_text(e.chapter, lang, glossary)).strip() or e.chapter
             # Translate only the parts that are missing or too short.
             if is_short(e.title, ne.title) or not ne.title:
                 ne.title = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title

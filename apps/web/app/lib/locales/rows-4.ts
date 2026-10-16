@@ -218,4 +218,8 @@ export const ROWS_4: Row[] = [
   // page loading
   ["情報を取得中...", "Loading data...", "正在获取信息...", "正在取得資訊...", "정보를 가져오는 중...", "Cargando datos...", "Chargement des données...", "Daten werden geladen..."],
   ["読み込みが終わるまで操作できません", "You can't use the screen until loading finishes", "加载完成前无法操作", "載入完成前無法操作", "불러오기가 끝날 때까지 조작할 수 없습니다", "No se puede usar la pantalla hasta que termine la carga", "L'écran est inutilisable tant que le chargement n'est pas terminé", "Bis zum Ende des Ladevorgangs ist keine Bedienung möglich"],
+
+  // chapter + docx
+  ["章（Word出力の見出し1）", "Chapter (Heading 1 in Word export)", "章节（Word 导出的标题 1）", "章節（Word 匯出的標題 1）", "장(Word 내보내기의 제목 1)", "Capítulo (Título 1 en la exportación a Word)", "Chapitre (Titre 1 dans l'export Word)", "Kapitel (Überschrift 1 im Word-Export)"],
+  ["例）第一部 序章（空欄なら章なし）", "e.g. Part 1: Prologue (blank = no chapter)", "例）第一部 序章（留空表示无章节）", "例）第一部 序章（留空表示無章節）", "예) 제1부 서장(비우면 장 없음)", "p. ej. Parte 1: Prólogo (vacío = sin capítulo)", "p. ex. Partie 1 : Prologue (vide = pas de chapitre)", "z. B. Teil 1: Prolog (leer = kein Kapitel)"],
 ];
