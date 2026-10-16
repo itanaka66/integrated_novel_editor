@@ -30,6 +30,7 @@ class ParsedEpisode:
     title: str
     content: str
     summary: str = ''
+    chapter: str = ''
 
 
 @dataclass
@@ -87,6 +88,7 @@ def parse_novel_export(text: str) -> ParsedNovel:
         genre=header.get('ジャンル', '').strip(),
     )
 
+    current_chapter = ''
     for idx, (start, number_str) in enumerate(marks):
         end = marks[idx + 1][0] if idx + 1 < len(marks) else len(lines)
         block = _sections(lines[start + 1:end])
@@ -95,11 +97,14 @@ def parse_novel_export(text: str) -> ParsedNovel:
         # 【第2章】, ...), so it can't be looked up by a fixed key — find
         # whichever 章 label is present in this block instead.
         chapter = next((v for k, v in block.items() if k.endswith('章')), '')
+        # A chapter label is written once, on the chapter's first episode; the
+        # episodes after it belong to the same chapter until the next label.
+        current_chapter = chapter.strip() or current_chapter
         result.episodes.append(ParsedEpisode(
             number=int(number_str),
             title=title,
             content=block.get('本文', '').strip(),
-            summary=chapter,
+            chapter=current_chapter,
         ))
     return result
 

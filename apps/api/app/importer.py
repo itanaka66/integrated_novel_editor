@@ -45,10 +45,11 @@ async def _import_episode(db, project, parsed_ep) -> bool:
             snapshot_revision(db, existing)
         existing.title = parsed_ep.title or existing.title
         existing.summary = parsed_ep.summary or existing.summary
+        existing.chapter = parsed_ep.chapter or existing.chapter
         existing.content = parsed_ep.content or existing.content
         e = existing
     else:
-        e = Episode(project_id=project.id, number=parsed_ep.number, title=parsed_ep.title, summary=parsed_ep.summary, content=parsed_ep.content)
+        e = Episode(project_id=project.id, number=parsed_ep.number, title=parsed_ep.title, summary=parsed_ep.summary, chapter=parsed_ep.chapter, content=parsed_ep.content)
         db.add(e)
     db.commit()
     db.refresh(e)

@@ -174,6 +174,7 @@ export default function WritePanel({ project }: { project: Project }) {
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
+        <div className="summary"><small>{t("章（Word出力の見出し1）")}</small><input value={e.chapter ?? ""} onChange={(x) => setE({ ...e, chapter: x.target.value })} placeholder={t("例）第一部 序章（空欄なら章なし）")} /></div>
         <div className="summary"><small>SUMMARY</small><input value={e.summary} onChange={(x) => setE({ ...e, summary: x.target.value })} /></div>
         <div className="editorToolbar">
           <button onClick={() => wrapSelection("**")} title={t("太字")}>B</button>

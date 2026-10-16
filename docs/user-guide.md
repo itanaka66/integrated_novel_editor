@@ -153,6 +153,8 @@ The range's last episode defaults to the work's own **episode target** (総話�
 
 The エクスポート tab also offers **KDP出版パッケージ (.zip)** and the JSON backup (`GET /api/v1/projects/{id}/export?format=json`, every project table plus the publishing info) — see [Publishing info and posting destinations](#publishing-info-and-posting-destinations). 「インポート開始」 and 「今すぐバックアップ」 are blue like the other action buttons.
 
+**Word (.docx)** export: the work's name is the title, each **chapter (章) is 見出し1 (Heading 1)** and each **episode (話) is 見出し2 (Heading 2)**, so Word's navigation pane and table of contents follow the story. Set an episode's chapter in the Write screen ("章" field above SUMMARY); a Heading 1 is written whenever the chapter changes between consecutive episodes, and episodes without a chapter get no Heading 1. Text imports in the なろう format fill the chapter automatically (the 【第N章】 label applies to its episode and the ones after it). `GET /api/v1/projects/{id}/export?format=docx`.
+
 ### Connection settings
 
 `GET`/`PUT /api/v1/system-settings`. Each of Qdrant URL, Ollama 1 (Writer) URL/model/embedding-model, and Ollama 2 (Controller) URL/model can be overridden from this screen; a field shows "（上書き中）" when it's currently an override rather than the server's environment-variable default. Saving an empty value for a field reverts it to that default. These overrides are stored in the database and take effect on the very next AI/search call — Qdrant and Ollama clients are constructed fresh per call, so there's nothing to restart.
