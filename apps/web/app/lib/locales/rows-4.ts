@@ -229,4 +229,7 @@ export const ROWS_4: Row[] = [
   // translator enabled toggle
   ["有効", "Enabled", "启用", "啟用", "사용", "Activo", "Activé", "Aktiv"],
   ["有効な翻訳LLMがありません：Controllerが翻訳します", "No enabled translation LLM: the Controller translates", "没有启用的翻译 LLM：由 Controller 翻译", "沒有啟用的翻譯 LLM：由 Controller 翻譯", "사용 중인 번역 LLM이 없습니다: Controller가 번역합니다", "No hay LLM de traducción activo: traduce el Controller", "Aucun LLM de traduction activé : le Controller traduit", "Kein aktives Übersetzungs-LLM: Der Controller übersetzt"],
+
+  // translator languages
+  ["翻訳できる言語", "Languages it can translate", "可翻译的语言", "可翻譯的語言", "번역 가능한 언어", "Idiomas que puede traducir", "Langues traduisibles", "Übersetzbare Sprachen"],
 ];

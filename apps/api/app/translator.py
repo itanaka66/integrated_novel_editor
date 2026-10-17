@@ -313,11 +313,11 @@ async def review_chunk(src: str, out: str, language: str, glossary: str) -> list
 
 
 async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict | None) -> str:
-    t, _ = await generate(_prompt(language, glossary, chunk))
+    t, _ = await generate(_prompt(language, glossary, chunk), language=language)
     cleaned = clean_translation(t)
     if bad_translation(chunk, cleaned, language):
         # One more try with a firmer prompt; keep whichever answer is better.
-        t2, _ = await generate(_retry_prompt(language, glossary, chunk))
+        t2, _ = await generate(_retry_prompt(language, glossary, chunk), language=language)
         again = clean_translation(t2)
         if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
             cleaned = again
@@ -327,7 +327,7 @@ async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict
             # Translate again, naming the sentences that were left out; keep it only
             # when it brings back at least one of them without losing quality.
             purpose.set(f'翻訳（{LANGUAGES[language]}）抜け修正')
-            t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]))
+            t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]), language=language)
             again = clean_translation(t4)
             if again and not bad_translation(chunk, again, language):
                 left = await find_omissions(chunk, again, alignment_embed)
@@ -342,7 +342,7 @@ async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict
         if issues:
             # Translate again with the reviewer's findings, keep it unless it is worse.
             purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
-            t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues))
+            t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues), language=language)
             fixed = clean_translation(t3)
             if fixed and not bad_translation(chunk, fixed, language):
                 cleaned = fixed
@@ -361,9 +361,9 @@ async def translate_text(text: str, language: str, glossary: str = '', stats: di
     return '\n'.join(parts)
 
 
-def _group_width() -> int:
+def _group_width(language: str | None = None) -> int:
     try:
-        return max(1, translator_count())
+        return max(1, translator_count(language))
     except Exception:  # settings unreadable: fall back to one at a time
         logger.warning('Could not read the translation LLM list', exc_info=True)
         return 1
@@ -445,7 +445,7 @@ async def run_translation(job: dict) -> None:
                 continue
             work.append((e, ne))
         # As many episodes at once as there are translation LLMs (1 = one by one).
-        width = _group_width()
+        width = _group_width(lang)
         for i in range(0, len(work), width):
             group = work[i:i + width]
             nums = '・'.join(str(e.number) for e, _ in group)

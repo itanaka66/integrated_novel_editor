@@ -55,17 +55,19 @@ _busy: dict[tuple[str, str], int] = {}
 _rr = [0]
 
 
-def translator_endpoints(cfg=None) -> list[dict]:
-    """The translation LLMs in effect: the configured list, or - when none is
-    configured - the single translator setting, which defaults to the Controller
-    (so with no dedicated translation LLM the Controller translates too)."""
+def translator_endpoints(cfg=None, language: str | None = None) -> list[dict]:
+    """The translation LLMs in effect for `language` (any, when None): enabled rows
+    whose language boxes include it. When there is none - no list, every row off,
+    or no row handling that language - the single translator setting is used,
+    which defaults to the Controller (so the Controller translates too)."""
     cfg = cfg or get_effective_config()
-    active = [e for e in cfg.translator_pool if e.get('enabled', True)]  # unchecked rows stay listed but are not used
+    active = [e for e in cfg.translator_pool  # unchecked rows stay listed but are not used
+              if e.get('enabled', True) and (language is None or language in e.get('languages', [language]))]
     return active or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
 
 
-def translator_count() -> int:
-    return len(translator_endpoints())
+def translator_count(language: str | None = None) -> int:
+    return len(translator_endpoints(language=language))
 
 
 def pick_endpoint(endpoints: list[dict]) -> dict:
@@ -77,11 +79,11 @@ def pick_endpoint(endpoints: list[dict]) -> dict:
     return free[_rr[0] % len(free)]
 
 
-async def translator_generate(prompt):
+async def translator_generate(prompt, language: str | None = None):
     """Translation. Its own server/model (Settings > 接続設定), which defaults to
     the Controller's; same API key as the Controller (typically the same
     instance) and no options override."""
-    ep = pick_endpoint(translator_endpoints())
+    ep = pick_endpoint(translator_endpoints(language=language))
     model, url = ep['model'], ep['url']
     if model.lower().startswith('qwen3'):
         # Qwen3 "thinks" for ~1000 tokens before answering, which turns a

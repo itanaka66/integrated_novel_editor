@@ -29,7 +29,7 @@ type SystemSettings = {
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
   translator_ollama_url: string; translator_ollama_url_is_override: boolean;
   translator_ollama_model: string; translator_ollama_model_is_override: boolean;
-  translator_pool: { url: string; model: string; enabled?: boolean }[];
+  translator_pool: { url: string; model: string; enabled?: boolean; languages?: string[] }[];
   cors_origins: string; // read-only — env/.env only, not editable from here
 };
 
@@ -56,6 +56,8 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
   { key: "pr", label: t("広報・ニュース・プレスリリース"), hint: t("企業イメージや媒体の信頼性を保つため、用字用語のルール（記者ハンドブックなど）が必要。") },
 ];
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
+
+const TRANSLATION_LANGS: [string, string][] = [["ja", "日本語"], ["en", "English"], ["zh-CN", "简体中文"], ["ko", "한국어"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (BR)"]];
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
   const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
@@ -92,7 +94,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
     controller_ollama_url: "", controller_ollama_model: "",
     translator_ollama_url: "", translator_ollama_model: "",
-    translator_pool: [] as { url: string; model: string; enabled?: boolean }[],
+    translator_pool: [] as { url: string; model: string; enabled?: boolean; languages?: string[] }[],
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -403,11 +405,27 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                       onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, model: e.target.value } : r)) })} />
                     <TestButton target="translator_ollama" resultKey={`translator_pool_${i}`} url={row.url} model={row.model} />
                     <button type="button" style={{ color: "#c0392b" }} onClick={() => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.filter((_, j) => j !== i) })}>{t("削除")}</button>
+                    <div style={{ flexBasis: "100%", display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, paddingLeft: 4 }}>
+                      <span style={{ color: "#687386" }}>{t("翻訳できる言語")}</span>
+                      {TRANSLATION_LANGS.map(([code, label]) => {
+                        const on = (row.languages ?? TRANSLATION_LANGS.map(([c]) => c)).includes(code);
+                        return (
+                          <label key={code} style={{ display: "inline-flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                            <input type="checkbox" checked={on} onChange={(e) => {
+                              const cur = row.languages ?? TRANSLATION_LANGS.map(([c]) => c);
+                              const next = e.target.checked ? [...cur, code] : cur.filter((c) => c !== code);
+                              setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, languages: TRANSLATION_LANGS.map(([c]) => c).filter((c) => next.includes(c)) } : r)) });
+                            }} />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
                 {!sysForm.translator_pool.some((r) => r.enabled !== false) && <p style={{ fontSize: 12 }}>{sysForm.translator_pool.length === 0 ? t("未設定：Controllerが翻訳します") : t("有効な翻訳LLMがありません：Controllerが翻訳します")}</p>}
                 {sysForm.translator_pool.length < 8 && (
-                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "", enabled: true }] })}>{t("＋ 翻訳LLMを追加")}</button>
+                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "", enabled: true, languages: TRANSLATION_LANGS.map(([c]) => c) }] })}>{t("＋ 翻訳LLMを追加")}</button>
                 )}
               </div>
 
