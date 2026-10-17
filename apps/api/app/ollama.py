@@ -1,3 +1,6 @@
+import contextlib
+import contextvars
+
 from editor_common import ollama as _common_ollama
 from .config import settings as env_settings
 from .llm_queue import slot
@@ -79,25 +82,51 @@ def pick_endpoint(endpoints: list[dict]) -> dict:
     return free[_rr[0] % len(free)]
 
 
+# The translation LLM an episode is pinned to (see pin_translator).
+_pinned: contextvars.ContextVar[dict | None] = contextvars.ContextVar('translator_pinned', default=None)
+
+
+@contextlib.contextmanager
+def pin_translator(language: str | None = None):
+    """Use ONE translation LLM for everything inside the block. An episode is
+    translated start to finish (chapter, title, summary, every chunk, retries and
+    fixes) by the same LLM, so its wording and names stay consistent and one
+    episode never occupies several LLMs; different episodes still go to different
+    LLMs. The LLM is counted as busy for the whole block, so concurrent episodes
+    spread out instead of piling onto one."""
+    ep = pick_endpoint(translator_endpoints(language=language))
+    key = (ep['url'], ep['model'])
+    _busy[key] = _busy.get(key, 0) + 1
+    token = _pinned.set(ep)
+    try:
+        yield ep
+    finally:
+        _pinned.reset(token)
+        _busy[key] -= 1
+
+
 async def translator_generate(prompt, language: str | None = None):
     """Translation. Its own server/model (Settings > 接続設定), which defaults to
     the Controller's; same API key as the Controller (typically the same
     instance) and no options override."""
-    ep = pick_endpoint(translator_endpoints(language=language))
+    pinned = _pinned.get()
+    ep = pinned or pick_endpoint(translator_endpoints(language=language))
     model, url = ep['model'], ep['url']
     if model.lower().startswith('qwen3'):
         # Qwen3 "thinks" for ~1000 tokens before answering, which turns a
         # minute into many; its documented /no_think switch skips that.
         prompt = prompt.rstrip() + ' /no_think'
     key = (url, model)
-    _busy[key] = _busy.get(key, 0) + 1
+    if not pinned:  # a pinned LLM is already counted busy by pin_translator
+        _busy[key] = _busy.get(key, 0) + 1
     try:
         return await generate(
             prompt, model, url, env_settings.translator_timeout_seconds,
             options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
         )
     finally:
-        _busy[key] -= 1
+        if not pinned:
+            _busy[key] -= 1
 
 
 async def reviewer_generate(prompt):
