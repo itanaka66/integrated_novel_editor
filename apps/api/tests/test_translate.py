@@ -661,3 +661,34 @@ def test_translate_endpoint_returns_the_running_job_instead_of_starting_another(
     stale = translator.new_job(pid, "es")
     stale["status"] = "running"  # no live task behind it (e.g. left over): must not block a new translation
     assert translator.active_job_for(pid, "es") is None
+
+
+def test_one_episode_is_translated_by_a_single_llm_but_episodes_spread(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace as NS
+    from app import ollama
+    used = {}
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        used.setdefault(prompt.rsplit("\n\n", 1)[-1][:12], []).append(url)
+        await asyncio.sleep(0.02)
+        return "T" * 60, model
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: _PoolCfg())
+    monkeypatch.setattr(translator, "pin_translator", ollama.pin_translator)  # the suite stubs it out by default
+    monkeypatch.setattr(translator, "generate", ollama.translator_generate)
+    long_a = "\n".join(["あ" * 400] * 20)  # several chunks
+    long_b = "\n".join(["い" * 400] * 20)
+    ep = lambda n, body: NS(number=n, title=f"題{n}", summary="要約" * 5, chapter="", content=body)  # noqa: E731
+
+    async def go():
+        job = {}
+        return await asyncio.gather(translator._translate_episode(ep(1, long_a), None, "en", "", job),
+                                    translator._translate_episode(ep(2, long_b), None, "en", "", job))
+    a, b = asyncio.run(go())
+    assert len(translator.split_chunks(long_a)) >= 3 and a["content"] and b["content"]
+    urls_a = {u for k, v in used.items() if k.startswith("あ") for u in v}
+    urls_b = {u for k, v in used.items() if k.startswith("い") for u in v}
+    assert len(urls_a) == 1 and len(urls_b) == 1  # every chunk of an episode on the same LLM
+    assert urls_a != urls_b  # the two episodes were given different LLMs
+    assert not any(ollama._busy.values())  # busy counters are released

@@ -6,6 +6,7 @@ table — a translation is cheap to re-run and this avoids a migration); a
 server restart simply drops in-flight jobs.
 """
 import asyncio
+import contextlib
 import itertools
 import json
 import logging
@@ -20,7 +21,7 @@ from .models import Project, Episode, Character, WorldEntity
 # not compete with prose generation.
 from .ollama import translator_generate as generate
 from .ollama import reviewer_generate as review_generate
-from .ollama import alignment_embed, translator_count
+from .ollama import alignment_embed, pin_translator, translator_count
 from .omission import find_omissions
 from .config import settings as env_settings
 from .continuity import extract_json
@@ -352,12 +353,13 @@ async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict
 
 
 async def translate_text(text: str, language: str, glossary: str = '', stats: dict | None = None) -> str:
-    """Chunks are translated concurrently; each call goes to whichever translation
-    LLM is free (see ollama.translator_generate), so several LLMs share one text."""
+    """Translate a text chunk by chunk. Which LLM is used is decided by
+    ollama.translator_generate (the one an episode is pinned to, else the least busy)."""
     if not (text or '').strip():
         return text or ''
-    chunks = split_chunks(text)
-    parts = await asyncio.gather(*(_translate_chunk(c, language, glossary, stats) for c in chunks))
+    # One chunk after another: inside an episode they all run on the pinned LLM, and
+    # translating them in order keeps names and tone consistent.
+    parts = [await _translate_chunk(c, language, glossary, stats) for c in split_chunks(text)]
     return '\n'.join(parts)
 
 
@@ -376,6 +378,26 @@ async def _translate_episode(e, ne, lang: str, glossary: str, job: dict) -> dict
     purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
     cur = lambda name: getattr(ne, name, '') if ne is not None else ''  # noqa: E731
     out: dict = {}
+    with _pin(lang):  # the whole episode on one translation LLM
+        return await _translate_episode_fields(e, ne, lang, glossary, job, cur, out)
+
+
+@contextlib.contextmanager
+def _pin(lang: str):
+    try:
+        cm = pin_translator(lang)
+        cm.__enter__()
+    except Exception:  # settings unreadable: the unpinned path picks per call
+        logger.warning('Could not pin a translation LLM', exc_info=True)
+        yield
+        return
+    try:
+        yield
+    finally:
+        cm.__exit__(None, None, None)
+
+
+async def _translate_episode_fields(e, ne, lang, glossary, job, cur, out) -> dict:
     if e.chapter and not cur('chapter'):
         out['chapter'] = (await translate_text(e.chapter, lang, glossary)).strip() or e.chapter
     if ne is None or is_short(e.title, cur('title')) or not cur('title'):

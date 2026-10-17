@@ -45,6 +45,8 @@ def single_translation_llm_by_default(monkeypatch):
     # pool patch this themselves.
     from app import translator
     monkeypatch.setattr(translator, "translator_count", lambda language=None: 1)
+    import contextlib
+    monkeypatch.setattr(translator, "pin_translator", lambda language=None: contextlib.nullcontext())
 
 
 @pytest.fixture(autouse=True)
