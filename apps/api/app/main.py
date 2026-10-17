@@ -315,6 +315,8 @@ async def project_translate(pid:int,x:TranslateRequest,db:Session=Depends(get_db
  # novel takes far longer than a request should stay open); poll the job.
  crud_get_or_404(db,Project,pid,'Project')
  if x.language not in translator.LANGUAGES:raise HTTPException(400,'unsupported language: '+', '.join(translator.LANGUAGES))
+ busy=translator.active_job_for(pid,x.language)
+ if busy:return _translate_job_out(busy) # already being translated into this language: show that job, do not start a second
  job=translator.new_job(pid,x.language)
  translator.running[job['id']]=asyncio.create_task(translator.run_translation(job))
  return _translate_job_out(job)

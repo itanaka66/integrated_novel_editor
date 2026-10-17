@@ -387,9 +387,44 @@ async def _translate_episode(e, ne, lang: str, glossary: str, job: dict) -> dict
     return out
 
 
+_key_locks: dict[tuple, asyncio.Lock] = {}
+
+
+def active_job_for(source_project_id: int, language: str) -> dict | None:
+    """A queued/running single-language translation of this work into this language."""
+    for j in jobs.values():
+        if j['source_project_id'] == source_project_id and j['language'] == language and j['status'] in ('queued', 'running'):
+            task = running.get(j['id'])
+            if task is not None and not task.done():  # a leftover entry with no live task must not block new jobs
+                return j
+    return None
+
+
+def _lock_for(job: dict) -> asyncio.Lock:
+    """One lock per (event loop, work, language): only one job at a time may
+    translate a given work into a given language. Two at once (a second click,
+    全翻訳 + a single language, a job resumed after a restart next to a new one)
+    would each see the episodes as missing, translate them on different LLMs at
+    the same time and create the translated episodes twice."""
+    key = (id(asyncio.get_running_loop()), job['source_project_id'], job['language'])
+    lock = _key_locks.get(key)
+    if lock is None:
+        _key_locks[key] = lock = asyncio.Lock()
+    return lock
+
+
 async def run_translation(job: dict) -> None:
     db = SessionLocal()
+    lock = _lock_for(job)
+    held = False
     try:
+        if lock.locked():
+            job['last_message'] = '同じ作品・同じ言語の別の翻訳が終わるのを待っています…'
+            _persist()
+        await lock.acquire()
+        held = True
+        # Whatever the job that held the lock translated is now in the database, so
+        # the resume logic below only does what is still missing or too short.
         job['status'] = 'running'
         _persist()
         set_project(job['source_project_id'])
@@ -483,5 +518,7 @@ async def run_translation(job: dict) -> None:
         _persist()
         job['last_message'] = f'翻訳に失敗しました: {ex}'
     finally:
+        if held:
+            lock.release()
         db.close()
         running.pop(job['id'], None)
