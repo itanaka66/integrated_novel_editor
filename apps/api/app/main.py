@@ -665,6 +665,7 @@ def _system_settings_out(db):
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
   translator_ollama_url=cfg.translator_ollama_url,translator_ollama_url_is_override=override(row.translator_ollama_url if row else None),
   translator_ollama_model=cfg.translator_ollama_model,translator_ollama_model_is_override=override(row.translator_ollama_model if row else None),
+  translator_pool=cfg.translator_pool,
   cors_origins=','.join(rc.get_cors_origins()),
   updated_at=row.updated_at if row else None,
  )
@@ -675,7 +676,14 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
  row=db.get(RuntimeConfig,rc.SINGLETON_ID)
  if not row:
   row=RuntimeConfig(id=rc.SINGLETON_ID);db.add(row)
- for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
+ for k,v in x.model_dump(exclude_unset=True).items():
+  if k=='translator_pool':
+   pool=rc.parse_pool(json.dumps(v or []))
+   if len(pool)>8:raise HTTPException(400,'翻訳LLMは最大8台までです')
+   for it in v or []:
+    if str(it.get('url') or '').strip() and not re.match(r'^https?://',str(it['url']).strip(),re.I):raise HTTPException(400,'URLは http:// または https:// で始めてください')
+   v=json.dumps(pool,ensure_ascii=False) if pool else None
+  setattr(row,k,v or None)
  db.commit();db.refresh(row)
  return _system_settings_out(db)
 @app.get('/api/v1/backups',response_model=BackupStatusOut)

@@ -29,6 +29,7 @@ type SystemSettings = {
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
   translator_ollama_url: string; translator_ollama_url_is_override: boolean;
   translator_ollama_model: string; translator_ollama_model_is_override: boolean;
+  translator_pool: { url: string; model: string }[];
   cors_origins: string; // read-only — env/.env only, not editable from here
 };
 
@@ -91,6 +92,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
     controller_ollama_url: "", controller_ollama_model: "",
     translator_ollama_url: "", translator_ollama_model: "",
+    translator_pool: [] as { url: string; model: string }[],
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -149,6 +151,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
     });
   }, [tab]);
@@ -168,6 +171,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -183,6 +187,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -380,21 +385,26 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
               </label>
               {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
 
-              <label>
-                {t("翻訳用 Ollama URL")} {sys.translator_ollama_url_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.translator_ollama_url} onChange={(e) => setSysForm({ ...sysForm, translator_ollama_url: e.target.value })} placeholder={sys.controller_ollama_url} />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="translator_ollama" resultKey="translator_ollama" url={sysForm.translator_ollama_url || sysForm.controller_ollama_url} model={sysForm.translator_ollama_model || sysForm.controller_ollama_model} />
-                {sys.translator_ollama_url_is_override && <button type="button" onClick={() => resetField("translator_ollama_url")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
+              <div style={{ gridColumn: "1/-1" }}>
+                <b>{t("翻訳LLM（複数台可）")}</b>
+                <p style={{ color: "#687386", fontSize: 12, margin: "4px 0 8px" }}>
+                  {t("翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。")}
+                </p>
+                {sysForm.translator_pool.map((row, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                    <input style={{ flex: "2 1 220px" }} value={row.url} placeholder="http://ollama:11434"
+                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, url: e.target.value } : r)) })} />
+                    <input style={{ flex: "1 1 140px" }} value={row.model} placeholder="qwen3:8b"
+                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, model: e.target.value } : r)) })} />
+                    <TestButton target="translator_ollama" resultKey={`translator_pool_${i}`} url={row.url} model={row.model} />
+                    <button type="button" style={{ color: "#c0392b" }} onClick={() => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.filter((_, j) => j !== i) })}>{t("削除")}</button>
+                  </div>
+                ))}
+                {sysForm.translator_pool.length === 0 && <p style={{ fontSize: 12 }}>{t("未設定：Controllerが翻訳します")}</p>}
+                {sysForm.translator_pool.length < 8 && (
+                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "" }] })}>{t("＋ 翻訳LLMを追加")}</button>
+                )}
               </div>
-
-              <label>
-                {t("翻訳用モデル")} {sys.translator_ollama_model_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.translator_ollama_model} onChange={(e) => setSysForm({ ...sysForm, translator_ollama_model: e.target.value })} placeholder={sys.controller_ollama_model} />
-              </label>
-              {sys.translator_ollama_model_is_override && <button type="button" onClick={() => resetField("translator_ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>{t("翻訳（全翻訳を含む）で使うモデルです。空欄の場合は Controller のサーバー・モデルを使います。")}</p>
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
                 {t("各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。")}

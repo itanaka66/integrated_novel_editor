@@ -39,6 +39,15 @@ def no_translation_review_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def single_translation_llm_by_default(monkeypatch):
+    # The translator asks the runtime config (a database) how many translation LLMs
+    # there are; unit tests have no such database, so default to one. Tests of the
+    # pool patch this themselves.
+    from app import translator
+    monkeypatch.setattr(translator, "translator_count", lambda: 1)
+
+
+@pytest.fixture(autouse=True)
 def reset_cors_cache():
     # DynamicCORSMiddleware reads this module-level cache (see
     # runtime_config.get_cors_origins) instead of the database on every

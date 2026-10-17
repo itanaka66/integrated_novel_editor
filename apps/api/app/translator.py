@@ -20,7 +20,7 @@ from .models import Project, Episode, Character, WorldEntity
 # not compete with prose generation.
 from .ollama import translator_generate as generate
 from .ollama import reviewer_generate as review_generate
-from .ollama import alignment_embed
+from .ollama import alignment_embed, translator_count
 from .omission import find_omissions
 from .config import settings as env_settings
 from .continuity import extract_json
@@ -312,48 +312,79 @@ async def review_chunk(src: str, out: str, language: str, glossary: str) -> list
     return [str(i).strip() for i in (data.get('issues') or []) if str(i).strip()][:5]
 
 
+async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict | None) -> str:
+    t, _ = await generate(_prompt(language, glossary, chunk))
+    cleaned = clean_translation(t)
+    if bad_translation(chunk, cleaned, language):
+        # One more try with a firmer prompt; keep whichever answer is better.
+        t2, _ = await generate(_retry_prompt(language, glossary, chunk))
+        again = clean_translation(t2)
+        if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
+            cleaned = again
+    if env_settings.translation_omission_check:
+        missing = await find_omissions(chunk, cleaned, alignment_embed)
+        if missing:
+            # Translate again, naming the sentences that were left out; keep it only
+            # when it brings back at least one of them without losing quality.
+            purpose.set(f'翻訳（{LANGUAGES[language]}）抜け修正')
+            t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]))
+            again = clean_translation(t4)
+            if again and not bad_translation(chunk, again, language):
+                left = await find_omissions(chunk, again, alignment_embed)
+                if len(left) < len(missing):
+                    cleaned = again
+                    if stats is not None:
+                        stats['omissions_fixed'] = stats.get('omissions_fixed', 0) + len(missing) - len(left)
+    if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
+        issues = await review_chunk(chunk, cleaned, language, glossary)
+        if stats is not None:
+            stats['reviewed'] = stats.get('reviewed', 0) + 1
+        if issues:
+            # Translate again with the reviewer's findings, keep it unless it is worse.
+            purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
+            t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues))
+            fixed = clean_translation(t3)
+            if fixed and not bad_translation(chunk, fixed, language):
+                cleaned = fixed
+                if stats is not None:
+                    stats['fixed'] = stats.get('fixed', 0) + 1
+    return cleaned
+
+
 async def translate_text(text: str, language: str, glossary: str = '', stats: dict | None = None) -> str:
+    """Chunks are translated concurrently; each call goes to whichever translation
+    LLM is free (see ollama.translator_generate), so several LLMs share one text."""
     if not (text or '').strip():
         return text or ''
-    out = []
-    for chunk in split_chunks(text):
-        t, _ = await generate(_prompt(language, glossary, chunk))
-        cleaned = clean_translation(t)
-        if bad_translation(chunk, cleaned, language):
-            # One more try with a firmer prompt; keep whichever answer is better.
-            t2, _ = await generate(_retry_prompt(language, glossary, chunk))
-            again = clean_translation(t2)
-            if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
-                cleaned = again
-        if env_settings.translation_omission_check:
-            missing = await find_omissions(chunk, cleaned, alignment_embed)
-            if missing:
-                # Translate again, naming the sentences that were left out; keep it only
-                # when it brings back at least one of them without losing quality.
-                purpose.set(f'翻訳（{LANGUAGES[language]}）抜け修正')
-                t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]))
-                again = clean_translation(t4)
-                if again and not bad_translation(chunk, again, language):
-                    left = await find_omissions(chunk, again, alignment_embed)
-                    if len(left) < len(missing):
-                        cleaned = again
-                        if stats is not None:
-                            stats['omissions_fixed'] = stats.get('omissions_fixed', 0) + len(missing) - len(left)
-        if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
-            issues = await review_chunk(chunk, cleaned, language, glossary)
-            if stats is not None:
-                stats['reviewed'] = stats.get('reviewed', 0) + 1
-            if issues:
-                # Translate again with the reviewer's findings, keep it unless it is worse.
-                purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
-                t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues))
-                fixed = clean_translation(t3)
-                if fixed and not bad_translation(chunk, fixed, language):
-                    cleaned = fixed
-                    if stats is not None:
-                        stats['fixed'] = stats.get('fixed', 0) + 1
-        out.append(cleaned)
-    return '\n'.join(out)
+    chunks = split_chunks(text)
+    parts = await asyncio.gather(*(_translate_chunk(c, language, glossary, stats) for c in chunks))
+    return '\n'.join(parts)
+
+
+def _group_width() -> int:
+    try:
+        return max(1, translator_count())
+    except Exception:  # settings unreadable: fall back to one at a time
+        logger.warning('Could not read the translation LLM list', exc_info=True)
+        return 1
+
+
+async def _translate_episode(e, ne, lang: str, glossary: str, job: dict) -> dict:
+    """The translated fields of one episode (only the parts that are missing or too
+    short when continuing an earlier translation). Touches no database state, so
+    several episodes can run at the same time."""
+    purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
+    cur = lambda name: getattr(ne, name, '') if ne is not None else ''  # noqa: E731
+    out: dict = {}
+    if e.chapter and not cur('chapter'):
+        out['chapter'] = (await translate_text(e.chapter, lang, glossary)).strip() or e.chapter
+    if ne is None or is_short(e.title, cur('title')) or not cur('title'):
+        out['title'] = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title
+    if ne is None or is_short(e.summary, cur('summary')):
+        out['summary'] = await translate_text(e.summary, lang, glossary, stats=job)
+    if ne is None or is_short(e.content, cur('content')):
+        out['content'] = await translate_text(e.content, lang, glossary, stats=job)
+    return out
 
 
 async def run_translation(job: dict) -> None:
@@ -404,36 +435,35 @@ async def run_translation(job: dict) -> None:
 
         existing = {x.number: x for x in db.scalars(select(Episode).where(Episode.project_id == dst.id)).all()}
         done = skipped = 0
+        work = []
         for e in eps:
             ne = existing.get(e.number)
-            if ne is None:
-                job['last_message'] = f'第{e.number}話を翻訳中…'
-                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
-                ne = Episode(project_id=dst.id, number=e.number, title='', summary='', content='')
-                db.add(ne)
-            elif not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
+            if ne is not None and not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
                 skipped += 1
                 job['processed_episodes'] += 1
                 _persist()
                 continue
-            else:
-                job['last_message'] = f'第{e.number}話の不足分を翻訳中…'
-                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
-            if e.chapter and not ne.chapter:
-                ne.chapter = (await translate_text(e.chapter, lang, glossary)).strip() or e.chapter
-            # Translate only the parts that are missing or too short.
-            if is_short(e.title, ne.title) or not ne.title:
-                ne.title = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title
-            if is_short(e.summary, ne.summary):
-                ne.summary = await translate_text(e.summary, lang, glossary, stats=job)
-            if is_short(e.content, ne.content):
-                ne.content = await translate_text(e.content, lang, glossary, stats=job)
-            db.commit()
-            db.refresh(ne)
-            file_sync.write_episode_file(dst, ne)
-            done += 1
-            job['processed_episodes'] += 1
+            work.append((e, ne))
+        # As many episodes at once as there are translation LLMs (1 = one by one).
+        width = _group_width()
+        for i in range(0, len(work), width):
+            group = work[i:i + width]
+            nums = '・'.join(str(e.number) for e, _ in group)
+            job['last_message'] = f'第{nums}話を翻訳中…'
             _persist()
+            results = await asyncio.gather(*(_translate_episode(e, ne, lang, glossary, job) for e, ne in group))
+            for (e, ne), fields in zip(group, results):
+                if ne is None:
+                    ne = Episode(project_id=dst.id, number=e.number, title='', summary='', content='')
+                    db.add(ne)
+                for k, v in fields.items():
+                    setattr(ne, k, v)
+                db.commit()
+                db.refresh(ne)
+                file_sync.write_episode_file(dst, ne)
+                done += 1
+                job['processed_episodes'] += 1
+                _persist()
         job['status'] = 'completed'
         _persist()
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume

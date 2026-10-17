@@ -39,6 +39,7 @@ def test_translate_rejects_unknown_language(client, project):
 
 
 def test_retranslate_only_fills_missing_or_short_parts(client, project, monkeypatch, db_session_factory):
+    import asyncio
     calls = []
 
     async def fake_generate(prompt, *a, **k):
@@ -53,13 +54,11 @@ def test_retranslate_only_fills_missing_or_short_parts(client, project, monkeypa
         client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": f"題{n}", "content": long_text})
 
     def run():
-        jid = client.post(f"/api/v1/projects/{pid}/translate", json={"language": "en"}).json()["id"]
-        for _ in range(80):
-            j = client.get(f"/api/v1/translate-jobs/{jid}").json()
-            if j["status"] in ("completed", "error"):
-                return j
-            time.sleep(0.1)
-        return j
+        async def go():
+            job = translator.new_job(pid, "en")
+            await translator.run_translation(job)
+            return job
+        return asyncio.run(go())
     first = run()
     assert first["status"] == "completed"
     dst = first["project_id"]
@@ -115,13 +114,12 @@ def test_translate_all_runs_on_the_server_and_lists_as_background_job(client, pr
     monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
     pid = project["id"]
     client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "a", "content": "b"})
-    j = client.post(f"/api/v1/projects/{pid}/translate-all").json()
-    assert j["total_languages"] == 7
-    for _ in range(150):
-        j = client.get(f"/api/v1/translate-all-jobs/{j['id']}").json()
-        if j["status"] in ("completed", "error"):
-            break
-        time.sleep(0.1)
+    import asyncio
+    langs = [c for c in translator.LANGUAGES if c != "ja"]
+    job = translator.new_all_job(pid, langs)
+    assert job["total_languages"] == 7
+    asyncio.run(translator.run_all(job))
+    j = client.get(f"/api/v1/translate-all-jobs/{job['id']}").json()
     assert j["status"] == "completed" and j["done_languages"] == 7 and j["failed"] == []
     assert client.get(f"/api/v1/projects/{pid}/translate-all").json()["id"] == j["id"]
     assert client.get("/api/v1/background-jobs").json() == {"jobs": []}
@@ -312,6 +310,7 @@ def test_translator_adds_no_think_for_qwen3_and_uses_the_configured_timeout(monk
     class Cfg:
         translator_ollama_model = "qwen3:14b"
         translator_ollama_url = "http://x"
+        translator_pool = []
     monkeypatch.setattr(ollama, "get_effective_config", lambda: Cfg())
     asyncio.run(ollama.translator_generate("translate this"))
     assert seen["prompt"].endswith("/no_think") and seen["timeout"] == 321 and seen["kind"] == "translator"
@@ -446,3 +445,95 @@ def test_omission_check_keeps_the_first_answer_when_the_retry_is_no_better(monke
         return ["恐竜が柵を越えた」"]
     monkeypatch.setattr(translator, "find_omissions", fake_find)
     assert asyncio.run(translator.translate_text(LONG_JA, "en")) == OMITTED_EN
+
+
+class _PoolCfg:
+    translator_ollama_url = "http://ctrl:11434"
+    translator_ollama_model = "qwen3:14b"
+    translator_pool = [{"url": "http://t1:11434", "model": "qwen3:8b"}, {"url": "http://t2:11434", "model": "qwen3:8b"},
+                       {"url": "http://t3:11434", "model": "gemma3:12b"}]
+
+
+def test_translator_calls_spread_over_idle_translation_llms(monkeypatch):
+    import asyncio
+    from app import ollama
+    seen = []
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        seen.append((url, model, prompt))
+        await asyncio.sleep(0.05)
+        return "ok", model
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: _PoolCfg())
+
+    async def go():
+        await asyncio.gather(*(ollama.translator_generate(f"p{i}") for i in range(3)))
+        await asyncio.gather(*(ollama.translator_generate(f"q{i}") for i in range(3)))
+    asyncio.run(go())
+    first, second = {u for u, _, _ in seen[:3]}, {u for u, _, _ in seen[3:]}
+    assert first == second == {"http://t1:11434", "http://t2:11434", "http://t3:11434"}  # three at once go to three LLMs
+    assert not any(u == "http://ctrl:11434" for u, _, _ in seen)  # the Controller is not used while others exist
+    assert next(p for u, m, p in seen if m == "qwen3:8b").endswith("/no_think")
+    assert not next(p for u, m, p in seen if m == "gemma3:12b").endswith("/no_think")
+    assert not any(v for v in ollama._busy.values())  # nothing left marked busy
+
+
+def test_controller_translates_when_no_other_translation_llm_exists(monkeypatch):
+    import asyncio
+    from app import ollama
+    seen = []
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        seen.append((url, model))
+        return "ok", model
+
+    class NoPool(_PoolCfg):
+        translator_pool = []
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: NoPool())
+    asyncio.run(ollama.translator_generate("x"))
+    assert seen == [("http://ctrl:11434", "qwen3:14b")]
+    assert ollama.translator_endpoints(NoPool()) == [{"url": "http://ctrl:11434", "model": "qwen3:14b"}]
+
+
+def test_episodes_are_translated_in_parallel_across_the_pool(client, project, monkeypatch, db_session_factory):
+    import asyncio
+    from app.models import Episode
+    running = {"now": 0, "max": 0}
+
+    async def slow(prompt, *a, **k):
+        running["now"] += 1
+        running["max"] = max(running["max"], running["now"])
+        await asyncio.sleep(0.05)
+        running["now"] -= 1
+        return "T" * 40, "m"
+    monkeypatch.setattr(translator, "generate", slow)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    monkeypatch.setattr(translator, "translator_count", lambda: 3)
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="本文" * 30) for n in range(1, 7)])
+        db.commit()
+
+    async def go():
+        job = translator.new_job(pid, "en")
+        await translator.run_translation(job)
+        return job
+    job = asyncio.run(go())
+    assert job["status"] == "completed" and job["processed_episodes"] == 6
+    assert 2 <= running["max"] <= 12  # several calls ran at once (3 episodes x their fields)
+    with db_session_factory() as db:
+        dst = db.query(translator.Project).filter(translator.Project.source_project_id == pid).one()
+        nums = [e.number for e in db.query(Episode).filter_by(project_id=dst.id).order_by(Episode.number)]
+    assert nums == [1, 2, 3, 4, 5, 6]
+
+
+def test_translator_pool_setting_round_trip_and_validation(client):
+    s = client.get("/api/v1/system-settings").json()
+    assert s["translator_pool"] == []
+    pool = [{"url": "http://a:11434/", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}, {"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "", "model": "x"}]
+    r = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()
+    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}]  # trimmed, de-duplicated
+    assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "ftp://x", "model": "m"}]}).status_code == 400
+    assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": f"http://h{i}", "model": "m"} for i in range(9)]}).status_code == 400
+    assert client.put("/api/v1/system-settings", json={"translator_pool": []}).json()["translator_pool"] == []
