@@ -602,3 +602,62 @@ def test_language_boxes_round_trip_and_default_to_all(client):
     assert got[1]["languages"] == ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]  # nothing given = all
     got2 = client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "http://a:11434", "model": "m", "languages": []}]}).json()["translator_pool"]
     assert got2[0]["languages"] == []  # an explicitly empty list is kept (the row handles nothing)
+
+
+def test_same_work_and_language_never_translates_twice_at_once(client, project, monkeypatch, db_session_factory):
+    import asyncio
+    from app.models import Episode, Project
+    calls = []
+    running = {"now": 0, "max": 0}
+
+    async def slow(prompt, *a, **k):
+        calls.append(prompt)
+        running["now"] += 1
+        running["max"] = max(running["max"], running["now"])
+        await asyncio.sleep(0.03)
+        running["now"] -= 1
+        return "T" * 40, "m"
+    monkeypatch.setattr(translator, "generate", slow)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="本文" * 30) for n in range(1, 4)])
+        db.commit()
+
+    async def go():
+        a, b = translator.new_job(pid, "en"), translator.new_job(pid, "en")  # e.g. a double click
+        await asyncio.gather(translator.run_translation(a), translator.run_translation(b))
+        return a, b
+    a, b = asyncio.run(go())
+    assert a["status"] == b["status"] == "completed"
+    assert running["max"] == 1  # one at a time (translator_count is 1 here and the jobs did not overlap)
+    with db_session_factory() as db:
+        dsts = db.query(Project).filter(Project.source_project_id == pid).all()
+        assert len(dsts) == 1  # one translated work, not two
+        nums = sorted(e.number for e in db.query(Episode).filter_by(project_id=dsts[0].id))
+    assert nums == [1, 2, 3]  # each episode exactly once
+    body_calls = [c for c in calls if c.rstrip().endswith("本文" * 30)]
+    assert len(body_calls) == 3  # every episode body was translated once - the second job did not repeat any
+    assert a["processed_episodes"] + b["processed_episodes"] == 6  # the later one counted them as already done
+
+
+def test_translate_endpoint_returns_the_running_job_instead_of_starting_another(client, project):
+    pid = project["id"]
+    translator.jobs.clear()  # other tests leave jobs behind; ids of projects repeat across tests
+
+    class LiveTask:
+        def done(self):
+            return False
+    running = translator.new_job(pid, "fr")
+    running["status"] = "running"
+    translator.running[running["id"]] = LiveTask()
+    r = client.post(f"/api/v1/projects/{pid}/translate", json={"language": "fr"}).json()
+    assert r["id"] == running["id"]
+    other = translator.new_job(pid, "de")
+    other["status"] = "completed"  # a finished job does not block a new one
+    assert translator.active_job_for(pid, "de") is None
+    running["status"] = "completed"
+    translator.running.pop(running["id"], None)
+    stale = translator.new_job(pid, "es")
+    stale["status"] = "running"  # no live task behind it (e.g. left over): must not block a new translation
+    assert translator.active_job_for(pid, "es") is None
