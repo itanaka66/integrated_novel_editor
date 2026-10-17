@@ -60,7 +60,8 @@ def translator_endpoints(cfg=None) -> list[dict]:
     configured - the single translator setting, which defaults to the Controller
     (so with no dedicated translation LLM the Controller translates too)."""
     cfg = cfg or get_effective_config()
-    return list(cfg.translator_pool) or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
+    active = [e for e in cfg.translator_pool if e.get('enabled', True)]  # unchecked rows stay listed but are not used
+    return active or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
 
 
 def translator_count() -> int:
