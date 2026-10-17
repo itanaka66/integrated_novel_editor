@@ -43,7 +43,7 @@ def parse_pool(raw: str | None) -> list[dict]:
         url, model = str((it or {}).get('url') or '').strip().rstrip('/'), str((it or {}).get('model') or '').strip()
         if url and model and (url, model) not in seen:
             seen.add((url, model))
-            out.append({'url': url, 'model': model})
+            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False})
     return out
 
 

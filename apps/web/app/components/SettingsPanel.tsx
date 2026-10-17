@@ -29,7 +29,7 @@ type SystemSettings = {
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
   translator_ollama_url: string; translator_ollama_url_is_override: boolean;
   translator_ollama_model: string; translator_ollama_model_is_override: boolean;
-  translator_pool: { url: string; model: string }[];
+  translator_pool: { url: string; model: string; enabled?: boolean }[];
   cors_origins: string; // read-only — env/.env only, not editable from here
 };
 
@@ -92,7 +92,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
     controller_ollama_url: "", controller_ollama_model: "",
     translator_ollama_url: "", translator_ollama_model: "",
-    translator_pool: [] as { url: string; model: string }[],
+    translator_pool: [] as { url: string; model: string; enabled?: boolean }[],
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -391,7 +391,12 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                   {t("翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。")}
                 </p>
                 {sysForm.translator_pool.map((row, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6, opacity: row.enabled === false ? 0.55 : 1 }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                      <input type="checkbox" checked={row.enabled !== false}
+                        onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, enabled: e.target.checked } : r)) })} />
+                      {t("有効")}
+                    </label>
                     <input style={{ flex: "2 1 220px" }} value={row.url} placeholder="http://ollama:11434"
                       onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, url: e.target.value } : r)) })} />
                     <input style={{ flex: "1 1 140px" }} value={row.model} placeholder="qwen3:8b"
@@ -400,9 +405,9 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                     <button type="button" style={{ color: "#c0392b" }} onClick={() => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.filter((_, j) => j !== i) })}>{t("削除")}</button>
                   </div>
                 ))}
-                {sysForm.translator_pool.length === 0 && <p style={{ fontSize: 12 }}>{t("未設定：Controllerが翻訳します")}</p>}
+                {!sysForm.translator_pool.some((r) => r.enabled !== false) && <p style={{ fontSize: 12 }}>{sysForm.translator_pool.length === 0 ? t("未設定：Controllerが翻訳します") : t("有効な翻訳LLMがありません：Controllerが翻訳します")}</p>}
                 {sysForm.translator_pool.length < 8 && (
-                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "" }] })}>{t("＋ 翻訳LLMを追加")}</button>
+                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "", enabled: true }] })}>{t("＋ 翻訳LLMを追加")}</button>
                 )}
               </div>
 

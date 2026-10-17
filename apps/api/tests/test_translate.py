@@ -533,7 +533,23 @@ def test_translator_pool_setting_round_trip_and_validation(client):
     assert s["translator_pool"] == []
     pool = [{"url": "http://a:11434/", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}, {"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "", "model": "x"}]
     r = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()
-    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}]  # trimmed, de-duplicated
+    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": True}, {"url": "http://b:11434", "model": "qwen3:8b", "enabled": True}]  # trimmed, de-duplicated, enabled by default
+    pool2 = [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": False}, {"url": "http://b:11434", "model": "qwen3:8b"}]
+    assert [p["enabled"] for p in client.put("/api/v1/system-settings", json={"translator_pool": pool2}).json()["translator_pool"]] == [False, True]  # the toggle is kept
     assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "ftp://x", "model": "m"}]}).status_code == 400
     assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": f"http://h{i}", "model": "m"} for i in range(9)]}).status_code == 400
     assert client.put("/api/v1/system-settings", json={"translator_pool": []}).json()["translator_pool"] == []
+
+
+def test_disabled_translation_llms_are_listed_but_not_used():
+    from app import ollama
+
+    class Cfg(_PoolCfg):
+        translator_pool = [{"url": "http://t1:11434", "model": "m", "enabled": False}, {"url": "http://t2:11434", "model": "m", "enabled": True},
+                           {"url": "http://t3:11434", "model": "m"}]  # a missing flag means enabled
+    assert [e["url"] for e in ollama.translator_endpoints(Cfg())] == ["http://t2:11434", "http://t3:11434"]
+
+    class AllOff(_PoolCfg):
+        translator_pool = [{"url": "http://t1:11434", "model": "m", "enabled": False}]
+    # nothing enabled -> the Controller translates (same as an empty list)
+    assert ollama.translator_endpoints(AllOff()) == [{"url": "http://ctrl:11434", "model": "qwen3:14b"}]
