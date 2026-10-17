@@ -8,7 +8,8 @@ docstring for why. Every AI/vector call in this app is already stateless
 restart or any connection-pool surgery — it just changes what the next
 call constructs its client with.
 """
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 
 from .config import settings as env_settings
 from .db import SessionLocal
@@ -27,6 +28,23 @@ class EffectiveConfig:
     controller_ollama_model: str
     translator_ollama_url: str
     translator_ollama_model: str
+    # Explicitly configured translation LLMs [{'url', 'model'}]; empty = use the
+    # single translator setting above (which defaults to the Controller).
+    translator_pool: list = field(default_factory=list)
+
+
+def parse_pool(raw: str | None) -> list[dict]:
+    try:
+        data = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    out, seen = [], set()
+    for it in data if isinstance(data, list) else []:
+        url, model = str((it or {}).get('url') or '').strip().rstrip('/'), str((it or {}).get('model') or '').strip()
+        if url and model and (url, model) not in seen:
+            seen.add((url, model))
+            out.append({'url': url, 'model': model})
+    return out
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -63,6 +81,7 @@ def get_effective_config(db=None) -> EffectiveConfig:
                                     env_settings.translator_ollama_url or _pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url)),
         translator_ollama_model=_pick(row.translator_ollama_model if row else None,
                                       env_settings.translator_ollama_model or _pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model)),
+        translator_pool=parse_pool(row.translator_pool if row else None),
     )
 
 

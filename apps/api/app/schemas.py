@@ -160,6 +160,7 @@ class SystemSettingsOut(BaseModel):
     controller_ollama_model:str; controller_ollama_model_is_override:bool
     translator_ollama_url:str; translator_ollama_url_is_override:bool
     translator_ollama_model:str; translator_ollama_model_is_override:bool
+    translator_pool:list[dict]=[]  # the translation LLMs (empty = the single setting above / the Controller)
     cors_origins:str # read-only — env/.env only, see models.RuntimeConfig
     updated_at:object|None=None
 
@@ -190,6 +191,7 @@ class SystemSettingsUpdate(BaseModel):
     controller_ollama_model:str|None=None
     translator_ollama_url:str|None=None
     translator_ollama_model:str|None=None
+    translator_pool:list[dict]|None=None  # [] clears it
     # cors_origins is intentionally NOT a field here — CORS_ORIGINS can only
     # be set via env/.env, not from this endpoint. See
     # models.RuntimeConfig's docstring for why.

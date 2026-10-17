@@ -51,20 +51,50 @@ async def generate_stream(prompt, model=None, url=None):
                 yield event
 
 
+_busy: dict[tuple[str, str], int] = {}
+_rr = [0]
+
+
+def translator_endpoints(cfg=None) -> list[dict]:
+    """The translation LLMs in effect: the configured list, or - when none is
+    configured - the single translator setting, which defaults to the Controller
+    (so with no dedicated translation LLM the Controller translates too)."""
+    cfg = cfg or get_effective_config()
+    return list(cfg.translator_pool) or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
+
+
+def translator_count() -> int:
+    return len(translator_endpoints())
+
+
+def pick_endpoint(endpoints: list[dict]) -> dict:
+    """The least busy endpoint (ties go round-robin), so a free translation LLM is
+    used before one that is already working."""
+    low = min(_busy.get((e['url'], e['model']), 0) for e in endpoints)
+    free = [e for e in endpoints if _busy.get((e['url'], e['model']), 0) == low]
+    _rr[0] += 1
+    return free[_rr[0] % len(free)]
+
+
 async def translator_generate(prompt):
     """Translation. Its own server/model (Settings > 接続設定), which defaults to
     the Controller's; same API key as the Controller (typically the same
     instance) and no options override."""
-    cfg = get_effective_config()
-    model = cfg.translator_ollama_model
+    ep = pick_endpoint(translator_endpoints())
+    model, url = ep['model'], ep['url']
     if model.lower().startswith('qwen3'):
         # Qwen3 "thinks" for ~1000 tokens before answering, which turns a
         # minute into many; its documented /no_think switch skips that.
         prompt = prompt.rstrip() + ' /no_think'
-    return await generate(
-        prompt, model, cfg.translator_ollama_url, env_settings.translator_timeout_seconds,
-        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
-    )
+    key = (url, model)
+    _busy[key] = _busy.get(key, 0) + 1
+    try:
+        return await generate(
+            prompt, model, url, env_settings.translator_timeout_seconds,
+            options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
+        )
+    finally:
+        _busy[key] -= 1
 
 
 async def reviewer_generate(prompt):
