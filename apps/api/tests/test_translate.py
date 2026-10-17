@@ -447,6 +447,9 @@ def test_omission_check_keeps_the_first_answer_when_the_retry_is_no_better(monke
     assert asyncio.run(translator.translate_text(LONG_JA, "en")) == OMITTED_EN
 
 
+ALL_LANGS = ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]
+
+
 class _PoolCfg:
     translator_ollama_url = "http://ctrl:11434"
     translator_ollama_model = "qwen3:14b"
@@ -509,7 +512,7 @@ def test_episodes_are_translated_in_parallel_across_the_pool(client, project, mo
         return "T" * 40, "m"
     monkeypatch.setattr(translator, "generate", slow)
     monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
-    monkeypatch.setattr(translator, "translator_count", lambda: 3)
+    monkeypatch.setattr(translator, "translator_count", lambda language=None: 3)
     pid = project["id"]
     with db_session_factory() as db:
         db.add_all([Episode(project_id=pid, number=n, title=f"t{n}", content="本文" * 30) for n in range(1, 7)])
@@ -533,7 +536,7 @@ def test_translator_pool_setting_round_trip_and_validation(client):
     assert s["translator_pool"] == []
     pool = [{"url": "http://a:11434/", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}, {"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "", "model": "x"}]
     r = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()
-    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": True}, {"url": "http://b:11434", "model": "qwen3:8b", "enabled": True}]  # trimmed, de-duplicated, enabled by default
+    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS}, {"url": "http://b:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS}]  # trimmed, de-duplicated, enabled by default
     pool2 = [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": False}, {"url": "http://b:11434", "model": "qwen3:8b"}]
     assert [p["enabled"] for p in client.put("/api/v1/system-settings", json={"translator_pool": pool2}).json()["translator_pool"]] == [False, True]  # the toggle is kept
     assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "ftp://x", "model": "m"}]}).status_code == 400
@@ -553,3 +556,49 @@ def test_disabled_translation_llms_are_listed_but_not_used():
         translator_pool = [{"url": "http://t1:11434", "model": "m", "enabled": False}]
     # nothing enabled -> the Controller translates (same as an empty list)
     assert ollama.translator_endpoints(AllOff()) == [{"url": "http://ctrl:11434", "model": "qwen3:14b"}]
+
+
+def test_translation_llms_are_chosen_by_target_language(monkeypatch):
+    import asyncio
+    from app import ollama
+
+    class Cfg(_PoolCfg):
+        translator_pool = [
+            {"url": "http://en:11434", "model": "m", "enabled": True, "languages": ["en", "fr"]},
+            {"url": "http://cjk:11434", "model": "m", "enabled": True, "languages": ["ja", "zh-CN", "ko"]},
+            {"url": "http://off:11434", "model": "m", "enabled": False, "languages": ["en", "ko"]},
+            {"url": "http://old:11434", "model": "m"},  # saved before languages existed: handles anything
+        ]
+    urls = lambda lang: [e["url"] for e in ollama.translator_endpoints(Cfg(), lang)]  # noqa: E731
+    assert urls("en") == ["http://en:11434", "http://old:11434"]
+    assert urls("ko") == ["http://cjk:11434", "http://old:11434"]
+    assert urls("de") == ["http://old:11434"]
+    assert len(urls(None)) == 3
+
+    class Narrow(_PoolCfg):
+        translator_pool = [{"url": "http://en:11434", "model": "m", "enabled": True, "languages": ["en"]}]
+    # no enabled LLM handles Korean -> the Controller translates it
+    assert ollama.translator_endpoints(Narrow(), "ko") == [{"url": "http://ctrl:11434", "model": "qwen3:14b"}]
+
+    seen = []
+
+    async def fake_generate(prompt, model=None, url=None, timeout=240, options=None, api_key=None, kind='writer'):
+        seen.append(url)
+        return "ok", model
+    monkeypatch.setattr(ollama, "generate", fake_generate)
+    monkeypatch.setattr(ollama, "get_effective_config", lambda: Cfg())
+
+    async def go():
+        for _ in range(4):
+            await ollama.translator_generate("x", language="ko")
+    asyncio.run(go())
+    assert set(seen) <= {"http://cjk:11434", "http://old:11434"} and "http://en:11434" not in seen
+
+
+def test_language_boxes_round_trip_and_default_to_all(client):
+    pool = [{"url": "http://a:11434", "model": "m", "languages": ["en", "xx", "ko"]}, {"url": "http://b:11434", "model": "m"}]
+    got = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()["translator_pool"]
+    assert got[0]["languages"] == ["en", "ko"]  # unknown codes dropped, canonical order kept
+    assert got[1]["languages"] == ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]  # nothing given = all
+    got2 = client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "http://a:11434", "model": "m", "languages": []}]}).json()["translator_pool"]
+    assert got2[0]["languages"] == []  # an explicitly empty list is kept (the row handles nothing)

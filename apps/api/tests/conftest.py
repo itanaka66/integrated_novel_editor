@@ -44,7 +44,7 @@ def single_translation_llm_by_default(monkeypatch):
     # there are; unit tests have no such database, so default to one. Tests of the
     # pool patch this themselves.
     from app import translator
-    monkeypatch.setattr(translator, "translator_count", lambda: 1)
+    monkeypatch.setattr(translator, "translator_count", lambda language=None: 1)
 
 
 @pytest.fixture(autouse=True)

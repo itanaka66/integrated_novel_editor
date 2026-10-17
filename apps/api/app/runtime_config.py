@@ -33,6 +33,10 @@ class EffectiveConfig:
     translator_pool: list = field(default_factory=list)
 
 
+# Target languages a translation LLM can be asked for (same codes as translator.LANGUAGES).
+TRANSLATION_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR')
+
+
 def parse_pool(raw: str | None) -> list[dict]:
     try:
         data = json.loads(raw) if raw else []
@@ -43,7 +47,10 @@ def parse_pool(raw: str | None) -> list[dict]:
         url, model = str((it or {}).get('url') or '').strip().rstrip('/'), str((it or {}).get('model') or '').strip()
         if url and model and (url, model) not in seen:
             seen.add((url, model))
-            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False})
+            langs = (it or {}).get('languages')
+            # No list = every language (rows saved before this option existed).
+            langs = list(TRANSLATION_LANGUAGES) if not isinstance(langs, list) else [c for c in TRANSLATION_LANGUAGES if c in langs]
+            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False, 'languages': langs})
     return out
 
 
