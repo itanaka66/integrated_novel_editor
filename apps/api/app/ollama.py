@@ -4,7 +4,7 @@ import contextvars
 from editor_common import ollama as _common_ollama
 from .config import settings as env_settings
 from .llm_queue import slot
-from .runtime_config import get_effective_config
+from .runtime_config import get_effective_config, language_box
 
 # Sent as Ollama's own "options" object on every Writer /api/generate call
 # only (see controller_generate below — the Controller model runs on
@@ -65,7 +65,7 @@ def translator_endpoints(cfg=None, language: str | None = None) -> list[dict]:
     which defaults to the Controller (so the Controller translates too)."""
     cfg = cfg or get_effective_config()
     active = [e for e in cfg.translator_pool  # unchecked rows stay listed but are not used
-              if e.get('enabled', True) and (language is None or language in e.get('languages', [language]))]
+              if e.get('enabled', True) and (language is None or language_box(language) in e.get('languages', [language_box(language)]))]
     return active or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
 
 

@@ -57,7 +57,7 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
 ];
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
 
-const TRANSLATION_LANGS: [string, string][] = [["ja", "日本語"], ["en", "English"], ["zh-CN", "简体中文"], ["ko", "한국어"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (BR)"]];
+const TRANSLATION_LANGS: [string, string][] = [["ja", "日本語"], ["en", "English"], ["zh-CN", "简体中文"], ["ko", "한국어"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (BR)"], ["it", "Italiano"], ["other", t("その他の言語")]];
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
   const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");

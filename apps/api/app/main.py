@@ -326,7 +326,7 @@ async def project_translate_all(pid:int,db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  for j in translator.all_jobs.values():
   if j['source_project_id']==pid and j['status'] in ('queued','running'):return j
- langs=[c for c in translator.LANGUAGES if c!=(p.language or 'ja')]
+ langs=[c for c in translator.CORE_LANGUAGES if c!=(p.language or 'ja')]
  job=translator.new_all_job(pid,langs)
  llm_set_project(pid)
  translator.all_running[job['id']]=asyncio.create_task(translator.run_all(job))

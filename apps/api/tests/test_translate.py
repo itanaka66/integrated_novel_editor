@@ -115,7 +115,7 @@ def test_translate_all_runs_on_the_server_and_lists_as_background_job(client, pr
     pid = project["id"]
     client.post(f"/api/v1/projects/{pid}/episodes", json={"number": 1, "title": "a", "content": "b"})
     import asyncio
-    langs = [c for c in translator.LANGUAGES if c != "ja"]
+    langs = [c for c in translator.CORE_LANGUAGES if c != "ja"]
     job = translator.new_all_job(pid, langs)
     assert job["total_languages"] == 7
     asyncio.run(translator.run_all(job))
@@ -447,7 +447,7 @@ def test_omission_check_keeps_the_first_answer_when_the_retry_is_no_better(monke
     assert asyncio.run(translator.translate_text(LONG_JA, "en")) == OMITTED_EN
 
 
-ALL_LANGS = ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]
+ALL_LANGS = ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR", "it", "other"]
 
 
 class _PoolCfg:
@@ -536,7 +536,7 @@ def test_translator_pool_setting_round_trip_and_validation(client):
     assert s["translator_pool"] == []
     pool = [{"url": "http://a:11434/", "model": "qwen3:8b"}, {"url": "http://b:11434", "model": "qwen3:8b"}, {"url": "http://a:11434", "model": "qwen3:8b"}, {"url": "", "model": "x"}]
     r = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()
-    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS}, {"url": "http://b:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS}]  # trimmed, de-duplicated, enabled by default
+    assert r["translator_pool"] == [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS, "v": 2}, {"url": "http://b:11434", "model": "qwen3:8b", "enabled": True, "languages": ALL_LANGS, "v": 2}]  # trimmed, de-duplicated, enabled by default
     pool2 = [{"url": "http://a:11434", "model": "qwen3:8b", "enabled": False}, {"url": "http://b:11434", "model": "qwen3:8b"}]
     assert [p["enabled"] for p in client.put("/api/v1/system-settings", json={"translator_pool": pool2}).json()["translator_pool"]] == [False, True]  # the toggle is kept
     assert client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "ftp://x", "model": "m"}]}).status_code == 400
@@ -599,7 +599,7 @@ def test_language_boxes_round_trip_and_default_to_all(client):
     pool = [{"url": "http://a:11434", "model": "m", "languages": ["en", "xx", "ko"]}, {"url": "http://b:11434", "model": "m"}]
     got = client.put("/api/v1/system-settings", json={"translator_pool": pool}).json()["translator_pool"]
     assert got[0]["languages"] == ["en", "ko"]  # unknown codes dropped, canonical order kept
-    assert got[1]["languages"] == ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]  # nothing given = all
+    assert got[1]["languages"] == ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR", "it", "other"]  # nothing given = all
     got2 = client.put("/api/v1/system-settings", json={"translator_pool": [{"url": "http://a:11434", "model": "m", "languages": []}]}).json()["translator_pool"]
     assert got2[0]["languages"] == []  # an explicitly empty list is kept (the row handles nothing)
 
@@ -692,3 +692,46 @@ def test_one_episode_is_translated_by_a_single_llm_but_episodes_spread(monkeypat
     assert len(urls_a) == 1 and len(urls_b) == 1  # every chunk of an episode on the same LLM
     assert urls_a != urls_b  # the two episodes were given different LLMs
     assert not any(ollama._busy.values())  # busy counters are released
+
+
+def test_more_languages_are_supported_end_to_end(client, project):
+    from app import export
+    assert len(translator.LANGUAGES) == 22 and {"it", "nl", "pl", "uk", "tr", "ar", "hi", "vi", "th", "id", "sv", "el", "fa", "ms"} <= set(translator.LANGUAGES)
+    assert set(translator.LANGUAGES) == set(translator._PROMPT_LANG) == set(export.LABELS)  # every language has a prompt name and export wording
+    assert translator.CORE_LANGUAGES == ("ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR")  # 全翻訳 keeps the eight
+    pid = project["id"]
+    translator.jobs.clear()
+    assert client.post(f"/api/v1/projects/{pid}/translate", json={"language": "xx"}).status_code == 400
+    # the untranslated-source check works for every target language
+    jp = "夜明け前の集落に、乾いた風が吹いていた。リナの声に、ガルドは毛皮の寝床から跳ね起きた。槍を掴み外へ出た。"
+    for lang in ("it", "ar", "th", "hi", "uk", "el", "fa", "vi"):
+        assert translator.bad_translation(jp, jp, lang) == "untranslated"
+    assert translator.bad_translation(jp, "Prima dell'alba un vento secco soffiava sul villaggio. Alla voce di Lina, Gard saltò giù dal letto di pelliccia.", "it") == ""
+
+
+def test_other_languages_are_governed_by_the_italian_and_other_boxes():
+    from app import ollama
+    class Cfg(_PoolCfg):
+        translator_pool = [
+            {"url": "http://main:11434", "model": "m", "enabled": True, "languages": ["ja", "en"]},
+            {"url": "http://it:11434", "model": "m", "enabled": True, "languages": ["it"]},
+            {"url": "http://rest:11434", "model": "m", "enabled": True, "languages": ["other"]},
+        ]
+    urls = lambda lang: [e["url"] for e in ollama.translator_endpoints(Cfg(), lang)]  # noqa: E731
+    assert urls("it") == ["http://it:11434"]
+    assert urls("th") == urls("ar") == urls("ms") == ["http://rest:11434"]  # every language without its own box -> 'other'
+    assert urls("en") == ["http://main:11434"]
+    class NoOther(_PoolCfg):
+        translator_pool = [{"url": "http://main:11434", "model": "m", "enabled": True, "languages": ["ja", "en", "it"]}]
+    assert ollama.translator_endpoints(NoOther(), "pl") == [{"url": "http://ctrl:11434", "model": "qwen3:14b"}]  # nobody handles 'other' -> Controller
+
+
+def test_legacy_all_eight_selection_means_everything_but_a_new_save_is_exact():
+    from app import runtime_config as rc
+    import json
+    old8 = ["ja", "en", "zh-CN", "ko", "es", "fr", "de", "pt-BR"]
+    legacy = rc.parse_pool(json.dumps([{"url": "http://a", "model": "m", "languages": old8}, {"url": "http://b", "model": "m", "languages": ["en", "fr"]}]))
+    assert legacy[0]["languages"] == old8 + ["it", "other"]  # saved when "all" meant the eight
+    assert legacy[1]["languages"] == ["en", "fr"]  # a deliberate subset stays
+    resaved = rc.parse_pool(json.dumps([{"url": "http://a", "model": "m", "languages": old8, "v": 2}]))
+    assert resaved[0]["languages"] == old8  # an exact selection saved by the new UI is not upgraded

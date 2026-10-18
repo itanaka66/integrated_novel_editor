@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import PublishingDialog from "./PublishingDialog";
+import { CORE_TRANSLATION_CODES, TRANSLATION_LANGUAGES, languageOptionLabel } from "../lib/translationLanguages";
 import PublishTargetsDialog, { usePublishTargets } from "./PublishTargetsDialog";
 import { safeUrl } from "../lib/publishTargets";
 import { Episode, Project } from "../lib/types";
@@ -21,11 +22,6 @@ const ICONS: { key: Section; label: string }[] = [
   { key: "settings", label: t("⚙ 設定") },
 ];
 
-const LANGUAGES: { code: string; label: string }[] = [
-  { code: "ja", label: "日本語" }, { code: "en", label: "English" }, { code: "zh-CN", label: "简体中文" },
-  { code: "ko", label: "한국어" }, { code: "es", label: "Español" }, { code: "fr", label: "Français" },
-  { code: "de", label: "Deutsch" }, { code: "pt-BR", label: "Português (BR)" },
-];
 type TranslateJob = { id: number; project_id: number | null; language: string; status: string; progress_percent: number; last_message: string };
 
 type DigestResult = { project: Project; source_episode_count: number; episode_count: number; source_chars: number; chars: number; source_numbers: number[] };
@@ -36,6 +32,7 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   const [tError, setTError] = useState("");
   const [showPub, setShowPub] = useState(false);
   const [showTargets, setShowTargets] = useState(false);
+  const [targetLang, setTargetLang] = useState("");
   const [targets, setTargets] = usePublishTargets();
   type AllJob = { id: number; status: string; total_languages: number; done_languages: number; failed: string[]; current_language: string; last_message: string };
   const [allJob, setAllJob] = useState<AllJob | null>(null);
@@ -91,8 +88,8 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
   // another), so it carries on after logging out; this just watches it, and picks
   // it up again when the screen is opened later.
   async function translateAll() {
-    const targets = LANGUAGES.filter((l) => l.code !== (project.language || "ja"));
-    if (!window.confirm(t("作品全編を{n}言語（{labels}）に順番に翻訳し、それぞれ新しい作品として作成します（元の作品は変更されません）。サーバーで実行されるため、ログアウトしても続きます。よろしいですか？", { n: targets.length, labels: targets.map((l) => l.label).join("・") }))) return;
+    const targets = TRANSLATION_LANGUAGES.filter((l) => CORE_TRANSLATION_CODES.includes(l.code) && l.code !== (project.language || "ja"));
+    if (!window.confirm(t("作品全編を{n}言語（{labels}）に順番に翻訳し、それぞれ新しい作品として作成します（元の作品は変更されません）。サーバーで実行されるため、ログアウトしても続きます。よろしいですか？", { n: targets.length, labels: targets.map((l) => l.native).join("・") }))) return;
     setTError(""); setTJob(null);
     try {
       const j = await api(`/projects/${project.id}/translate-all`, { method: "POST" });
@@ -167,7 +164,11 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <p>{t("作品全編を選択した言語に翻訳し、新しい作品として作成します。")}</p>
         <div className="exportButtons">
           <button className="primary" onClick={translateAll} disabled={tBusy || episodes.length === 0}>{allRun ? t("全翻訳中 {i}/{n}（{label}）", { i: allRun.index, n: allRun.total, label: allRun.label }) : t("全翻訳")}</button>
-          {LANGUAGES.map((l) => <button key={l.code} onClick={() => translate(l.code, l.label)} disabled={tBusy || episodes.length === 0}>{l.label}</button>)}
+          <select value={targetLang} onChange={(e) => setTargetLang(e.target.value)} disabled={tBusy} aria-label={t("翻訳する言語")}>
+            <option value="">{t("翻訳する言語を選択")}</option>
+            {TRANSLATION_LANGUAGES.filter((l) => l.code !== (project.language || "ja")).map((l) => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
+          </select>
+          <button onClick={() => { const l = TRANSLATION_LANGUAGES.find((x) => x.code === targetLang); if (l) translate(l.code, `${l.native}（${l.japanese}）`); }} disabled={tBusy || episodes.length === 0 || !targetLang}>{t("翻訳")}</button>
         </div>
         {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
         {allActive && allJob && <button type="button" style={{ color: "#c0392b" }} onClick={() => cancelTranslation("translate_all", allJob.id)}>{t("全翻訳をキャンセル")}</button>}

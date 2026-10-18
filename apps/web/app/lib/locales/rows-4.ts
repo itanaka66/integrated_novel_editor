@@ -232,4 +232,10 @@ export const ROWS_4: Row[] = [
 
   // translator languages
   ["翻訳できる言語", "Languages it can translate", "可翻译的语言", "可翻譯的語言", "번역 가능한 언어", "Idiomas que puede traducir", "Langues traduisibles", "Übersetzbare Sprachen"],
+
+  // translation language picker
+  ["翻訳する言語", "Language to translate into", "翻译成的语言", "翻譯成的語言", "번역할 언어", "Idioma de destino", "Langue cible", "Zielsprache"],
+  ["翻訳する言語を選択", "Choose a language", "选择语言", "選擇語言", "언어 선택", "Elige un idioma", "Choisir une langue", "Sprache wählen"],
+  ["その他の言語", "Other languages", "其他语言", "其他語言", "기타 언어", "Otros idiomas", "Autres langues", "Weitere Sprachen"],
+  ["翻訳", "Translate", "翻译", "翻譯", "번역", "Traducir", "Traduire", "Übersetzen"],
 ];
