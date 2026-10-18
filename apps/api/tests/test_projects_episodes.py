@@ -96,3 +96,53 @@ def test_episode_counts_in_one_query(client, project):
     assert r.status_code == 200
     counts = r.json()["counts"]
     assert counts[str(pid)] == 3 and str(empty) not in counts
+
+
+def _mk(client, pid, n, title):
+    return client.post(f"/api/v1/projects/{pid}/episodes", json={"number": n, "title": title, "content": f"本文{n}"}).json()
+
+
+def _mirror_files(pid):
+    from app import file_sync
+    from app.models import Project
+    root = file_sync.storage_root()
+    return sorted(p.name for p in root.rglob("*.md")) if root.exists() else []
+
+
+def test_swap_two_episodes_exchanges_numbers_and_files(client, project):
+    pid = project["id"]
+    a, b, c = _mk(client, pid, 1, "一"), _mk(client, pid, 2, "二"), _mk(client, pid, 3, "三")
+    before = _mirror_files(pid)
+    r = client.post(f"/api/v1/projects/{pid}/episodes/swap", json={"episode_a": a["id"], "episode_b": c["id"]})
+    assert r.status_code == 200
+    eps = r.json()["episodes"]
+    assert [(e["number"], e["title"], e["content"]) for e in eps] == [(1, "三", "本文3"), (2, "二", "本文2"), (3, "一", "本文1")]  # text travels with the episode
+    after = _mirror_files(pid)
+    assert len(after) == len(before) == 3  # no orphaned files from the old numbers
+    assert client.post(f"/api/v1/projects/{pid}/episodes/swap", json={"episode_a": a["id"], "episode_b": a["id"]}).status_code == 400
+    assert client.post(f"/api/v1/projects/{pid}/episodes/swap", json={"episode_a": a["id"], "episode_b": 99999}).status_code == 404
+    other = client.post("/api/v1/projects", json={"name": "other"}).json()["id"]
+    foreign = _mk(client, other, 1, "他")
+    assert client.post(f"/api/v1/projects/{pid}/episodes/swap", json={"episode_a": a["id"], "episode_b": foreign["id"]}).status_code == 404  # another work's episode
+
+
+def test_insert_episode_shifts_later_episodes_and_their_references(client, project):
+    pid = project["id"]
+    _mk(client, pid, 1, "一"); _mk(client, pid, 2, "二"); _mk(client, pid, 3, "三")
+    client.post(f"/api/v1/projects/{pid}/plots", json={"title": "長編", "start_episode": 1, "end_episode": 3})
+    client.post(f"/api/v1/projects/{pid}/foreshadowings", json={"title": "伏線", "setup_episode": 2, "payoff_episode": 3})
+    client.post(f"/api/v1/projects/{pid}/timeline", json={"episode_number": 3, "title": "出来事"})
+    r = client.post(f"/api/v1/projects/{pid}/episodes/insert", json={"after_number": 1, "title": "挿入話"})
+    assert r.status_code == 200
+    body = r.json()
+    assert [(e["number"], e["title"]) for e in body["episodes"]] == [(1, "一"), (2, "挿入話"), (3, "二"), (4, "三")]
+    new = next(e for e in body["episodes"] if e["title"] == "挿入話")
+    assert new["id"] == body["episode_id"] and new["content"] == ""
+    plot = client.get(f"/api/v1/projects/{pid}/plots").json()[0]
+    assert (plot["start_episode"], plot["end_episode"]) == (1, 4)  # 1 stays, the end moved with episode 3
+    fs = client.get(f"/api/v1/projects/{pid}/foreshadowings").json()[0]
+    assert (fs["setup_episode"], fs["payoff_episode"]) == (3, 4)
+    assert client.get(f"/api/v1/projects/{pid}/timeline").json()[0]["episode_number"] == 4
+    assert len(_mirror_files(pid)) == 4
+    top = client.post(f"/api/v1/projects/{pid}/episodes/insert", json={"after_number": 0}).json()["episodes"]
+    assert [e["number"] for e in top] == [1, 2, 3, 4, 5] and top[0]["title"] == "第1話" and top[1]["title"] == "一"

@@ -827,6 +827,52 @@ def episode_delete(eid:int,db:Session=Depends(get_db)):
  project=e.project
  file_sync.delete_episode_file(project,e)
  db.delete(e);db.commit()
+def _renumber_episode(project,e,number):
+ # episode files are named by number ("0004_<id>.md"): capture the old path before
+ # changing the number, then drop it once the new file is written.
+ old_path=file_sync.episode_file_path(project,e)
+ e.number=number
+ try:old_path.unlink(missing_ok=True)
+ except OSError:logger.exception('Failed to remove stale episode file for episode %s',e.id)
+@app.post('/api/v1/projects/{pid}/episodes/swap',response_model=EpisodeListResult)
+def episodes_swap(pid:int,x:EpisodeSwapRequest,db:Session=Depends(get_db)):
+ # Exchanges the positions (numbers) of two episodes of this work. The text stays with
+ # its episode; only the order changes. Plot / foreshadowing / timeline entries keep the
+ # episode NUMBERS they already had (they point at positions).
+ project=crud_get_or_404(db,Project,pid,'Project')
+ if x.episode_a==x.episode_b:raise HTTPException(400,'違う2つの話を指定してください')
+ a,b=(db.get(Episode,i) for i in (x.episode_a,x.episode_b))
+ if not a or not b or a.project_id!=pid or b.project_id!=pid:raise HTTPException(404,'Episode not found')
+ na,nb=a.number,b.number
+ _renumber_episode(project,a,nb);_renumber_episode(project,b,na)
+ db.commit()
+ for e in (a,b):
+  db.refresh(e);file_sync.write_episode_file(project,e)
+ return EpisodeListResult(episodes=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number,Episode.id)).all())
+@app.post('/api/v1/projects/{pid}/episodes/insert',response_model=EpisodeListResult)
+def episodes_insert(pid:int,x:EpisodeInsertRequest,db:Session=Depends(get_db)):
+ # Inserts a new, empty episode right after episode number `after_number` (0 = at the very
+ # start): the new one gets number after_number+1 and every episode from there on moves
+ # one place later. Plot / foreshadowing / timeline references to those later episodes
+ # move with them so they keep pointing at the same episodes.
+ project=crud_get_or_404(db,Project,pid,'Project')
+ pos=max(1,x.after_number+1)
+ later=db.scalars(select(Episode).where(Episode.project_id==pid,Episode.number>=pos).order_by(Episode.number.desc(),Episode.id.desc())).all()
+ for e in later:_renumber_episode(project,e,e.number+1)
+ for pl in db.scalars(select(Plot).where(Plot.project_id==pid)).all():
+  if pl.start_episode is not None and pl.start_episode>=pos:pl.start_episode+=1
+  if pl.end_episode is not None and pl.end_episode>=pos:pl.end_episode+=1
+ for fs in db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all():
+  if fs.setup_episode is not None and fs.setup_episode>=pos:fs.setup_episode+=1
+  if fs.payoff_episode is not None and fs.payoff_episode>=pos:fs.payoff_episode+=1
+ for te in db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid)).all():
+  if te.episode_number>=pos:te.episode_number+=1
+ new=Episode(project_id=pid,number=pos,title=x.title.strip() or f'第{pos}話',summary='',content='')
+ db.add(new);db.commit();db.refresh(new)
+ for e in later:
+  db.refresh(e);file_sync.write_episode_file(project,e)
+ file_sync.write_episode_file(project,new)
+ return EpisodeListResult(episodes=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number,Episode.id)).all(),episode_id=new.id)
 @app.post('/api/v1/projects/{pid}/episodes/bulk-delete',response_model=EpisodeBulkDeleteResult)
 def episodes_bulk_delete(pid:int,x:EpisodeBulkDeleteRequest,db:Session=Depends(get_db)):
  # Deletes the given episodes, then closes any resulting gaps in the

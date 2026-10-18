@@ -18,6 +18,9 @@ class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; mode
 class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None; chapter:str|None=None
 class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
 class EpisodeBulkDeleteRequest(BaseModel): episode_ids:list[int]
+class EpisodeSwapRequest(BaseModel): episode_a:int; episode_b:int
+class EpisodeInsertRequest(BaseModel): after_number:int=0; title:str=''
+class EpisodeListResult(BaseModel): episodes:list[EpisodeOut]; episode_id:int|None=None
 class EpisodeBulkDeleteResult(BaseModel): deleted_count:int; renumbered_count:int; episodes:list[EpisodeOut]
 class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
 class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
