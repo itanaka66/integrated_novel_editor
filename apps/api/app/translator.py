@@ -141,7 +141,7 @@ _all_ids = itertools.count(1)
 
 def new_all_job(project_id: int, languages: list[str]) -> dict:
     job = {'id': next(_all_ids), 'source_project_id': project_id, 'languages': languages, 'status': 'queued',
-           'total_languages': len(languages), 'done_languages': 0, 'failed': [], 'current_language': '', 'project_ids': [],
+           'total_languages': len(languages), 'done_languages': 0, 'finished_languages': [], 'failed': [], 'current_language': '', 'project_ids': [],
            'last_message': 'キューに追加しました'}
     all_jobs[job['id']] = job
     _persist()
@@ -149,24 +149,46 @@ def new_all_job(project_id: int, languages: list[str]) -> dict:
 
 
 async def run_all(job: dict) -> None:
-    """Translate into each language in turn (each its own translated work, or the
-    existing one topped up). Runs on the server, so it carries on after the user
-    logs out; a language that fails does not stop the rest."""
+    """Translate into several languages at once (each its own translated work, or
+    the existing one topped up): up to TRANSLATION_PARALLEL_LANGUAGES (4) languages
+    run at the same time, the rest start as soon as one finishes. Runs on the
+    server, so it carries on after the user logs out; a language that fails does
+    not stop the others. A job restored after a restart skips the languages it had
+    already finished."""
     job['status'] = 'running'
+    job.setdefault('finished_languages', [])
+    if not job['finished_languages'] and job.get('done_languages'):
+        # saved by the one-after-another version: the first N languages were done
+        job['finished_languages'] = list(job['languages'][:job['done_languages']])
     _persist()
     try:
-        for lang in job['languages'][job['done_languages']:]:
-            job['current_language'] = LANGUAGES[lang]
-            job['last_message'] = f'{LANGUAGES[lang]} に翻訳中…'
-            child = new_job(job['source_project_id'], lang)
-            await run_translation(child)
-            if child['status'] == 'completed':
-                if child.get('project_id'):
-                    job['project_ids'].append(child['project_id'])
-            else:
-                job['failed'].append(LANGUAGES[lang])
-            job['done_languages'] += 1
-            _persist()
+        limit = max(1, int(env_settings.translation_parallel_languages))
+        sem = asyncio.Semaphore(limit)
+        active: list[str] = []
+
+        async def one(lang: str) -> None:
+            async with sem:
+                active.append(lang)
+                job['current_language'] = '・'.join(LANGUAGES[x] for x in active)
+                job['last_message'] = f'{len(active)}言語を同時に翻訳中…（{job["current_language"]}）'
+                _persist()
+                child = new_job(job['source_project_id'], lang)
+                try:
+                    await run_translation(child)
+                finally:
+                    active.remove(lang)
+                    job['current_language'] = '・'.join(LANGUAGES[x] for x in active)
+                if child['status'] == 'completed':
+                    if child.get('project_id'):
+                        job['project_ids'].append(child['project_id'])
+                else:
+                    job['failed'].append(LANGUAGES[lang])
+                job['finished_languages'].append(lang)
+                job['done_languages'] = len(job['finished_languages'])
+                _persist()
+
+        pending = [lang for lang in job['languages'] if lang not in job['finished_languages']]
+        await asyncio.gather(*(one(lang) for lang in pending))
         job['status'] = 'completed'
         _persist()
         job['last_message'] = f'{job["total_languages"]}言語の翻訳が終わりました' + (f'（失敗: {"・".join(job["failed"])}）' if job['failed'] else '。')

@@ -735,3 +735,73 @@ def test_legacy_all_eight_selection_means_everything_but_a_new_save_is_exact():
     assert legacy[1]["languages"] == ["en", "fr"]  # a deliberate subset stays
     resaved = rc.parse_pool(json.dumps([{"url": "http://a", "model": "m", "languages": old8, "v": 2}]))
     assert resaved[0]["languages"] == old8  # an exact selection saved by the new UI is not upgraded
+
+
+def _run_all_with_tracking(db_session_factory, project_id, langs, monkeypatch, limit=None):
+    import asyncio
+    from app.config import settings
+    inflight, peak, started = set(), [0], []
+
+    async def gen(prompt, *a, language=None, **k):
+        inflight.add(language)
+        started.append(language)
+        peak[0] = max(peak[0], len(inflight))
+        await asyncio.sleep(0.05)
+        inflight.discard(language)
+        return "T" * 40, "m"
+    monkeypatch.setattr(translator, "generate", gen)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    if limit is not None:
+        monkeypatch.setattr(settings, "translation_parallel_languages", limit)
+    job = translator.new_all_job(project_id, langs)
+    asyncio.run(translator.run_all(job))
+    return job, peak[0], started
+
+
+def test_translate_all_runs_up_to_four_languages_at_once(client, project, monkeypatch, db_session_factory):
+    from app.models import Episode
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add(Episode(project_id=pid, number=1, title="t", content="本文" * 30))
+        db.commit()
+    langs = ["en", "ko", "fr", "de", "es", "zh-CN"]
+    job, peak, _ = _run_all_with_tracking(db_session_factory, pid, langs, monkeypatch)
+    assert job["status"] == "completed" and job["done_languages"] == 6 and job["failed"] == []
+    assert peak == 4  # the default limit: four languages at the same time, the rest as slots free up
+    assert sorted(job["finished_languages"]) == sorted(langs) and len(job["project_ids"]) == 6
+
+
+def test_translate_all_parallel_limit_is_configurable(client, project, monkeypatch, db_session_factory):
+    from app.models import Episode
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add(Episode(project_id=pid, number=1, title="t", content="本文" * 30))
+        db.commit()
+    job, peak, _ = _run_all_with_tracking(db_session_factory, pid, ["en", "ko", "fr", "de"], monkeypatch, limit=2)
+    assert job["status"] == "completed" and peak == 2
+    translator.jobs.clear()
+    job1, peak1, _ = _run_all_with_tracking(db_session_factory, pid, ["it", "nl"], monkeypatch, limit=1)
+    assert peak1 == 1  # 1 = the old one-after-another behaviour
+
+
+def test_resumed_translate_all_skips_the_finished_languages(client, project, monkeypatch, db_session_factory):
+    from app.models import Episode
+    pid = project["id"]
+    with db_session_factory() as db:
+        db.add(Episode(project_id=pid, number=1, title="t", content="本文" * 30))
+        db.commit()
+    import asyncio
+    async def gen(prompt, *a, language=None, **k):
+        started.add(language)
+        return "T" * 40, "m"
+    started = set()
+    monkeypatch.setattr(translator, "generate", gen)
+    monkeypatch.setattr(translator, "SessionLocal", db_session_factory)
+    job = translator.new_all_job(pid, ["en", "ko", "fr"])
+    job["finished_languages"] = ["en"]  # as restored from translate_jobs.json
+    asyncio.run(translator.run_all(job))
+    assert started == {"ko", "fr"} and job["done_languages"] == 3 and job["status"] == "completed"
+    old = translator.new_all_job(pid, ["en", "ko", "fr"])
+    old["done_languages"] = 2  # saved by the older one-after-another version
+    asyncio.run(translator.run_all(old))
+    assert len(old["project_ids"]) == 1 and old["finished_languages"] == ["en", "ko", "fr"]  # only the third language was run (its work already existed, so nothing needed translating)

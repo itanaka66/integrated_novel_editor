@@ -25,6 +25,9 @@ class Settings(BaseSettings):
  # Sentence-level omission check: embed source/translated sentences (a multilingual
  # embedding model) and re-translate a chunk when a source sentence has no
  # counterpart. Cheap (one embedding call per chunk); skipped if the model is missing.
+ # 全翻訳: how many languages are translated at the same time (each runs its own
+ # episodes on the translation LLMs; calls beyond what the LLMs can take wait).
+ translation_parallel_languages:int=4
  translation_omission_check:bool=True; translation_embed_model:str='bge-m3'
  # Sent as "Authorization: Bearer <key>" on every Ollama request (Writer/
  # embeddings and Controller respectively) when set — see
