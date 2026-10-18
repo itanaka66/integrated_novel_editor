@@ -98,17 +98,6 @@ export const PUBLISH_TARGETS: PublishTarget[] = [
     caution: "【調査メモ（要確認）】契約条件・AI生成コンテンツの扱い・非英語作品の扱いは公式の案内を確認",
   },
   {
-    name: "Chuangshi（創世中文網）",
-    officialUrl: "https://chuangshi.qq.com/",
-    postUrl: "https://chuangshi.qq.com/",
-    helpUrl: "https://chuangshi.qq.com/",
-    method: "中国語（簡体字）のWeb小説プラットフォーム（連載・有料化）",
-    languages: "中国語（簡体字）。8言語のうち投稿向きなのは簡体字中国語のみ",
-    languageSetting: "中国語での執筆・投稿が前提",
-    translation: "要確認",
-    caution: "【調査メモ（要確認）】登録に中国国内の電話番号・本人確認が必要になる可能性がある。海外居住者の投稿可否は公式を確認",
-  },
-  {
     name: "Munpia（문피아）",
     officialUrl: "https://www.munpia.com/",
     postUrl: "https://www.munpia.com/",
@@ -128,6 +117,6 @@ export const PUBLISH_TARGETS: PublishTarget[] = [
     languages: "中国語（簡体字）。8言語のうち投稿向きなのは簡体字中国語のみ（要確認）",
     languageSetting: "中国語での執筆・投稿が前提",
     translation: "要確認",
-    caution: "【調査メモ（要確認）】登録に中国国内の電話番号・本人確認が必要になる可能性がある。海外居住者の投稿可否、契約条件は公式を確認。創世中文網（chuangshi.qq.com）との関係も公式で確認",
+    caution: "【調査メモ（要確認）】登録に中国国内の電話番号・本人確認が必要になる可能性がある。海外居住者の投稿可否、契約条件は公式を確認",
   },
 ];
