@@ -119,4 +119,15 @@ export const PUBLISH_TARGETS: PublishTarget[] = [
     translation: "要確認",
     caution: "【調査メモ（要確認）】会員登録・本人確認の条件、海外居住者の投稿可否は公式を確認",
   },
+  {
+    name: "QQ 作家専区（write.qq.com）",
+    officialUrl: "https://write.qq.com/",
+    postUrl: "https://write.qq.com/",
+    helpUrl: "https://write.qq.com/",
+    method: "中国語（簡体字）のWeb小説の作家向け投稿ページ（Tencent系の作家向けサイト）",
+    languages: "中国語（簡体字）。8言語のうち投稿向きなのは簡体字中国語のみ（要確認）",
+    languageSetting: "中国語での執筆・投稿が前提",
+    translation: "要確認",
+    caution: "【調査メモ（要確認）】登録に中国国内の電話番号・本人確認が必要になる可能性がある。海外居住者の投稿可否、契約条件は公式を確認。創世中文網（chuangshi.qq.com）との関係も公式で確認",
+  },
 ];
