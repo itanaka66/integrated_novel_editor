@@ -238,4 +238,11 @@ export const ROWS_4: Row[] = [
   ["翻訳する言語を選択", "Choose a language", "选择语言", "選擇語言", "언어 선택", "Elige un idioma", "Choisir une langue", "Sprache wählen"],
   ["その他の言語", "Other languages", "其他语言", "其他語言", "기타 언어", "Otros idiomas", "Autres langues", "Weitere Sprachen"],
   ["翻訳", "Translate", "翻译", "翻譯", "번역", "Traducir", "Traduire", "Übersetzen"],
+
+  // reorder episodes
+  ["＋ この話の次に挿入", "+ Insert after this episode", "+ 在此话之后插入", "+ 在此話之後插入", "+ 이 화 다음에 삽입", "+ Insertar después de este episodio", "+ Insérer après cet épisode", "+ Nach dieser Episode einfügen"],
+  ["挿入するエピソードのタイトル", "Title of the episode to insert", "要插入的章节标题", "要插入的章節標題", "삽입할 화의 제목", "Título del episodio a insertar", "Titre de l'épisode à insérer", "Titel der einzufügenden Episode"],
+  ["開いている話を前の話と入れ替えます", "Swap the open episode with the previous one", "与上一话交换", "與上一話交換", "열려 있는 화를 이전 화와 바꿉니다", "Intercambiar el episodio abierto con el anterior", "Échanger l'épisode ouvert avec le précédent", "Geöffnete Episode mit der vorherigen tauschen"],
+  ["開いている話を次の話と入れ替えます", "Swap the open episode with the next one", "与下一话交换", "與下一話交換", "열려 있는 화를 다음 화와 바꿉니다", "Intercambiar el episodio abierto con el siguiente", "Échanger l'épisode ouvert avec le suivant", "Geöffnete Episode mit der nächsten tauschen"],
+  ["選択した2話を入れ替え", "Swap the 2 selected episodes", "交换所选的 2 话", "交換所選的 2 話", "선택한 2화 바꾸기", "Intercambiar los 2 episodios seleccionados", "Échanger les 2 épisodes sélectionnés", "Die 2 gewählten Episoden tauschen"],
 ];
