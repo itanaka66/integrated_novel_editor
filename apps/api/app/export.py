@@ -26,6 +26,20 @@ LABELS = {
     'fr': ('Épisode {n} : {t}', '(Aucun texte)', 'Table des matières'),
     'de': ('Episode {n}: {t}', '(Kein Text)', 'Inhaltsverzeichnis'),
     'pt-BR': ('Episódio {n}: {t}', '(Sem texto)', 'Sumário'),
+    'it': ('Episodio {n}: {t}', '(Nessun testo)', 'Indice'),
+    'nl': ('Aflevering {n}: {t}', '(Geen tekst)', 'Inhoud'),
+    'pl': ('Odcinek {n}: {t}', '(Brak tekstu)', 'Spis treści'),
+    'uk': ('Епізод {n}: {t}', '(Немає тексту)', 'Зміст'),
+    'tr': ('Bölüm {n}: {t}', '(Metin yok)', 'İçindekiler'),
+    'ar': ('الحلقة {n}: {t}', '(لا يوجد نص)', 'المحتويات'),
+    'hi': ('एपिसोड {n}: {t}', '(कोई पाठ नहीं)', 'विषय-सूची'),
+    'vi': ('Tập {n}: {t}', '(Chưa có nội dung)', 'Mục lục'),
+    'th': ('ตอนที่ {n}: {t}', '(ไม่มีเนื้อหา)', 'สารบัญ'),
+    'id': ('Episode {n}: {t}', '(Tidak ada teks)', 'Daftar isi'),
+    'sv': ('Avsnitt {n}: {t}', '(Ingen text)', 'Innehåll'),
+    'el': ('Επεισόδιο {n}: {t}', '(Χωρίς κείμενο)', 'Περιεχόμενα'),
+    'fa': ('قسمت {n}: {t}', '(بدون متن)', 'فهرست'),
+    'ms': ('Episod {n}: {t}', '(Tiada teks)', 'Kandungan'),
 }
 
 
@@ -154,7 +168,7 @@ def build_docx(project, episodes) -> bytes:
 
 # KDP's own names for the languages this app can produce.
 KDP_LANGUAGE = {'ja': '日本語 (Japanese)', 'en': '英語 (English)', 'zh-CN': '中国語・簡体字 (Chinese)', 'ko': '韓国語 (Korean)',
-                'es': 'スペイン語 (Spanish)', 'fr': 'フランス語 (French)', 'de': 'ドイツ語 (German)', 'pt-BR': 'ポルトガル語・ブラジル (Portuguese)'}
+                'es': 'スペイン語 (Spanish)', 'fr': 'フランス語 (French)', 'de': 'ドイツ語 (German)', 'pt-BR': 'ポルトガル語・ブラジル (Portuguese)', 'it': 'イタリア語 (Italian)', 'nl': 'オランダ語 (Dutch)', 'pl': 'ポーランド語 (Polish)', 'uk': 'ウクライナ語 (Ukrainian)', 'tr': 'トルコ語 (Turkish)', 'ar': 'アラビア語 (Arabic)', 'hi': 'ヒンディー語 (Hindi)', 'vi': 'ベトナム語 (Vietnamese)', 'th': 'タイ語 (Thai)', 'id': 'インドネシア語 (Indonesian)', 'sv': 'スウェーデン語 (Swedish)', 'el': 'ギリシャ語 (Greek)', 'fa': 'ペルシア語 (Persian)', 'ms': 'マレー語 (Malay)'}
 
 
 def kdp_rows(project, pub: dict, episodes, ai: dict) -> list[tuple[str, str]]:

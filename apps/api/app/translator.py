@@ -33,11 +33,41 @@ logger = logging.getLogger(__name__)
 LANGUAGES = {
     'ja': '日本語', 'en': 'English', 'zh-CN': '简体中文', 'ko': '한국어',
     'es': 'Español', 'fr': 'Français', 'de': 'Deutsch', 'pt-BR': 'Português (BR)',
+    'it': 'Italiano',
+    'nl': 'Nederlands',
+    'pl': 'Polski',
+    'uk': 'Українська',
+    'tr': 'Türkçe',
+    'ar': 'العربية',
+    'hi': 'हिन्दी',
+    'vi': 'Tiếng Việt',
+    'th': 'ไทย',
+    'id': 'Bahasa Indonesia',
+    'sv': 'Svenska',
+    'el': 'Ελληνικά',
+    'fa': 'فارسی',
+    'ms': 'Bahasa Melayu',
 }
+# The eight languages 全翻訳 translates into; the others are chosen one at a time.
+CORE_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR')
 # Language names as given to the model, in English for reliable instruction-following.
 _PROMPT_LANG = {
     'ja': 'Japanese', 'en': 'English', 'zh-CN': 'Simplified Chinese', 'ko': 'Korean',
     'es': 'Spanish', 'fr': 'French', 'de': 'German', 'pt-BR': 'Brazilian Portuguese',
+    'it': 'Italian',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'uk': 'Ukrainian',
+    'tr': 'Turkish',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'vi': 'Vietnamese',
+    'th': 'Thai',
+    'id': 'Indonesian',
+    'sv': 'Swedish',
+    'el': 'Greek',
+    'fa': 'Persian',
+    'ms': 'Malay',
 }
 CHUNK_CHARS = 2500
 # A translated field shorter than this fraction of the original is treated as
@@ -239,7 +269,7 @@ def clean_translation(text: str) -> str:
 _KANA = re.compile(r'[\u3040-\u30ff]')
 _HAN = re.compile(r'[\u3400-\u9fff]')
 _HANGUL = re.compile(r'[\uac00-\ud7af]')
-_LATIN_TARGETS = ('en', 'es', 'fr', 'de', 'pt-BR')
+_CJK_TARGETS = ('ja', 'ko', 'zh-CN')  # targets whose own text legitimately contains such characters
 
 
 def _ratio(rx, text: str) -> float:
@@ -257,8 +287,8 @@ def bad_translation(src: str, out: str, language: str) -> str:
     if s <= 40:
         return ''
     kana = _ratio(_KANA, out)
-    if language in _LATIN_TARGETS and (kana + _ratio(_HAN, out) + _ratio(_HANGUL, out)) > 0.2:
-        return 'untranslated'
+    if language not in _CJK_TARGETS and (kana + _ratio(_HAN, out) + _ratio(_HANGUL, out)) > 0.2:
+        return 'untranslated'  # any other target: Japanese/Chinese/Korean characters should be gone
     if language == 'ko' and (kana > 0.2 or _ratio(_HANGUL, out) < 0.2):
         return 'untranslated'
     if language == 'zh-CN' and kana > 0.1:

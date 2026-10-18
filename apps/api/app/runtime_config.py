@@ -34,7 +34,15 @@ class EffectiveConfig:
 
 
 # Target languages a translation LLM can be asked for (same codes as translator.LANGUAGES).
-TRANSLATION_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR')
+TRANSLATION_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR', 'it', 'other')
+# The boxes named individually; every other target language is covered by 'other'.
+NAMED_LANGUAGES = TRANSLATION_LANGUAGES[:-1]
+_LEGACY_LANGUAGES = TRANSLATION_LANGUAGES[:8]  # the eight boxes that existed before 'it' / 'other'
+
+
+def language_box(code: str) -> str:
+    """The checkbox that governs translating into `code`."""
+    return code if code in NAMED_LANGUAGES else 'other'
 
 
 def parse_pool(raw: str | None) -> list[dict]:
@@ -49,8 +57,13 @@ def parse_pool(raw: str | None) -> list[dict]:
             seen.add((url, model))
             langs = (it or {}).get('languages')
             # No list = every language (rows saved before this option existed).
-            langs = list(TRANSLATION_LANGUAGES) if not isinstance(langs, list) else [c for c in TRANSLATION_LANGUAGES if c in langs]
-            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False, 'languages': langs})
+            if not isinstance(langs, list):
+                langs = list(TRANSLATION_LANGUAGES)
+            else:
+                if (it or {}).get('v') != 2 and all(c in langs for c in _LEGACY_LANGUAGES):
+                    langs = list(langs) + ['it', 'other']  # "all eight" saved before the new boxes meant everything
+                langs = [c for c in TRANSLATION_LANGUAGES if c in langs]
+            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False, 'languages': langs, 'v': 2})
     return out
 
 
