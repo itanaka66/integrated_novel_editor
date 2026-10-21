@@ -17,11 +17,13 @@ import SettingsPanel from "./components/SettingsPanel";
 import LlmActivityDialog from "./components/LlmActivityDialog";
 import PageLoadingOverlay from "./components/PageLoadingOverlay";
 import { useIdleLogout } from "./lib/useIdleLogout";
+import { useOfflineLogout } from "./lib/useOfflineLogout";
 import { getLanguage, t } from "./lib/i18n";
 
 export default function Studio() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [idleNotice, setIdleNotice] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState(false);
 
   // layout.tsx server-renders <html lang="ja">; hydration restores that over
   // whatever lib/i18n set at module load, so set it again once mounted.
@@ -48,8 +50,14 @@ export default function Studio() {
     logout().then(() => setAuthed(false));
   });
 
+  // Network loss signs the user out immediately (see lib/useOfflineLogout).
+  useOfflineLogout(authed === true, () => {
+    setOfflineNotice(true);
+    logout().then(() => setAuthed(false));
+  });
+
   if (authed === null) return <div className="center" suppressHydrationWarning>{t("確認中...")}</div>;
-  if (!authed) return <Login notice={idleNotice ? "You were signed out automatically after 10 minutes of inactivity." : undefined} onLoggedIn={() => { setIdleNotice(false); setAuthed(true); }} />;
+  if (!authed) return <Login notice={offlineNotice ? t("ネットワーク接続が切断されたため、自動的にサインアウトしました。") : idleNotice ? t("10分間操作がなかったため、自動的にサインアウトしました。") : undefined} onLoggedIn={() => { setIdleNotice(false); setOfflineNotice(false); setAuthed(true); }} />;
   return (
     <>
       <Workspace onLogout={() => { logout().then(() => setAuthed(false)); }} />

@@ -79,15 +79,14 @@ def chunks(e):
  while start<len(s):
   t=s[start:start+1400];out.append({'id':e.id*100000+i,'project_id':e.project_id,'episode_id':e.id,'title':e.title,'source_type':'episode','text':t});i+=1;start+=1200
  return out
-def cleanup_stale_auto_write_jobs(d):
- # auto_write_running is an in-memory dict, so any job left 'queued'/'running'/
- # 'stopping' from before a restart has no task actually driving it anymore —
- # it would otherwise sit there forever looking active. Mark those as errored.
+def _requeue_stale_auto_write_jobs(d):
+ # On restart, re-queue any job that was running so resume_auto_write() can
+ # restart it from current_episode instead of losing the work done so far.
  stale=d.scalars(select(AutoWriteJob).where(AutoWriteJob.status.in_(['queued','running','stopping']))).all()
  for job in stale:
-  job.status='error'; job.last_message='サーバー再起動により中断されました。再度開始してください。'
+  job.status='queued'; job.last_message='サーバー再起動後に続きから再開します…'
  if stale: d.commit()
- return len(stale)
+ return list(stale)
 def cleanup_stale_import_jobs(d):
  stale=d.scalars(select(ImportJob).where(ImportJob.status.in_(['queued','running']))).all()
  for job in stale:
@@ -121,10 +120,15 @@ def init():
    d.add(Plot(project_id=p.id,title='文明開拓編',plot_type='main_arc',status='active',start_episode=1,end_episode=100,objective='安全な集落を作る',conflict='自然災害と恐竜'))
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
-  cleanup_stale_auto_write_jobs(d)
+  stale_auto_write=_requeue_stale_auto_write_jobs(d)
   cleanup_stale_import_jobs(d)
  _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
  _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
+ # Restart auto-write jobs that were running when the server went down.
+ for job in stale_auto_write:
+  task=asyncio.create_task(run_job(job.id))
+  auto_write_running[job.id]=task
+ if stale_auto_write:logger.info('Resumed %s auto-write job(s) after restart',len(stale_auto_write))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
 @app.get('/api/v1/llm/queue')
@@ -1190,11 +1194,11 @@ def _job_out(job,db):
 async def auto_write_start(x:AutoWriteStart,db:Session=Depends(get_db)):
     p=db.get(Project,x.project_id)
     if not p:raise HTTPException(404,'Project not found')
-    job=AutoWriteJob(project_id=x.project_id,start_episode=x.start_episode,end_episode=x.end_episode,current_episode=x.start_episode,status='queued',last_message='キューに追加しました')
+    job=AutoWriteJob(project_id=x.project_id,start_episode=x.start_episode,end_episode=x.end_episode,current_episode=x.start_episode,status='queued',last_message='キューに追加しました',premise=x.premise,overwrite=x.overwrite)
     if x.writer_model:job.writer_model=x.writer_model
     if x.controller_model:job.controller_model=x.controller_model
     db.add(job);db.commit();db.refresh(job)
-    task=asyncio.create_task(run_job(job.id,x.premise,x.overwrite))
+    task=asyncio.create_task(run_job(job.id))
     auto_write_running[job.id]=task
     return _job_out(job,db)
 
