@@ -50,7 +50,18 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   useEffect(() => { load(); }, []);
 
   // Translations hang under the work they were made from (parent = original).
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const COLLAPSED_KEY = "ine-dashboard-collapsed-v1";
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      if (!raw) return new Set<number>();
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? new Set<number>(arr) : new Set<number>();
+    } catch { return new Set<number>(); }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch { /* storage full/blocked */ }
+  }, [collapsed]);
   const ids = new Set(projects.map((p) => p.id));
   const childrenOf = (id: number) => projects.filter((c) => c.source_project_id === id);
   const roots = projects.filter((p) => !p.source_project_id || !ids.has(p.source_project_id));
