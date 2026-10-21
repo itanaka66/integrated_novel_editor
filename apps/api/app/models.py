@@ -93,6 +93,8 @@ class AutoWriteJob(Base):
     writer_model:Mapped[str]=mapped_column(String(150),default='qwen3.8:27b')
     controller_model:Mapped[str]=mapped_column(String(150),default='qwen3:14b')
     last_message:Mapped[str]=mapped_column(Text,default='')
+    premise:Mapped[str]=mapped_column(Text,default='',server_default='')
+    overwrite:Mapped[bool]=mapped_column(default=False,server_default='0')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 

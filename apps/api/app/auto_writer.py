@@ -59,9 +59,14 @@ JSONのみ：{{"status":"PASS|WARN|BLOCK","checks":{{"timeline":"PASS|WARN|BLOCK
     text,_=await controller_generate(prompt)
     return _json(text)
 
-async def run_job(job_id,premise='',overwrite=False):
+async def run_job(job_id):
     db=SessionLocal(); job=db.get(AutoWriteJob,job_id)
     if not job: db.close(); return
+    premise=job.premise or ''
+    overwrite=bool(job.overwrite)
+    # Resume from current_episode so a restart after power-off or logout
+    # continues exactly where it stopped rather than starting over.
+    resume_from=max(job.start_episode,job.current_episode)
     try:
         set_project(job.project_id)
         job.status='running'; db.commit()
@@ -69,7 +74,7 @@ async def run_job(job_id,premise='',overwrite=False):
         # Generate the 500-episode hierarchy once, then lazily refine it.
         job.last_message='Series Planner: EP.1～500 全体構成を確認中'; db.commit()
         series_obj=await planner.ensure_series(db,job.project_id,premise)
-        for n in range(job.start_episode,job.end_episode+1):
+        for n in range(resume_from,job.end_episode+1):
             if _check_stopped(db,job): return
             job.current_episode=n; job.last_message=f'EP.{n}: 階層Plannerを展開中'; db.commit()
             purpose.set(f'自動執筆 EP.{n}: 階層Planner')
