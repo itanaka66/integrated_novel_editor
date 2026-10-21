@@ -75,6 +75,31 @@ export default function WritePanel({ project }: { project: Project }) {
     if (target) { setE(target); setShowChecks(false); }
   }
 
+  // Reorder: swap two episodes, or insert a new one after the open episode.
+  async function swapEpisodes(a: number, b: number) {
+    setBulkBusy(true);
+    try {
+      const r = await post(`/projects/${project.id}/episodes/swap`, { episode_a: a, episode_b: b });
+      if (r?.episodes) { setEs(r.episodes); setE((cur) => (cur ? r.episodes.find((x: Episode) => x.id === cur.id) ?? cur : cur)); setSelectedIds(new Set()); }
+    } finally { setBulkBusy(false); }
+  }
+  async function moveOpenEpisode(dir: -1 | 1) {
+    if (!e) return;
+    const i = es.findIndex((x) => x.id === e.id);
+    const other = es[i + dir];
+    if (other) await swapEpisodes(e.id, other.id);
+  }
+  async function insertAfterOpen() {
+    const after = e ? e.number : 0;
+    const title = prompt(t("挿入するエピソードのタイトル"), `第${after + 1}話`);
+    if (title === null) return;
+    setBulkBusy(true);
+    try {
+      const r = await post(`/projects/${project.id}/episodes/insert`, { after_number: after, title });
+      if (r?.episodes) { setEs(r.episodes); setE(r.episodes.find((x: Episode) => x.id === r.episode_id) ?? e); }
+    } finally { setBulkBusy(false); }
+  }
+
   async function addEpisode() {
     const number = es.reduce((m, x) => Math.max(m, x.number), 0) + 1;
     const title = prompt(t("エピソードタイトル"), `第${number}話`);
@@ -156,6 +181,12 @@ export default function WritePanel({ project }: { project: Project }) {
           ))}
         </div>
         <button className="newEpisode" onClick={addEpisode}>{t("＋ 新規エピソード")}</button>
+        <button className="newEpisode" onClick={insertAfterOpen} disabled={bulkBusy}>{t("＋ この話の次に挿入")}</button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button className="newEpisode" style={{ flex: 1 }} onClick={() => moveOpenEpisode(-1)} disabled={bulkBusy || es.findIndex((x) => x.id === e.id) <= 0} title={t("開いている話を前の話と入れ替えます")}>↑</button>
+          <button className="newEpisode" style={{ flex: 1 }} onClick={() => moveOpenEpisode(1)} disabled={bulkBusy || es.findIndex((x) => x.id === e.id) >= es.length - 1} title={t("開いている話を次の話と入れ替えます")}>↓</button>
+        </div>
+        <button className="newEpisode" onClick={() => { const [a, b] = Array.from(selectedIds); swapEpisodes(a, b); }} disabled={selectedIds.size !== 2 || bulkBusy}>{t("選択した2話を入れ替え")}</button>
         <button className="newEpisode" onClick={deleteSelected} disabled={selectedIds.size === 0 || bulkBusy}>
           {bulkBusy ? t("削除中...") : t("選択した{n}件を削除（話数を自動調整）", { n: selectedIds.size || "" })}
         </button>
@@ -174,6 +205,7 @@ export default function WritePanel({ project }: { project: Project }) {
           </div>
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
+        <div className="summary"><small>{t("章（Word出力の見出し1）")}</small><input value={e.chapter ?? ""} onChange={(x) => setE({ ...e, chapter: x.target.value })} placeholder={t("例）第一部 序章（空欄なら章なし）")} /></div>
         <div className="summary"><small>SUMMARY</small><input value={e.summary} onChange={(x) => setE({ ...e, summary: x.target.value })} /></div>
         <div className="editorToolbar">
           <button onClick={() => wrapSelection("**")} title={t("太字")}>B</button>

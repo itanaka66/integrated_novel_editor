@@ -29,6 +29,7 @@ type SystemSettings = {
   controller_ollama_model: string; controller_ollama_model_is_override: boolean;
   translator_ollama_url: string; translator_ollama_url_is_override: boolean;
   translator_ollama_model: string; translator_ollama_model_is_override: boolean;
+  translator_pool: { url: string; model: string; enabled?: boolean; languages?: string[] }[];
   cors_origins: string; // read-only — env/.env only, not editable from here
 };
 
@@ -55,6 +56,8 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
   { key: "pr", label: t("広報・ニュース・プレスリリース"), hint: t("企業イメージや媒体の信頼性を保つため、用字用語のルール（記者ハンドブックなど）が必要。") },
 ];
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
+
+const TRANSLATION_LANGS: [string, string][] = [["ja", "日本語"], ["en", "English"], ["zh-CN", "简体中文"], ["ko", "한국어"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (BR)"], ["it", "Italiano"], ["other", t("その他の言語")]];
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
   const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
@@ -91,6 +94,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
     controller_ollama_url: "", controller_ollama_model: "",
     translator_ollama_url: "", translator_ollama_model: "",
+    translator_pool: [] as { url: string; model: string; enabled?: boolean; languages?: string[] }[],
   });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
@@ -149,6 +153,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
     });
   }, [tab]);
@@ -168,6 +173,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -183,6 +189,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
         ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
         controller_ollama_model: s.controller_ollama_model,
         translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
+        translator_pool: s.translator_pool ?? [],
       });
       setSysSaved(true);
     } finally { setSysBusy(false); }
@@ -211,7 +218,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     } finally { setImportBusy(false); }
   }
 
-  async function exportAs(format: "txt" | "md" | "epub" | "kdp") {
+  async function exportAs(format: "txt" | "md" | "epub" | "docx" | "kdp") {
     setExporting(format);
     try {
       await downloadFile(`/projects/${project.id}/export?format=${format}`, `${project.name}.${format}`);
@@ -380,21 +387,47 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
               </label>
               {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
 
-              <label>
-                {t("翻訳用 Ollama URL")} {sys.translator_ollama_url_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.translator_ollama_url} onChange={(e) => setSysForm({ ...sysForm, translator_ollama_url: e.target.value })} placeholder={sys.controller_ollama_url} />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="translator_ollama" resultKey="translator_ollama" url={sysForm.translator_ollama_url || sysForm.controller_ollama_url} model={sysForm.translator_ollama_model || sysForm.controller_ollama_model} />
-                {sys.translator_ollama_url_is_override && <button type="button" onClick={() => resetField("translator_ollama_url")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
+              <div style={{ gridColumn: "1/-1" }}>
+                <b>{t("翻訳LLM（複数台可）")}</b>
+                <p style={{ color: "#687386", fontSize: 12, margin: "4px 0 8px" }}>
+                  {t("翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。")}
+                </p>
+                {sysForm.translator_pool.map((row, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6, opacity: row.enabled === false ? 0.55 : 1 }}>
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                      <input type="checkbox" checked={row.enabled !== false}
+                        onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, enabled: e.target.checked } : r)) })} />
+                      {t("有効")}
+                    </label>
+                    <input style={{ flex: "2 1 220px" }} value={row.url} placeholder="http://ollama:11434"
+                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, url: e.target.value } : r)) })} />
+                    <input style={{ flex: "1 1 140px" }} value={row.model} placeholder="qwen3:8b"
+                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, model: e.target.value } : r)) })} />
+                    <TestButton target="translator_ollama" resultKey={`translator_pool_${i}`} url={row.url} model={row.model} />
+                    <button type="button" style={{ color: "#c0392b" }} onClick={() => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.filter((_, j) => j !== i) })}>{t("削除")}</button>
+                    <div style={{ flexBasis: "100%", display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, paddingLeft: 4 }}>
+                      <span style={{ color: "#687386" }}>{t("翻訳できる言語")}</span>
+                      {TRANSLATION_LANGS.map(([code, label]) => {
+                        const on = (row.languages ?? TRANSLATION_LANGS.map(([c]) => c)).includes(code);
+                        return (
+                          <label key={code} style={{ display: "inline-flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
+                            <input type="checkbox" checked={on} onChange={(e) => {
+                              const cur = row.languages ?? TRANSLATION_LANGS.map(([c]) => c);
+                              const next = e.target.checked ? [...cur, code] : cur.filter((c) => c !== code);
+                              setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, languages: TRANSLATION_LANGS.map(([c]) => c).filter((c) => next.includes(c)) } : r)) });
+                            }} />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {!sysForm.translator_pool.some((r) => r.enabled !== false) && <p style={{ fontSize: 12 }}>{sysForm.translator_pool.length === 0 ? t("未設定：Controllerが翻訳します") : t("有効な翻訳LLMがありません：Controllerが翻訳します")}</p>}
+                {sysForm.translator_pool.length < 8 && (
+                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "", enabled: true, languages: TRANSLATION_LANGS.map(([c]) => c) }] })}>{t("＋ 翻訳LLMを追加")}</button>
+                )}
               </div>
-
-              <label>
-                {t("翻訳用モデル")} {sys.translator_ollama_model_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.translator_ollama_model} onChange={(e) => setSysForm({ ...sysForm, translator_ollama_model: e.target.value })} placeholder={sys.controller_ollama_model} />
-              </label>
-              {sys.translator_ollama_model_is_override && <button type="button" onClick={() => resetField("translator_ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-              <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>{t("翻訳（全翻訳を含む）で使うモデルです。空欄の場合は Controller のサーバー・モデルを使います。")}</p>
 
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
                 {t("各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。")}
@@ -490,6 +523,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
             <button onClick={() => exportAs("txt")} disabled={!!exporting}>{exporting === "txt" ? t("書き出し中...") : t("テキスト (.txt)")}</button>
             <button onClick={() => exportAs("md")} disabled={!!exporting}>{exporting === "md" ? t("書き出し中...") : "Markdown (.md)"}</button>
             <button onClick={() => exportAs("epub")} disabled={!!exporting}>{exporting === "epub" ? t("書き出し中...") : "EPUB (.epub)"}</button>
+            <button onClick={() => exportAs("docx")} disabled={!!exporting}>{exporting === "docx" ? t("書き出し中...") : "Word (.docx)"}</button>
             <button onClick={() => exportAs("kdp")} disabled={!!exporting}>{exporting === "kdp" ? t("書き出し中...") : t("KDP出版パッケージ (.zip)")}</button>
           </div>
           <div style={{ fontSize: 12, color: "#566273", marginTop: 6 }}>

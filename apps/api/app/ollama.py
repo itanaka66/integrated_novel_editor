@@ -1,7 +1,10 @@
+import contextlib
+import contextvars
+
 from editor_common import ollama as _common_ollama
 from .config import settings as env_settings
 from .llm_queue import slot
-from .runtime_config import get_effective_config
+from .runtime_config import get_effective_config, language_box
 
 # Sent as Ollama's own "options" object on every Writer /api/generate call
 # only (see controller_generate below — the Controller model runs on
@@ -51,20 +54,79 @@ async def generate_stream(prompt, model=None, url=None):
                 yield event
 
 
-async def translator_generate(prompt):
+_busy: dict[tuple[str, str], int] = {}
+_rr = [0]
+
+
+def translator_endpoints(cfg=None, language: str | None = None) -> list[dict]:
+    """The translation LLMs in effect for `language` (any, when None): enabled rows
+    whose language boxes include it. When there is none - no list, every row off,
+    or no row handling that language - the single translator setting is used,
+    which defaults to the Controller (so the Controller translates too)."""
+    cfg = cfg or get_effective_config()
+    active = [e for e in cfg.translator_pool  # unchecked rows stay listed but are not used
+              if e.get('enabled', True) and (language is None or language_box(language) in e.get('languages', [language_box(language)]))]
+    return active or [{'url': cfg.translator_ollama_url, 'model': cfg.translator_ollama_model}]
+
+
+def translator_count(language: str | None = None) -> int:
+    return len(translator_endpoints(language=language))
+
+
+def pick_endpoint(endpoints: list[dict]) -> dict:
+    """The least busy endpoint (ties go round-robin), so a free translation LLM is
+    used before one that is already working."""
+    low = min(_busy.get((e['url'], e['model']), 0) for e in endpoints)
+    free = [e for e in endpoints if _busy.get((e['url'], e['model']), 0) == low]
+    _rr[0] += 1
+    return free[_rr[0] % len(free)]
+
+
+# The translation LLM an episode is pinned to (see pin_translator).
+_pinned: contextvars.ContextVar[dict | None] = contextvars.ContextVar('translator_pinned', default=None)
+
+
+@contextlib.contextmanager
+def pin_translator(language: str | None = None):
+    """Use ONE translation LLM for everything inside the block. An episode is
+    translated start to finish (chapter, title, summary, every chunk, retries and
+    fixes) by the same LLM, so its wording and names stay consistent and one
+    episode never occupies several LLMs; different episodes still go to different
+    LLMs. The LLM is counted as busy for the whole block, so concurrent episodes
+    spread out instead of piling onto one."""
+    ep = pick_endpoint(translator_endpoints(language=language))
+    key = (ep['url'], ep['model'])
+    _busy[key] = _busy.get(key, 0) + 1
+    token = _pinned.set(ep)
+    try:
+        yield ep
+    finally:
+        _pinned.reset(token)
+        _busy[key] -= 1
+
+
+async def translator_generate(prompt, language: str | None = None):
     """Translation. Its own server/model (Settings > 接続設定), which defaults to
     the Controller's; same API key as the Controller (typically the same
     instance) and no options override."""
-    cfg = get_effective_config()
-    model = cfg.translator_ollama_model
+    pinned = _pinned.get()
+    ep = pinned or pick_endpoint(translator_endpoints(language=language))
+    model, url = ep['model'], ep['url']
     if model.lower().startswith('qwen3'):
         # Qwen3 "thinks" for ~1000 tokens before answering, which turns a
         # minute into many; its documented /no_think switch skips that.
         prompt = prompt.rstrip() + ' /no_think'
-    return await generate(
-        prompt, model, cfg.translator_ollama_url, env_settings.translator_timeout_seconds,
-        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
-    )
+    key = (url, model)
+    if not pinned:  # a pinned LLM is already counted busy by pin_translator
+        _busy[key] = _busy.get(key, 0) + 1
+    try:
+        return await generate(
+            prompt, model, url, env_settings.translator_timeout_seconds,
+            options=None, api_key=env_settings.controller_ollama_api_key or None, kind='translator',
+        )
+    finally:
+        if not pinned:
+            _busy[key] -= 1
 
 
 async def reviewer_generate(prompt):
@@ -92,6 +154,15 @@ async def controller_generate(prompt):
         prompt, cfg.controller_ollama_model, cfg.controller_ollama_url, 180,
         options=None, api_key=env_settings.controller_ollama_api_key or None, kind='controller',
     )
+
+
+async def alignment_embed(texts):
+    """Multilingual sentence embeddings for the translation omission check (the
+    RAG embedding model may be English-only, so this has its own setting)."""
+    cfg = get_effective_config()
+    model = env_settings.translation_embed_model
+    async with slot(kind='embed', model=model, url=cfg.ollama_url):
+        return await _common_ollama.embed(texts, model, cfg.ollama_url, api_key=env_settings.ollama_api_key or None)
 
 
 async def embed(texts):

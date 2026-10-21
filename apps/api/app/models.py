@@ -10,7 +10,7 @@ class Project(Base):
     episodes=relationship('Episode',back_populates='project',cascade='all, delete-orphan'); characters=relationship('Character',back_populates='project',cascade='all, delete-orphan'); worlds=relationship('WorldEntity',back_populates='project',cascade='all, delete-orphan'); plots=relationship('Plot',back_populates='project',cascade='all, delete-orphan'); foreshadowings=relationship('Foreshadowing',back_populates='project',cascade='all, delete-orphan')
 class Episode(Base):
     __tablename__='episodes'
-    id:Mapped[int]=mapped_column(primary_key=True); project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True); number:Mapped[int]=mapped_column(Integer); title:Mapped[str]=mapped_column(String(300)); summary:Mapped[str]=mapped_column(Text,default=''); content:Mapped[str]=mapped_column(Text,default=''); updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
+    id:Mapped[int]=mapped_column(primary_key=True); project_id:Mapped[int]=mapped_column(ForeignKey('projects.id',ondelete='CASCADE'),index=True); number:Mapped[int]=mapped_column(Integer); title:Mapped[str]=mapped_column(String(300)); summary:Mapped[str]=mapped_column(Text,default=''); content:Mapped[str]=mapped_column(Text,default=''); chapter:Mapped[str]=mapped_column(String(300),default='',server_default=''); updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
     project=relationship('Project',back_populates='episodes')
 class Character(Base):
     __tablename__='characters'
@@ -203,6 +203,7 @@ class RuntimeConfig(Base):
     controller_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
     translator_ollama_url:Mapped[str|None]=mapped_column(String(500),nullable=True)
     translator_ollama_model:Mapped[str|None]=mapped_column(String(150),nullable=True)
+    translator_pool:Mapped[str|None]=mapped_column(Text,nullable=True)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 
 class User(Base, UserMixin):

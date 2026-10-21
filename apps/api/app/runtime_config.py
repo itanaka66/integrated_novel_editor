@@ -8,7 +8,8 @@ docstring for why. Every AI/vector call in this app is already stateless
 restart or any connection-pool surgery — it just changes what the next
 call constructs its client with.
 """
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 
 from .config import settings as env_settings
 from .db import SessionLocal
@@ -27,6 +28,43 @@ class EffectiveConfig:
     controller_ollama_model: str
     translator_ollama_url: str
     translator_ollama_model: str
+    # Explicitly configured translation LLMs [{'url', 'model'}]; empty = use the
+    # single translator setting above (which defaults to the Controller).
+    translator_pool: list = field(default_factory=list)
+
+
+# Target languages a translation LLM can be asked for (same codes as translator.LANGUAGES).
+TRANSLATION_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR', 'it', 'other')
+# The boxes named individually; every other target language is covered by 'other'.
+NAMED_LANGUAGES = TRANSLATION_LANGUAGES[:-1]
+_LEGACY_LANGUAGES = TRANSLATION_LANGUAGES[:8]  # the eight boxes that existed before 'it' / 'other'
+
+
+def language_box(code: str) -> str:
+    """The checkbox that governs translating into `code`."""
+    return code if code in NAMED_LANGUAGES else 'other'
+
+
+def parse_pool(raw: str | None) -> list[dict]:
+    try:
+        data = json.loads(raw) if raw else []
+    except ValueError:
+        return []
+    out, seen = [], set()
+    for it in data if isinstance(data, list) else []:
+        url, model = str((it or {}).get('url') or '').strip().rstrip('/'), str((it or {}).get('model') or '').strip()
+        if url and model and (url, model) not in seen:
+            seen.add((url, model))
+            langs = (it or {}).get('languages')
+            # No list = every language (rows saved before this option existed).
+            if not isinstance(langs, list):
+                langs = list(TRANSLATION_LANGUAGES)
+            else:
+                if (it or {}).get('v') != 2 and all(c in langs for c in _LEGACY_LANGUAGES):
+                    langs = list(langs) + ['it', 'other']  # "all eight" saved before the new boxes meant everything
+                langs = [c for c in TRANSLATION_LANGUAGES if c in langs]
+            out.append({'url': url, 'model': model, 'enabled': (it or {}).get('enabled', True) is not False, 'languages': langs, 'v': 2})
+    return out
 
 
 def _pick(override: str | None, fallback: str) -> str:
@@ -63,6 +101,7 @@ def get_effective_config(db=None) -> EffectiveConfig:
                                     env_settings.translator_ollama_url or _pick(row.controller_ollama_url if row else None, env_settings.controller_ollama_url)),
         translator_ollama_model=_pick(row.translator_ollama_model if row else None,
                                       env_settings.translator_ollama_model or _pick(row.controller_ollama_model if row else None, env_settings.controller_ollama_model)),
+        translator_pool=parse_pool(row.translator_pool if row else None),
     )
 
 

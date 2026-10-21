@@ -35,6 +35,18 @@ def no_translation_review_by_default(monkeypatch):
     # The AI translation check calls the Controller model; tests must never reach a
     # real Ollama. Tests of the check itself switch it on and fake the call.
     monkeypatch.setattr(settings, "translation_review", False)
+    monkeypatch.setattr(settings, "translation_omission_check", False)
+
+
+@pytest.fixture(autouse=True)
+def single_translation_llm_by_default(monkeypatch):
+    # The translator asks the runtime config (a database) how many translation LLMs
+    # there are; unit tests have no such database, so default to one. Tests of the
+    # pool patch this themselves.
+    from app import translator
+    monkeypatch.setattr(translator, "translator_count", lambda language=None: 1)
+    import contextlib
+    monkeypatch.setattr(translator, "pin_translator", lambda language=None: contextlib.nullcontext())
 
 
 @pytest.fixture(autouse=True)

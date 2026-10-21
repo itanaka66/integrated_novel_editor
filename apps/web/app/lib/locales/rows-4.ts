@@ -212,10 +212,37 @@ export const ROWS_4: Row[] = [
   ["翻訳をキャンセルします。翻訳済みの分は残り、次回は続きから翻訳します。よろしいですか？", "Cancel the translation? What is translated is kept and the next run continues from it. Continue?", "将取消翻译。已翻译的部分会保留，下次从中断处继续。是否继续？", "將取消翻譯。已翻譯的部分會保留，下次從中斷處繼續。是否繼續？", "번역을 취소합니다. 번역된 부분은 남고 다음에 이어서 번역합니다. 계속할까요?", "¿Cancelar la traducción? Lo traducido se conserva y la próxima vez continuará desde ahí. ¿Continuar?", "Annuler la traduction ? Ce qui est traduit est conservé et la prochaine exécution reprendra à partir de là. Continuer ?", "Übersetzung abbrechen? Das Übersetzte bleibt erhalten, der nächste Lauf setzt dort fort. Fortfahren?"],
 
   // translation model
-  ["翻訳用 Ollama URL", "Translation Ollama URL", "翻译用 Ollama 地址", "翻譯用 Ollama 網址", "번역용 Ollama URL", "URL de Ollama para traducción", "URL Ollama pour la traduction", "Ollama-URL für Übersetzung"],
-  ["翻訳用モデル", "Translation model", "翻译用模型", "翻譯用模型", "번역용 모델", "Modelo de traducción", "Modèle de traduction", "Übersetzungsmodell"],
-  ["翻訳（全翻訳を含む）で使うモデルです。空欄の場合は Controller のサーバー・モデルを使います。", "The model used for translation (including 全翻訳). If blank, the Controller's server and model are used.", "用于翻译（包括全部翻译）的模型。留空则使用 Controller 的服务器和模型。", "用於翻譯（包括全部翻譯）的模型。留空則使用 Controller 的伺服器和模型。", "번역(전체 번역 포함)에 사용하는 모델입니다. 비워 두면 Controller의 서버와 모델을 사용합니다.", "Modelo usado para traducir (incluido traducir todo). Si está vacío, se usan el servidor y el modelo del Controller.", "Modèle utilisé pour la traduction (y compris la traduction complète). Si vide, le serveur et le modèle du Controller sont utilisés.", "Modell für Übersetzungen (auch „Alles übersetzen“). Leer: Server und Modell des Controllers."],
   // page loading
   ["情報を取得中...", "Loading data...", "正在获取信息...", "正在取得資訊...", "정보를 가져오는 중...", "Cargando datos...", "Chargement des données...", "Daten werden geladen..."],
   ["読み込みが終わるまで操作できません", "You can't use the screen until loading finishes", "加载完成前无法操作", "載入完成前無法操作", "불러오기가 끝날 때까지 조작할 수 없습니다", "No se puede usar la pantalla hasta que termine la carga", "L'écran est inutilisable tant que le chargement n'est pas terminé", "Bis zum Ende des Ladevorgangs ist keine Bedienung möglich"],
+
+  // chapter + docx
+  ["章（Word出力の見出し1）", "Chapter (Heading 1 in Word export)", "章节（Word 导出的标题 1）", "章節（Word 匯出的標題 1）", "장(Word 내보내기의 제목 1)", "Capítulo (Título 1 en la exportación a Word)", "Chapitre (Titre 1 dans l'export Word)", "Kapitel (Überschrift 1 im Word-Export)"],
+  ["例）第一部 序章（空欄なら章なし）", "e.g. Part 1: Prologue (blank = no chapter)", "例）第一部 序章（留空表示无章节）", "例）第一部 序章（留空表示無章節）", "예) 제1부 서장(비우면 장 없음)", "p. ej. Parte 1: Prólogo (vacío = sin capítulo)", "p. ex. Partie 1 : Prologue (vide = pas de chapitre)", "z. B. Teil 1: Prolog (leer = kein Kapitel)"],
+
+  // translator pool
+  ["翻訳LLM（複数台可）", "Translation LLMs (several allowed)", "翻译 LLM（可多台）", "翻譯 LLM（可多台）", "번역 LLM(여러 대 가능)", "LLM de traducción (varios)", "LLM de traduction (plusieurs possibles)", "Übersetzungs-LLMs (mehrere möglich)"],
+  ["翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。", "Translation work goes to whichever translation LLM is free. The Controller concentrates on checking translations and translates too only when this list is empty.", "翻译任务会依次分配给空闲的翻译 LLM。Controller 专注于翻译检查，仅在此列表为空时才参与翻译。", "翻譯任務會依序分配給閒置的翻譯 LLM。Controller 專注於翻譯檢查，僅在此清單為空時才參與翻譯。", "번역은 비어 있는 번역 LLM에 차례로 배정합니다. Controller는 번역 검사에 집중하고, 이 목록이 비어 있을 때만 번역도 합니다.", "El trabajo de traducción va al LLM de traducción libre. El Controller se centra en revisar y solo traduce si esta lista está vacía.", "Le travail de traduction va au LLM de traduction disponible. Le Controller se concentre sur la vérification et ne traduit que si cette liste est vide.", "Übersetzungen gehen an das jeweils freie Übersetzungs-LLM. Der Controller konzentriert sich auf die Prüfung und übersetzt nur, wenn diese Liste leer ist."],
+  ["未設定：Controllerが翻訳します", "Not set: the Controller translates", "未设置：由 Controller 翻译", "未設定：由 Controller 翻譯", "미설정: Controller가 번역합니다", "Sin configurar: traduce el Controller", "Non défini : le Controller traduit", "Nicht gesetzt: Der Controller übersetzt"],
+  ["＋ 翻訳LLMを追加", "+ Add translation LLM", "+ 添加翻译 LLM", "+ 新增翻譯 LLM", "+ 번역 LLM 추가", "+ Añadir LLM de traducción", "+ Ajouter un LLM de traduction", "+ Übersetzungs-LLM hinzufügen"],
+
+  // translator enabled toggle
+  ["有効", "Enabled", "启用", "啟用", "사용", "Activo", "Activé", "Aktiv"],
+  ["有効な翻訳LLMがありません：Controllerが翻訳します", "No enabled translation LLM: the Controller translates", "没有启用的翻译 LLM：由 Controller 翻译", "沒有啟用的翻譯 LLM：由 Controller 翻譯", "사용 중인 번역 LLM이 없습니다: Controller가 번역합니다", "No hay LLM de traducción activo: traduce el Controller", "Aucun LLM de traduction activé : le Controller traduit", "Kein aktives Übersetzungs-LLM: Der Controller übersetzt"],
+
+  // translator languages
+  ["翻訳できる言語", "Languages it can translate", "可翻译的语言", "可翻譯的語言", "번역 가능한 언어", "Idiomas que puede traducir", "Langues traduisibles", "Übersetzbare Sprachen"],
+
+  // translation language picker
+  ["翻訳する言語", "Language to translate into", "翻译成的语言", "翻譯成的語言", "번역할 언어", "Idioma de destino", "Langue cible", "Zielsprache"],
+  ["翻訳する言語を選択", "Choose a language", "选择语言", "選擇語言", "언어 선택", "Elige un idioma", "Choisir une langue", "Sprache wählen"],
+  ["その他の言語", "Other languages", "其他语言", "其他語言", "기타 언어", "Otros idiomas", "Autres langues", "Weitere Sprachen"],
+  ["翻訳", "Translate", "翻译", "翻譯", "번역", "Traducir", "Traduire", "Übersetzen"],
+
+  // reorder episodes
+  ["＋ この話の次に挿入", "+ Insert after this episode", "+ 在此话之后插入", "+ 在此話之後插入", "+ 이 화 다음에 삽입", "+ Insertar después de este episodio", "+ Insérer après cet épisode", "+ Nach dieser Episode einfügen"],
+  ["挿入するエピソードのタイトル", "Title of the episode to insert", "要插入的章节标题", "要插入的章節標題", "삽입할 화의 제목", "Título del episodio a insertar", "Titre de l'épisode à insérer", "Titel der einzufügenden Episode"],
+  ["開いている話を前の話と入れ替えます", "Swap the open episode with the previous one", "与上一话交换", "與上一話交換", "열려 있는 화를 이전 화와 바꿉니다", "Intercambiar el episodio abierto con el anterior", "Échanger l'épisode ouvert avec le précédent", "Geöffnete Episode mit der vorherigen tauschen"],
+  ["開いている話を次の話と入れ替えます", "Swap the open episode with the next one", "与下一话交换", "與下一話交換", "열려 있는 화를 다음 화와 바꿉니다", "Intercambiar el episodio abierto con el siguiente", "Échanger l'épisode ouvert avec le suivant", "Geöffnete Episode mit der nächsten tauschen"],
+  ["選択した2話を入れ替え", "Swap the 2 selected episodes", "交换所选的 2 话", "交換所選的 2 話", "선택한 2화 바꾸기", "Intercambiar los 2 episodios seleccionados", "Échanger les 2 épisodes sélectionnés", "Die 2 gewählten Episoden tauschen"],
 ];

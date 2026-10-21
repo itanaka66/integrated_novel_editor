@@ -13,11 +13,14 @@ class ProofreadResult(BaseModel): diffs:list[ProofreadDiff]
 # textarea value here so 校正 always reflects what's on screen, not the
 # last-saved content.
 class ProofreadRequest(BaseModel): content:str|None=None
-class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''
+class EpisodeCreate(BaseModel): number:int; title:str; summary:str=''; content:str=''; chapter:str=''
 class EpisodeOut(EpisodeCreate): id:int; project_id:int; updated_at:object; model_config=ConfigDict(from_attributes=True)
-class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None
+class EpisodeUpdate(BaseModel): title:str|None=None; summary:str|None=None; content:str|None=None; chapter:str|None=None
 class EpisodeSaveOut(EpisodeOut): warnings:list[str]=[]
 class EpisodeBulkDeleteRequest(BaseModel): episode_ids:list[int]
+class EpisodeSwapRequest(BaseModel): episode_a:int; episode_b:int
+class EpisodeInsertRequest(BaseModel): after_number:int=0; title:str=''
+class EpisodeListResult(BaseModel): episodes:list[EpisodeOut]; episode_id:int|None=None
 class EpisodeBulkDeleteResult(BaseModel): deleted_count:int; renumbered_count:int; episodes:list[EpisodeOut]
 class CharacterCreate(BaseModel): name:str; role:str=''; personality:str=''; speech_style:str=''; goal:str=''; status:str='alive'; description:str=''
 class CharacterOut(CharacterCreate): id:int; project_id:int; model_config=ConfigDict(from_attributes=True)
@@ -160,6 +163,7 @@ class SystemSettingsOut(BaseModel):
     controller_ollama_model:str; controller_ollama_model_is_override:bool
     translator_ollama_url:str; translator_ollama_url_is_override:bool
     translator_ollama_model:str; translator_ollama_model_is_override:bool
+    translator_pool:list[dict]=[]  # the translation LLMs (empty = the single setting above / the Controller)
     cors_origins:str # read-only — env/.env only, see models.RuntimeConfig
     updated_at:object|None=None
 
@@ -190,6 +194,7 @@ class SystemSettingsUpdate(BaseModel):
     controller_ollama_model:str|None=None
     translator_ollama_url:str|None=None
     translator_ollama_model:str|None=None
+    translator_pool:list[dict]|None=None  # [] clears it
     # cors_origins is intentionally NOT a field here — CORS_ORIGINS can only
     # be set via env/.env, not from this endpoint. See
     # models.RuntimeConfig's docstring for why.

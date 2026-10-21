@@ -315,6 +315,8 @@ async def project_translate(pid:int,x:TranslateRequest,db:Session=Depends(get_db
  # novel takes far longer than a request should stay open); poll the job.
  crud_get_or_404(db,Project,pid,'Project')
  if x.language not in translator.LANGUAGES:raise HTTPException(400,'unsupported language: '+', '.join(translator.LANGUAGES))
+ busy=translator.active_job_for(pid,x.language)
+ if busy:return _translate_job_out(busy) # already being translated into this language: show that job, do not start a second
  job=translator.new_job(pid,x.language)
  translator.running[job['id']]=asyncio.create_task(translator.run_translation(job))
  return _translate_job_out(job)
@@ -324,7 +326,7 @@ async def project_translate_all(pid:int,db:Session=Depends(get_db)):
  p=crud_get_or_404(db,Project,pid,'Project')
  for j in translator.all_jobs.values():
   if j['source_project_id']==pid and j['status'] in ('queued','running'):return j
- langs=[c for c in translator.LANGUAGES if c!=(p.language or 'ja')]
+ langs=[c for c in translator.CORE_LANGUAGES if c!=(p.language or 'ja')]
  job=translator.new_all_job(pid,langs)
  llm_set_project(pid)
  translator.all_running[job['id']]=asyncio.create_task(translator.run_all(job))
@@ -442,7 +444,7 @@ def project_digest(pid:int,x:DigestRequest=DigestRequest(),db:Session=Depends(ge
   db.add(WorldEntity(project_id=d.id,name=w.name,entity_type=w.entity_type,description=w.description,rules=w.rules,location=w.location,era=w.era))
  new_eps=[]
  for i,e in enumerate(chosen,start=1):
-  ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,content=e.content or '');db.add(ne);new_eps.append(ne)
+  ne=Episode(project_id=d.id,number=i,title=e.title,summary=e.summary,chapter=e.chapter or '',content=e.content or '');db.add(ne);new_eps.append(ne)
  db.commit();db.refresh(d)
  for ne in new_eps:file_sync.write_episode_file(d,ne)
  _save_digest_meta(p,d,len(eps),sum(len(e.content or '') for e in eps),[e.number for e in chosen])
@@ -549,13 +551,15 @@ def project_export(pid:int,format:str='txt',db:Session=Depends(get_db)):
   return Response(export_mod.build_markdown(p,eps),media_type='text/markdown; charset=utf-8',headers={'Content-Disposition':content_disposition(name,'md')})
  if format=='epub':
   return Response(export_mod.build_epub(p,eps,cover_mod.selected_cover(pid)),media_type='application/epub+zip',headers={'Content-Disposition':content_disposition(name,'epub')})
+ if format=='docx':
+  return Response(export_mod.build_docx(p,eps),media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',headers={'Content-Disposition':content_disposition(name,'docx')})
  if format=='kdp':
   ai=_kdp_ai_hints(db,p)
   pub=_publishing_out(p).model_dump()
   return Response(export_mod.build_kdp_package(p,eps,cover_mod.selected_cover(pid),pub,ai),media_type='application/zip',headers={'Content-Disposition':content_disposition(name+'_kdp','zip')})
  if format=='json':
   return Response(json.dumps(_project_dump(db,p),ensure_ascii=False,indent=1,default=str),media_type='application/json',headers={'Content-Disposition':content_disposition(name,'json')})
- raise HTTPException(400,'format must be one of: txt, md, epub, kdp, json')
+ raise HTTPException(400,'format must be one of: txt, md, epub, docx, kdp, json')
 @app.post('/api/v1/projects/{pid}/ai-entities')
 async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
  # The AI proposes up to `count` new rows for one of the story-knowledge
@@ -663,6 +667,7 @@ def _system_settings_out(db):
   controller_ollama_model=cfg.controller_ollama_model,controller_ollama_model_is_override=override(row.controller_ollama_model if row else None),
   translator_ollama_url=cfg.translator_ollama_url,translator_ollama_url_is_override=override(row.translator_ollama_url if row else None),
   translator_ollama_model=cfg.translator_ollama_model,translator_ollama_model_is_override=override(row.translator_ollama_model if row else None),
+  translator_pool=cfg.translator_pool,
   cors_origins=','.join(rc.get_cors_origins()),
   updated_at=row.updated_at if row else None,
  )
@@ -673,7 +678,14 @@ def system_settings_put(x:SystemSettingsUpdate,db:Session=Depends(get_db)):
  row=db.get(RuntimeConfig,rc.SINGLETON_ID)
  if not row:
   row=RuntimeConfig(id=rc.SINGLETON_ID);db.add(row)
- for k,v in x.model_dump(exclude_unset=True).items():setattr(row,k,v or None)
+ for k,v in x.model_dump(exclude_unset=True).items():
+  if k=='translator_pool':
+   pool=rc.parse_pool(json.dumps(v or []))
+   if len(pool)>8:raise HTTPException(400,'翻訳LLMは最大8台までです')
+   for it in v or []:
+    if str(it.get('url') or '').strip() and not re.match(r'^https?://',str(it['url']).strip(),re.I):raise HTTPException(400,'URLは http:// または https:// で始めてください')
+   v=json.dumps(pool,ensure_ascii=False) if pool else None
+  setattr(row,k,v or None)
  db.commit();db.refresh(row)
  return _system_settings_out(db)
 @app.get('/api/v1/backups',response_model=BackupStatusOut)
@@ -815,6 +827,52 @@ def episode_delete(eid:int,db:Session=Depends(get_db)):
  project=e.project
  file_sync.delete_episode_file(project,e)
  db.delete(e);db.commit()
+def _renumber_episode(project,e,number):
+ # episode files are named by number ("0004_<id>.md"): capture the old path before
+ # changing the number, then drop it once the new file is written.
+ old_path=file_sync.episode_file_path(project,e)
+ e.number=number
+ try:old_path.unlink(missing_ok=True)
+ except OSError:logger.exception('Failed to remove stale episode file for episode %s',e.id)
+@app.post('/api/v1/projects/{pid}/episodes/swap',response_model=EpisodeListResult)
+def episodes_swap(pid:int,x:EpisodeSwapRequest,db:Session=Depends(get_db)):
+ # Exchanges the positions (numbers) of two episodes of this work. The text stays with
+ # its episode; only the order changes. Plot / foreshadowing / timeline entries keep the
+ # episode NUMBERS they already had (they point at positions).
+ project=crud_get_or_404(db,Project,pid,'Project')
+ if x.episode_a==x.episode_b:raise HTTPException(400,'違う2つの話を指定してください')
+ a,b=(db.get(Episode,i) for i in (x.episode_a,x.episode_b))
+ if not a or not b or a.project_id!=pid or b.project_id!=pid:raise HTTPException(404,'Episode not found')
+ na,nb=a.number,b.number
+ _renumber_episode(project,a,nb);_renumber_episode(project,b,na)
+ db.commit()
+ for e in (a,b):
+  db.refresh(e);file_sync.write_episode_file(project,e)
+ return EpisodeListResult(episodes=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number,Episode.id)).all())
+@app.post('/api/v1/projects/{pid}/episodes/insert',response_model=EpisodeListResult)
+def episodes_insert(pid:int,x:EpisodeInsertRequest,db:Session=Depends(get_db)):
+ # Inserts a new, empty episode right after episode number `after_number` (0 = at the very
+ # start): the new one gets number after_number+1 and every episode from there on moves
+ # one place later. Plot / foreshadowing / timeline references to those later episodes
+ # move with them so they keep pointing at the same episodes.
+ project=crud_get_or_404(db,Project,pid,'Project')
+ pos=max(1,x.after_number+1)
+ later=db.scalars(select(Episode).where(Episode.project_id==pid,Episode.number>=pos).order_by(Episode.number.desc(),Episode.id.desc())).all()
+ for e in later:_renumber_episode(project,e,e.number+1)
+ for pl in db.scalars(select(Plot).where(Plot.project_id==pid)).all():
+  if pl.start_episode is not None and pl.start_episode>=pos:pl.start_episode+=1
+  if pl.end_episode is not None and pl.end_episode>=pos:pl.end_episode+=1
+ for fs in db.scalars(select(Foreshadowing).where(Foreshadowing.project_id==pid)).all():
+  if fs.setup_episode is not None and fs.setup_episode>=pos:fs.setup_episode+=1
+  if fs.payoff_episode is not None and fs.payoff_episode>=pos:fs.payoff_episode+=1
+ for te in db.scalars(select(TimelineEvent).where(TimelineEvent.project_id==pid)).all():
+  if te.episode_number>=pos:te.episode_number+=1
+ new=Episode(project_id=pid,number=pos,title=x.title.strip() or f'第{pos}話',summary='',content='')
+ db.add(new);db.commit();db.refresh(new)
+ for e in later:
+  db.refresh(e);file_sync.write_episode_file(project,e)
+ file_sync.write_episode_file(project,new)
+ return EpisodeListResult(episodes=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number,Episode.id)).all(),episode_id=new.id)
 @app.post('/api/v1/projects/{pid}/episodes/bulk-delete',response_model=EpisodeBulkDeleteResult)
 def episodes_bulk_delete(pid:int,x:EpisodeBulkDeleteRequest,db:Session=Depends(get_db)):
  # Deletes the given episodes, then closes any resulting gaps in the

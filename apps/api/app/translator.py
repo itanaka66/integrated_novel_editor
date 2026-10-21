@@ -6,6 +6,7 @@ table — a translation is cheap to re-run and this avoids a migration); a
 server restart simply drops in-flight jobs.
 """
 import asyncio
+import contextlib
 import itertools
 import json
 import logging
@@ -20,6 +21,8 @@ from .models import Project, Episode, Character, WorldEntity
 # not compete with prose generation.
 from .ollama import translator_generate as generate
 from .ollama import reviewer_generate as review_generate
+from .ollama import alignment_embed, pin_translator, translator_count
+from .omission import find_omissions
 from .config import settings as env_settings
 from .continuity import extract_json
 from . import file_sync
@@ -30,11 +33,41 @@ logger = logging.getLogger(__name__)
 LANGUAGES = {
     'ja': '日本語', 'en': 'English', 'zh-CN': '简体中文', 'ko': '한국어',
     'es': 'Español', 'fr': 'Français', 'de': 'Deutsch', 'pt-BR': 'Português (BR)',
+    'it': 'Italiano',
+    'nl': 'Nederlands',
+    'pl': 'Polski',
+    'uk': 'Українська',
+    'tr': 'Türkçe',
+    'ar': 'العربية',
+    'hi': 'हिन्दी',
+    'vi': 'Tiếng Việt',
+    'th': 'ไทย',
+    'id': 'Bahasa Indonesia',
+    'sv': 'Svenska',
+    'el': 'Ελληνικά',
+    'fa': 'فارسی',
+    'ms': 'Bahasa Melayu',
 }
+# The eight languages 全翻訳 translates into; the others are chosen one at a time.
+CORE_LANGUAGES = ('ja', 'en', 'zh-CN', 'ko', 'es', 'fr', 'de', 'pt-BR')
 # Language names as given to the model, in English for reliable instruction-following.
 _PROMPT_LANG = {
     'ja': 'Japanese', 'en': 'English', 'zh-CN': 'Simplified Chinese', 'ko': 'Korean',
     'es': 'Spanish', 'fr': 'French', 'de': 'German', 'pt-BR': 'Brazilian Portuguese',
+    'it': 'Italian',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'uk': 'Ukrainian',
+    'tr': 'Turkish',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'vi': 'Vietnamese',
+    'th': 'Thai',
+    'id': 'Indonesian',
+    'sv': 'Swedish',
+    'el': 'Greek',
+    'fa': 'Persian',
+    'ms': 'Malay',
 }
 CHUNK_CHARS = 2500
 # A translated field shorter than this fraction of the original is treated as
@@ -108,7 +141,7 @@ _all_ids = itertools.count(1)
 
 def new_all_job(project_id: int, languages: list[str]) -> dict:
     job = {'id': next(_all_ids), 'source_project_id': project_id, 'languages': languages, 'status': 'queued',
-           'total_languages': len(languages), 'done_languages': 0, 'failed': [], 'current_language': '', 'project_ids': [],
+           'total_languages': len(languages), 'done_languages': 0, 'finished_languages': [], 'failed': [], 'current_language': '', 'project_ids': [],
            'last_message': 'キューに追加しました'}
     all_jobs[job['id']] = job
     _persist()
@@ -116,24 +149,46 @@ def new_all_job(project_id: int, languages: list[str]) -> dict:
 
 
 async def run_all(job: dict) -> None:
-    """Translate into each language in turn (each its own translated work, or the
-    existing one topped up). Runs on the server, so it carries on after the user
-    logs out; a language that fails does not stop the rest."""
+    """Translate into several languages at once (each its own translated work, or
+    the existing one topped up): up to TRANSLATION_PARALLEL_LANGUAGES (4) languages
+    run at the same time, the rest start as soon as one finishes. Runs on the
+    server, so it carries on after the user logs out; a language that fails does
+    not stop the others. A job restored after a restart skips the languages it had
+    already finished."""
     job['status'] = 'running'
+    job.setdefault('finished_languages', [])
+    if not job['finished_languages'] and job.get('done_languages'):
+        # saved by the one-after-another version: the first N languages were done
+        job['finished_languages'] = list(job['languages'][:job['done_languages']])
     _persist()
     try:
-        for lang in job['languages'][job['done_languages']:]:
-            job['current_language'] = LANGUAGES[lang]
-            job['last_message'] = f'{LANGUAGES[lang]} に翻訳中…'
-            child = new_job(job['source_project_id'], lang)
-            await run_translation(child)
-            if child['status'] == 'completed':
-                if child.get('project_id'):
-                    job['project_ids'].append(child['project_id'])
-            else:
-                job['failed'].append(LANGUAGES[lang])
-            job['done_languages'] += 1
-            _persist()
+        limit = max(1, int(env_settings.translation_parallel_languages))
+        sem = asyncio.Semaphore(limit)
+        active: list[str] = []
+
+        async def one(lang: str) -> None:
+            async with sem:
+                active.append(lang)
+                job['current_language'] = '・'.join(LANGUAGES[x] for x in active)
+                job['last_message'] = f'{len(active)}言語を同時に翻訳中…（{job["current_language"]}）'
+                _persist()
+                child = new_job(job['source_project_id'], lang)
+                try:
+                    await run_translation(child)
+                finally:
+                    active.remove(lang)
+                    job['current_language'] = '・'.join(LANGUAGES[x] for x in active)
+                if child['status'] == 'completed':
+                    if child.get('project_id'):
+                        job['project_ids'].append(child['project_id'])
+                else:
+                    job['failed'].append(LANGUAGES[lang])
+                job['finished_languages'].append(lang)
+                job['done_languages'] = len(job['finished_languages'])
+                _persist()
+
+        pending = [lang for lang in job['languages'] if lang not in job['finished_languages']]
+        await asyncio.gather(*(one(lang) for lang in pending))
         job['status'] = 'completed'
         _persist()
         job['last_message'] = f'{job["total_languages"]}言語の翻訳が終わりました' + (f'（失敗: {"・".join(job["failed"])}）' if job['failed'] else '。')
@@ -236,7 +291,7 @@ def clean_translation(text: str) -> str:
 _KANA = re.compile(r'[\u3040-\u30ff]')
 _HAN = re.compile(r'[\u3400-\u9fff]')
 _HANGUL = re.compile(r'[\uac00-\ud7af]')
-_LATIN_TARGETS = ('en', 'es', 'fr', 'de', 'pt-BR')
+_CJK_TARGETS = ('ja', 'ko', 'zh-CN')  # targets whose own text legitimately contains such characters
 
 
 def _ratio(rx, text: str) -> float:
@@ -254,8 +309,8 @@ def bad_translation(src: str, out: str, language: str) -> str:
     if s <= 40:
         return ''
     kana = _ratio(_KANA, out)
-    if language in _LATIN_TARGETS and (kana + _ratio(_HAN, out) + _ratio(_HANGUL, out)) > 0.2:
-        return 'untranslated'
+    if language not in _CJK_TARGETS and (kana + _ratio(_HAN, out) + _ratio(_HANGUL, out)) > 0.2:
+        return 'untranslated'  # any other target: Japanese/Chinese/Korean characters should be gone
     if language == 'ko' and (kana > 0.2 or _ratio(_HANGUL, out) < 0.2):
         return 'untranslated'
     if language == 'zh-CN' and kana > 0.1:
@@ -310,39 +365,140 @@ async def review_chunk(src: str, out: str, language: str, glossary: str) -> list
     return [str(i).strip() for i in (data.get('issues') or []) if str(i).strip()][:5]
 
 
+async def _translate_chunk(chunk: str, language: str, glossary: str, stats: dict | None) -> str:
+    t, _ = await generate(_prompt(language, glossary, chunk), language=language)
+    cleaned = clean_translation(t)
+    if bad_translation(chunk, cleaned, language):
+        # One more try with a firmer prompt; keep whichever answer is better.
+        t2, _ = await generate(_retry_prompt(language, glossary, chunk), language=language)
+        again = clean_translation(t2)
+        if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
+            cleaned = again
+    if env_settings.translation_omission_check:
+        missing = await find_omissions(chunk, cleaned, alignment_embed)
+        if missing:
+            # Translate again, naming the sentences that were left out; keep it only
+            # when it brings back at least one of them without losing quality.
+            purpose.set(f'翻訳（{LANGUAGES[language]}）抜け修正')
+            t4, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, [f'次の文が訳されていません: {m}' for m in missing[:5]]), language=language)
+            again = clean_translation(t4)
+            if again and not bad_translation(chunk, again, language):
+                left = await find_omissions(chunk, again, alignment_embed)
+                if len(left) < len(missing):
+                    cleaned = again
+                    if stats is not None:
+                        stats['omissions_fixed'] = stats.get('omissions_fixed', 0) + len(missing) - len(left)
+    if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
+        issues = await review_chunk(chunk, cleaned, language, glossary)
+        if stats is not None:
+            stats['reviewed'] = stats.get('reviewed', 0) + 1
+        if issues:
+            # Translate again with the reviewer's findings, keep it unless it is worse.
+            purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
+            t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues), language=language)
+            fixed = clean_translation(t3)
+            if fixed and not bad_translation(chunk, fixed, language):
+                cleaned = fixed
+                if stats is not None:
+                    stats['fixed'] = stats.get('fixed', 0) + 1
+    return cleaned
+
+
 async def translate_text(text: str, language: str, glossary: str = '', stats: dict | None = None) -> str:
+    """Translate a text chunk by chunk. Which LLM is used is decided by
+    ollama.translator_generate (the one an episode is pinned to, else the least busy)."""
     if not (text or '').strip():
         return text or ''
-    out = []
-    for chunk in split_chunks(text):
-        t, _ = await generate(_prompt(language, glossary, chunk))
-        cleaned = clean_translation(t)
-        if bad_translation(chunk, cleaned, language):
-            # One more try with a firmer prompt; keep whichever answer is better.
-            t2, _ = await generate(_retry_prompt(language, glossary, chunk))
-            again = clean_translation(t2)
-            if not bad_translation(chunk, again, language) or len(again) > len(cleaned):
-                cleaned = again
-        if env_settings.translation_review and len(chunk.strip()) >= REVIEW_MIN_CHARS:
-            issues = await review_chunk(chunk, cleaned, language, glossary)
-            if stats is not None:
-                stats['reviewed'] = stats.get('reviewed', 0) + 1
-            if issues:
-                # Translate again with the reviewer's findings, keep it unless it is worse.
-                purpose.set(f'翻訳（{LANGUAGES[language]}）修正')
-                t3, _ = await generate(_fix_prompt(language, glossary, chunk, cleaned, issues))
-                fixed = clean_translation(t3)
-                if fixed and not bad_translation(chunk, fixed, language):
-                    cleaned = fixed
-                    if stats is not None:
-                        stats['fixed'] = stats.get('fixed', 0) + 1
-        out.append(cleaned)
-    return '\n'.join(out)
+    # One chunk after another: inside an episode they all run on the pinned LLM, and
+    # translating them in order keeps names and tone consistent.
+    parts = [await _translate_chunk(c, language, glossary, stats) for c in split_chunks(text)]
+    return '\n'.join(parts)
+
+
+def _group_width(language: str | None = None) -> int:
+    try:
+        return max(1, translator_count(language))
+    except Exception:  # settings unreadable: fall back to one at a time
+        logger.warning('Could not read the translation LLM list', exc_info=True)
+        return 1
+
+
+async def _translate_episode(e, ne, lang: str, glossary: str, job: dict) -> dict:
+    """The translated fields of one episode (only the parts that are missing or too
+    short when continuing an earlier translation). Touches no database state, so
+    several episodes can run at the same time."""
+    purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
+    cur = lambda name: getattr(ne, name, '') if ne is not None else ''  # noqa: E731
+    out: dict = {}
+    with _pin(lang):  # the whole episode on one translation LLM
+        return await _translate_episode_fields(e, ne, lang, glossary, job, cur, out)
+
+
+@contextlib.contextmanager
+def _pin(lang: str):
+    try:
+        cm = pin_translator(lang)
+        cm.__enter__()
+    except Exception:  # settings unreadable: the unpinned path picks per call
+        logger.warning('Could not pin a translation LLM', exc_info=True)
+        yield
+        return
+    try:
+        yield
+    finally:
+        cm.__exit__(None, None, None)
+
+
+async def _translate_episode_fields(e, ne, lang, glossary, job, cur, out) -> dict:
+    if e.chapter and not cur('chapter'):
+        out['chapter'] = (await translate_text(e.chapter, lang, glossary)).strip() or e.chapter
+    if ne is None or is_short(e.title, cur('title')) or not cur('title'):
+        out['title'] = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title
+    if ne is None or is_short(e.summary, cur('summary')):
+        out['summary'] = await translate_text(e.summary, lang, glossary, stats=job)
+    if ne is None or is_short(e.content, cur('content')):
+        out['content'] = await translate_text(e.content, lang, glossary, stats=job)
+    return out
+
+
+_key_locks: dict[tuple, asyncio.Lock] = {}
+
+
+def active_job_for(source_project_id: int, language: str) -> dict | None:
+    """A queued/running single-language translation of this work into this language."""
+    for j in jobs.values():
+        if j['source_project_id'] == source_project_id and j['language'] == language and j['status'] in ('queued', 'running'):
+            task = running.get(j['id'])
+            if task is not None and not task.done():  # a leftover entry with no live task must not block new jobs
+                return j
+    return None
+
+
+def _lock_for(job: dict) -> asyncio.Lock:
+    """One lock per (event loop, work, language): only one job at a time may
+    translate a given work into a given language. Two at once (a second click,
+    全翻訳 + a single language, a job resumed after a restart next to a new one)
+    would each see the episodes as missing, translate them on different LLMs at
+    the same time and create the translated episodes twice."""
+    key = (id(asyncio.get_running_loop()), job['source_project_id'], job['language'])
+    lock = _key_locks.get(key)
+    if lock is None:
+        _key_locks[key] = lock = asyncio.Lock()
+    return lock
 
 
 async def run_translation(job: dict) -> None:
     db = SessionLocal()
+    lock = _lock_for(job)
+    held = False
     try:
+        if lock.locked():
+            job['last_message'] = '同じ作品・同じ言語の別の翻訳が終わるのを待っています…'
+            _persist()
+        await lock.acquire()
+        held = True
+        # Whatever the job that held the lock translated is now in the database, so
+        # the resume logic below only does what is still missing or too short.
         job['status'] = 'running'
         _persist()
         set_project(job['source_project_id'])
@@ -388,38 +544,41 @@ async def run_translation(job: dict) -> None:
 
         existing = {x.number: x for x in db.scalars(select(Episode).where(Episode.project_id == dst.id)).all()}
         done = skipped = 0
+        work = []
         for e in eps:
             ne = existing.get(e.number)
-            if ne is None:
-                job['last_message'] = f'第{e.number}話を翻訳中…'
-                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
-                ne = Episode(project_id=dst.id, number=e.number, title='', summary='', content='')
-                db.add(ne)
-            elif not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
+            if ne is not None and not any(is_short(a, b) for a, b in ((e.title, ne.title), (e.summary, ne.summary), (e.content, ne.content))):
                 skipped += 1
                 job['processed_episodes'] += 1
                 _persist()
                 continue
-            else:
-                job['last_message'] = f'第{e.number}話の不足分を翻訳中…'
-                purpose.set(f"翻訳（{LANGUAGES[lang]}）第{e.number}話")
-            # Translate only the parts that are missing or too short.
-            if is_short(e.title, ne.title) or not ne.title:
-                ne.title = (await translate_text(e.title, lang, glossary, stats=job)).strip() or e.title
-            if is_short(e.summary, ne.summary):
-                ne.summary = await translate_text(e.summary, lang, glossary, stats=job)
-            if is_short(e.content, ne.content):
-                ne.content = await translate_text(e.content, lang, glossary, stats=job)
-            db.commit()
-            db.refresh(ne)
-            file_sync.write_episode_file(dst, ne)
-            done += 1
-            job['processed_episodes'] += 1
+            work.append((e, ne))
+        # As many episodes at once as there are translation LLMs (1 = one by one).
+        width = _group_width(lang)
+        for i in range(0, len(work), width):
+            group = work[i:i + width]
+            nums = '・'.join(str(e.number) for e, _ in group)
+            job['last_message'] = f'第{nums}話を翻訳中…'
             _persist()
+            results = await asyncio.gather(*(_translate_episode(e, ne, lang, glossary, job) for e, ne in group))
+            for (e, ne), fields in zip(group, results):
+                if ne is None:
+                    ne = Episode(project_id=dst.id, number=e.number, title='', summary='', content='')
+                    db.add(ne)
+                for k, v in fields.items():
+                    setattr(ne, k, v)
+                db.commit()
+                db.refresh(ne)
+                file_sync.write_episode_file(dst, ne)
+                done += 1
+                job['processed_episodes'] += 1
+                _persist()
         job['status'] = 'completed'
         _persist()
         job['last_message'] = (f'{done}話を翻訳しました（訳が揃っている{skipped}話はそのまま）。' if resume
                                else f'{len(eps)}話の翻訳が完了しました。')
+        if job.get('omissions_fixed'):
+            job['last_message'] += f"（抜けていた{job['omissions_fixed']}文を補いました）"
         if job.get('reviewed'):
             job['last_message'] += f"（AIチェック{job['reviewed']}回、うち{job.get('fixed', 0)}箇所を修正）"
     except asyncio.CancelledError:
@@ -433,5 +592,7 @@ async def run_translation(job: dict) -> None:
         _persist()
         job['last_message'] = f'翻訳に失敗しました: {ex}'
     finally:
+        if held:
+            lock.release()
         db.close()
         running.pop(job['id'], None)

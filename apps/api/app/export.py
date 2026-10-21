@@ -9,6 +9,7 @@ episode.
 import csv
 import html
 import io
+import re
 import uuid
 import zipfile
 
@@ -25,6 +26,20 @@ LABELS = {
     'fr': ('Épisode {n} : {t}', '(Aucun texte)', 'Table des matières'),
     'de': ('Episode {n}: {t}', '(Kein Text)', 'Inhaltsverzeichnis'),
     'pt-BR': ('Episódio {n}: {t}', '(Sem texto)', 'Sumário'),
+    'it': ('Episodio {n}: {t}', '(Nessun testo)', 'Indice'),
+    'nl': ('Aflevering {n}: {t}', '(Geen tekst)', 'Inhoud'),
+    'pl': ('Odcinek {n}: {t}', '(Brak tekstu)', 'Spis treści'),
+    'uk': ('Епізод {n}: {t}', '(Немає тексту)', 'Зміст'),
+    'tr': ('Bölüm {n}: {t}', '(Metin yok)', 'İçindekiler'),
+    'ar': ('الحلقة {n}: {t}', '(لا يوجد نص)', 'المحتويات'),
+    'hi': ('एपिसोड {n}: {t}', '(कोई पाठ नहीं)', 'विषय-सूची'),
+    'vi': ('Tập {n}: {t}', '(Chưa có nội dung)', 'Mục lục'),
+    'th': ('ตอนที่ {n}: {t}', '(ไม่มีเนื้อหา)', 'สารบัญ'),
+    'id': ('Episode {n}: {t}', '(Tidak ada teks)', 'Daftar isi'),
+    'sv': ('Avsnitt {n}: {t}', '(Ingen text)', 'Innehåll'),
+    'el': ('Επεισόδιο {n}: {t}', '(Χωρίς κείμενο)', 'Περιεχόμενα'),
+    'fa': ('قسمت {n}: {t}', '(بدون متن)', 'فهرست'),
+    'ms': ('Episod {n}: {t}', '(Tiada teks)', 'Kandungan'),
 }
 
 
@@ -60,11 +75,100 @@ def build_markdown(project, episodes) -> str:
     return '\n'.join(parts)
 
 
+# ---- Word (.docx): 章 = 見出し1, 話 = 見出し2 --------------------------------
+
+_W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+_BAD_XML = re.compile('[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]')
+
+
+def _x(text) -> str:
+    """Escape for XML text and drop characters XML 1.0 cannot carry."""
+    return html.escape(_BAD_XML.sub('', str(text or '')), quote=False)
+
+
+def _para(text: str, style: str | None = None) -> str:
+    ppr = f'<w:pPr><w:pStyle w:val="{style}"/></w:pPr>' if style else ''
+    if not text:
+        return f'<w:p>{ppr}</w:p>'
+    return f'<w:p>{ppr}<w:r><w:t xml:space="preserve">{_x(text)}</w:t></w:r></w:p>'
+
+
+def _docx_styles(lang: str) -> str:
+    east = {'ja': '游明朝', 'zh-CN': '宋体', 'ko': '바탕'}.get(lang, '游明朝')
+    fonts = f'<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="{east}" w:cs="Times New Roman"/>'
+    head_fonts = f'<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="{"游ゴシック" if lang == "ja" else east}"/>'
+
+    def heading(sid: str, name: str, level: int, size: int) -> str:
+        return (f'<w:style w:type="paragraph" w:styleId="{sid}"><w:name w:val="{name}"/><w:basedOn w:val="Normal"/>'
+                f'<w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>'
+                f'<w:pPr><w:keepNext/><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="{level}"/></w:pPr>'
+                f'<w:rPr>{head_fonts}<w:b/><w:sz w:val="{size}"/><w:szCs w:val="{size}"/></w:rPr></w:style>')
+    return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="{_W_NS}">'
+            f'<w:docDefaults><w:rPrDefault><w:rPr>{fonts}<w:sz w:val="21"/><w:szCs w:val="21"/><w:lang w:val="{lang}" w:eastAsia="{lang}"/></w:rPr></w:rPrDefault>'
+            '<w:pPrDefault><w:pPr><w:spacing w:after="0" w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
+            '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+            f'<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>'
+            f'<w:pPr><w:spacing w:before="240" w:after="240"/><w:jc w:val="center"/></w:pPr><w:rPr>{head_fonts}<w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr></w:style>'
+            + heading('Heading1', 'heading 1', 0, 32) + heading('Heading2', 'heading 2', 1, 28) + '</w:styles>')
+
+
+def build_docx(project, episodes) -> bytes:
+    """A Word document: the work's name as the title, each chapter (章) as
+    見出し1 (Heading 1) and each episode (話) as 見出し2 (Heading 2), so Word's
+    navigation pane and table of contents follow the story. A chapter heading is
+    written whenever the chapter changes between consecutive episodes; episodes
+    with no chapter get no 見出し1. Assembled by hand, like the EPUB."""
+    lang = _lang(project)
+    body = [_para(project.name, 'Title')]
+    if getattr(project, 'author', ''):
+        body.append(_para(project.author))
+    if project.description:
+        body += [_para(line) for line in project.description.split('\n')]
+    last_chapter = None
+    for e in episodes:
+        chapter = (getattr(e, 'chapter', '') or '').strip()
+        if chapter and chapter != last_chapter:
+            body.append(_para(chapter, 'Heading1'))
+        last_chapter = chapter
+        body.append(_para(_episode_heading(e, lang), 'Heading2'))
+        text = e.content or ''
+        body += [_para(line) for line in (text.split('\n') if text else [LABELS[lang][1]])]
+    document = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="{_W_NS}"><w:body>'
+                + ''.join(body) + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+                '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>')
+    core = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties '
+            'xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
+            'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" '
+            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            f'<dc:title>{_x(project.name)}</dc:title><dc:creator>{_x(getattr(project, "author", "") or "")}</dc:creator>'
+            f'<dc:language>{lang}</dc:language></cp:coreProperties>')
+    rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+            '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>')
+    doc_rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+    types = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+             '<Default Extension="xml" ContentType="application/xml"/>'
+             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+             '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+             '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr('[Content_Types].xml', types)
+        z.writestr('_rels/.rels', rels)
+        z.writestr('word/document.xml', document)
+        z.writestr('word/_rels/document.xml.rels', doc_rels)
+        z.writestr('word/styles.xml', _docx_styles(lang))
+        z.writestr('docProps/core.xml', core)
+    return buf.getvalue()
+
+
 # ---- KDP package: EPUB + cover + the details the KDP form asks for ----------
 
 # KDP's own names for the languages this app can produce.
 KDP_LANGUAGE = {'ja': '日本語 (Japanese)', 'en': '英語 (English)', 'zh-CN': '中国語・簡体字 (Chinese)', 'ko': '韓国語 (Korean)',
-                'es': 'スペイン語 (Spanish)', 'fr': 'フランス語 (French)', 'de': 'ドイツ語 (German)', 'pt-BR': 'ポルトガル語・ブラジル (Portuguese)'}
+                'es': 'スペイン語 (Spanish)', 'fr': 'フランス語 (French)', 'de': 'ドイツ語 (German)', 'pt-BR': 'ポルトガル語・ブラジル (Portuguese)', 'it': 'イタリア語 (Italian)', 'nl': 'オランダ語 (Dutch)', 'pl': 'ポーランド語 (Polish)', 'uk': 'ウクライナ語 (Ukrainian)', 'tr': 'トルコ語 (Turkish)', 'ar': 'アラビア語 (Arabic)', 'hi': 'ヒンディー語 (Hindi)', 'vi': 'ベトナム語 (Vietnamese)', 'th': 'タイ語 (Thai)', 'id': 'インドネシア語 (Indonesian)', 'sv': 'スウェーデン語 (Swedish)', 'el': 'ギリシャ語 (Greek)', 'fa': 'ペルシア語 (Persian)', 'ms': 'マレー語 (Malay)'}
 
 
 def kdp_rows(project, pub: dict, episodes, ai: dict) -> list[tuple[str, str]]:
