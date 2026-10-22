@@ -1,17 +1,57 @@
-import asyncio, json, re
+import asyncio, json, re, logging
 from sqlalchemy import select
 from .db import SessionLocal
-from .models import Project, Episode, AutoWriteJob, SeriesPlan, ArcPlan, MiniArcPlan, EpisodePlan
+from .models import Project, Episode, AutoWriteJob
 from .context import build
 from .ollama import controller_generate, generate
 from .llm_queue import purpose, set_project
-from .continuity import update_character_states, check_continuity, update_plot_statuses, update_foreshadowing_statuses
+from .continuity import (
+    update_character_states, check_continuity,
+    update_plot_statuses, update_foreshadowing_statuses,
+)
 from .rag import index
 from .planner.planner_service import PlannerService
 
+logger = logging.getLogger(__name__)
 running = {}
 
-def _check_stopped(db,job):
+# ─── Isolated-session helpers (safe for asyncio.gather) ─────────────────────
+
+async def _build_ctx_isolated(project_id: int, existing_id: int | None) -> dict:
+    """Build episode context with a fresh DB session so it can run concurrently
+    with the main session's planning calls without sharing session state."""
+    db = SessionLocal()
+    try:
+        existing = db.get(Episode, existing_id) if existing_id is not None else None
+        return await build(db, project_id, existing, 8)
+    finally:
+        db.close()
+
+async def _post_char_states(project_id: int, ep_id: int):
+    db = SessionLocal()
+    try:
+        ep = db.get(Episode, ep_id)
+        if ep:
+            await update_character_states(db, project_id, ep)
+    except Exception:
+        logger.exception('character-state update failed for episode %s', ep_id)
+    finally:
+        db.close()
+
+async def _post_foreshadow(project_id: int, ep_id: int):
+    db = SessionLocal()
+    try:
+        ep = db.get(Episode, ep_id)
+        if ep:
+            await update_foreshadowing_statuses(db, project_id, ep)
+    except Exception:
+        logger.exception('foreshadowing-status update failed for episode %s', ep_id)
+    finally:
+        db.close()
+
+# ─── Internal helpers ────────────────────────────────────────────────────────
+
+def _check_stopped(db, job):
     """Re-reads `job`'s status and, if a stop was requested (status
     'stopping', set by POST /auto-write/{id}/stop on a separate request),
     transitions it to 'stopped' and returns True. Call this at every
@@ -24,96 +64,115 @@ def _check_stopped(db,job):
     'stopping' with 'completed' — the stop was silently dropped instead of
     ever reaching 'stopped'."""
     db.refresh(job)
-    if job.status=='stopping':
-        job.status='stopped'; db.commit()
+    if job.status == 'stopping':
+        job.status = 'stopped'; db.commit()
         return True
     return False
 
 def _json(text):
-    text=(text or '').strip()
-    m=re.search(r'\{.*\}', text, re.S)
+    text = (text or '').strip()
+    m = re.search(r'\{.*\}', text, re.S)
     if not m: return {}
     try: return json.loads(m.group(0))
     except: return {}
 
 def chunks(e):
-    s=e.content or ''; out=[]; start=0; i=0
-    while start<len(s):
-        out.append({'id':e.id*100000+i,'project_id':e.project_id,'episode_id':e.id,'title':e.title,'source_type':'episode','text':s[start:start+1400]})
-        i+=1; start+=1200
+    s = e.content or ''; out = []; start = 0; i = 0
+    while start < len(s):
+        out.append({'id': e.id * 100000 + i, 'project_id': e.project_id,
+                    'episode_id': e.id, 'title': e.title, 'source_type': 'episode',
+                    'text': s[start:start + 1400]})
+        i += 1; start += 1200
     return out
 
 async def _controller_gate(project, ctx, series, arc, mini, plan, content):
-    prompt=f'''あなたはA770上のStory Controller / Quality Gateです。
+    prompt = f'''あなたはA770上のStory Controller / Quality Gateです。
 500話シリーズの上位計画を守り、本文を正本化する前に監査します。
 担当は「時系列・人物状態・世界観・プロット」の4項目だけです。文章表現の評価はしません。
 
-SERIES={json.dumps(series,ensure_ascii=False)}
-ARC={json.dumps(arc,ensure_ascii=False)}
-MINI_ARC={json.dumps(mini,ensure_ascii=False)}
-EPISODE_PLAN={json.dumps(plan,ensure_ascii=False)}
-STORY_TWIN={json.dumps(ctx,ensure_ascii=False)}
+SERIES={json.dumps(series, ensure_ascii=False)}
+ARC={json.dumps(arc, ensure_ascii=False)}
+MINI_ARC={json.dumps(mini, ensure_ascii=False)}
+EPISODE_PLAN={json.dumps(plan, ensure_ascii=False)}
+STORY_TWIN={json.dumps(ctx, ensure_ascii=False)}
 本文={content}
 
 JSONのみ：{{"status":"PASS|WARN|BLOCK","checks":{{"timeline":"PASS|WARN|BLOCK","character":"PASS|WARN|BLOCK","world":"PASS|WARN|BLOCK","plot":"PASS|WARN|BLOCK"}},"issues":[{{"type":"timeline|character|world|plot","severity":"HIGH|MEDIUM|LOW","evidence":"","action":""}}]}}'''
-    text,_=await controller_generate(prompt)
+    text, _ = await controller_generate(prompt)
     return _json(text)
 
+# ─── Main job runner ─────────────────────────────────────────────────────────
+
 async def run_job(job_id):
-    db=SessionLocal(); job=db.get(AutoWriteJob,job_id)
+    db = SessionLocal(); job = db.get(AutoWriteJob, job_id)
     if not job: db.close(); return
-    premise=job.premise or ''
-    overwrite=bool(job.overwrite)
+    premise = job.premise or ''
+    overwrite = bool(job.overwrite)
     # Resume from current_episode so a restart after power-off or logout
     # continues exactly where it stopped rather than starting over.
-    resume_from=max(job.start_episode,job.current_episode)
+    resume_from = max(job.start_episode, job.current_episode)
     try:
         set_project(job.project_id)
-        job.status='running'; db.commit()
-        planner=PlannerService()
-        # Generate the 500-episode hierarchy once, then lazily refine it.
-        job.last_message='Series Planner: EP.1～500 全体構成を確認中'; db.commit()
-        series_obj=await planner.ensure_series(db,job.project_id,premise)
-        for n in range(resume_from,job.end_episode+1):
-            if _check_stopped(db,job): return
-            job.current_episode=n; job.last_message=f'EP.{n}: 階層Plannerを展開中'; db.commit()
-            purpose.set(f'自動執筆 EP.{n}: 階層Planner')
-            project=db.get(Project,job.project_id)
-            existing=db.scalar(select(Episode).where(Episode.project_id==job.project_id,Episode.number==n))
+        job.status = 'running'; db.commit()
+        planner = PlannerService()
+
+        # ── Pre-loop: ensure the 500-episode series plan exists once ──────────
+        job.last_message = 'Series Planner: EP.1～500 全体構成を確認中'; db.commit()
+        series_obj = await planner.ensure_series(db, job.project_id, premise)
+
+        for n in range(resume_from, job.end_episode + 1):
+            if _check_stopped(db, job): return
+            job.current_episode = n
+            job.last_message = f'EP.{n}: Phase1 計画+コンテキスト(並列)'; db.commit()
+
+            project = db.get(Project, job.project_id)
+            existing = db.scalar(select(Episode).where(
+                Episode.project_id == job.project_id, Episode.number == n))
             if existing and existing.content.strip() and not overwrite:
-                job.last_message=f'EP.{n}: existing episode skipped'; db.commit(); continue
-            ctx=await build(db,job.project_id,existing,8)
+                job.last_message = f'EP.{n}: existing episode skipped'; db.commit()
+                continue
 
-            # 500 -> 100 -> 10 -> 1
-            arc_number=(n-1)//100+1
-            mini_number=((n-1)%100)//10+1
-            arc_obj=await planner.ensure_arc(db,job.project_id,arc_number,premise)
-            mini_obj=await planner.ensure_mini(db,job.project_id,arc_number,mini_number,premise)
-            ep_obj=await planner.ensure_episode(db,job.project_id,n,premise)
-            series=json.loads(series_obj.content)
-            arc=json.loads(arc_obj.content)
-            mini=json.loads(mini_obj.content)
-            plan=json.loads(ep_obj.content)
+            # ── Phase 1 [PARALLEL]: Context build + hierarchical planning ────
+            # build() runs a RAG search and DB reads in an isolated session;
+            # the planning chain (arc → mini → episode) runs on the main
+            # session. Both are independent so they overlap.
+            arc_number = (n - 1) // 100 + 1
+            mini_number = ((n - 1) % 100) // 10 + 1
+            purpose.set(f'自動執筆 EP.{n}: Context+Planner(並列)')
+            ctx_task = asyncio.create_task(
+                _build_ctx_isolated(job.project_id, existing.id if existing else None)
+            )
+            arc_obj  = await planner.ensure_arc(db, job.project_id, arc_number, premise)
+            mini_obj = await planner.ensure_mini(db, job.project_id, arc_number, mini_number, premise)
+            ep_obj   = await planner.ensure_episode(db, job.project_id, n, premise)
+            ctx      = await ctx_task  # join — usually finished by now
+            series = json.loads(series_obj.content)
+            arc    = json.loads(arc_obj.content)
+            mini   = json.loads(mini_obj.content)
+            plan   = json.loads(ep_obj.content)
 
-            # Controller-owned preflight
-            if _check_stopped(db,job): return
-            job.last_message=f'EP.{n}: Controller preflight (timeline/character/world/plot)'; db.commit()
+            # ── Phase 2: Controller preflight ────────────────────────────────
+            if _check_stopped(db, job): return
+            job.last_message = f'EP.{n}: Phase2 Controller preflight'; db.commit()
             purpose.set(f'自動執筆 EP.{n}: Controller事前監査')
-            preflight_prompt=f'''A770 Controllerです。EP.{n}の執筆前監査を行います。
+            preflight_prompt = f'''A770 Controllerです。EP.{n}の執筆前監査を行います。
 担当は時系列・人物状態・世界観・プロット。文章品質は対象外。
 Series={json.dumps(series,ensure_ascii=False)}\nArc={json.dumps(arc,ensure_ascii=False)}\nMiniArc={json.dumps(mini,ensure_ascii=False)}\nEpisode={json.dumps(plan,ensure_ascii=False)}\nStoryTwin={json.dumps(ctx,ensure_ascii=False)}
 JSONのみ: {{"status":"PASS|WARN|BLOCK","issues":[],"constraints":[]}}'''
-            pre_text,_=await controller_generate(preflight_prompt); preflight=_json(pre_text)
-            if preflight.get('status')=='BLOCK':
-                repair=f'''EP.{n}のEpisode Planを修正してください。上位計画とStory Digital Twinを正本とし、以下の監査指摘を解消します。JSONのみで返してください。監査={json.dumps(preflight,ensure_ascii=False)}\nPlan={json.dumps(plan,ensure_ascii=False)}\nTwin={json.dumps(ctx,ensure_ascii=False)}'''
-                fixed,_=await controller_generate(repair); repaired=_json(fixed)
-                if repaired: plan=repaired; ep_obj.content=json.dumps(plan,ensure_ascii=False); db.commit()
+            pre_text, _ = await controller_generate(preflight_prompt)
+            preflight = _json(pre_text)
+            if preflight.get('status') == 'BLOCK':
+                repair = f'''EP.{n}のEpisode Planを修正してください。上位計画とStory Digital Twinを正本とし、以下の監査指摘を解消します。JSONのみで返してください。監査={json.dumps(preflight,ensure_ascii=False)}\nPlan={json.dumps(plan,ensure_ascii=False)}\nTwin={json.dumps(ctx,ensure_ascii=False)}'''
+                fixed, _ = await controller_generate(repair)
+                repaired = _json(fixed)
+                if repaired:
+                    plan = repaired; ep_obj.content = json.dumps(plan, ensure_ascii=False); db.commit()
 
-            # RTX3090 Writer
-            if _check_stopped(db,job): return
-            job.last_message=f'EP.{n}: Writer ({job.writer_model})'; db.commit()
+            # ── Phase 3: Writer generates episode content ─────────────────────
+            if _check_stopped(db, job): return
+            job.last_message = f'EP.{n}: Phase3 Writer ({job.writer_model})'; db.commit()
             purpose.set(f'自動執筆 EP.{n}: 本文生成')
-            writer_prompt=f'''あなたはRTX3090上のWriter AIです。EP.{n}の完成した日本語小説本文だけを出力してください。
+            writer_prompt = f'''あなたはRTX3090上のWriter AIです。EP.{n}の完成した日本語小説本文だけを出力してください。
 Controllerが決めた計画とStory Digital Twinを厳守してください。
 【Series】{json.dumps(series,ensure_ascii=False)}
 【Arc】{json.dumps(arc,ensure_ascii=False)}
@@ -122,48 +181,68 @@ Controllerが決めた計画とStory Digital Twinを厳守してください。
 【Controller制約】{json.dumps(preflight,ensure_ascii=False)}
 【Story Digital Twin】{json.dumps(ctx,ensure_ascii=False)}
 【作品ルール】{project.rules}'''
-            content,_=await generate(writer_prompt,job.writer_model)
+            content, _ = await generate(writer_prompt, job.writer_model)
 
-            # Controller final gate
-            if _check_stopped(db,job): return
-            job.last_message=f'EP.{n}: Controller final gate'; db.commit()
+            # ── Phase 4: Controller final gate ───────────────────────────────
+            if _check_stopped(db, job): return
+            job.last_message = f'EP.{n}: Phase4 Controller final gate'; db.commit()
             purpose.set(f'自動執筆 EP.{n}: Controller最終監査')
-            gate=await _controller_gate(project,ctx,series,arc,mini,plan,content)
-            if gate.get('status')=='BLOCK':
-                job.last_message=f'EP.{n}: Controller BLOCK → Writer再執筆'; db.commit()
+            gate = await _controller_gate(project, ctx, series, arc, mini, plan, content)
+            if gate.get('status') == 'BLOCK':
+                job.last_message = f'EP.{n}: Controller BLOCK → Writer再執筆'; db.commit()
                 purpose.set(f'自動執筆 EP.{n}: Writer再執筆')
-                revise=f'''EP.{n}本文を修正し、完成本文のみ出力してください。変更対象はControllerが指摘した時系列・人物状態・世界観・プロットの矛盾です。
+                revise = f'''EP.{n}本文を修正し、完成本文のみ出力してください。変更対象はControllerが指摘した時系列・人物状態・世界観・プロットの矛盾です。
 監査={json.dumps(gate,ensure_ascii=False)}\nEpisode Blueprint={json.dumps(plan,ensure_ascii=False)}\n本文={content}'''
-                content,_=await generate(revise,job.writer_model)
-                gate=await _controller_gate(project,ctx,series,arc,mini,plan,content)
+                content, _ = await generate(revise, job.writer_model)
+                gate = await _controller_gate(project, ctx, series, arc, mini, plan, content)
 
+            # ── Phase 5: Save episode ─────────────────────────────────────────
             if existing:
-                existing.title=plan.get('title') or existing.title; existing.summary=plan.get('summary',''); existing.content=content; ep=existing
+                existing.title = plan.get('title') or existing.title
+                existing.summary = plan.get('summary', '')
+                existing.content = content
+                ep = existing
             else:
-                ep=Episode(project_id=job.project_id,number=n,title=plan.get('title') or f'第{n}話',summary=plan.get('summary',''),content=content); db.add(ep)
-            ep_obj.status='completed'; db.commit(); db.refresh(ep)
-            try: await update_character_states(db,job.project_id,ep)
-            except Exception: pass
-            try: update_plot_statuses(db,job.project_id,n)
-            except Exception: pass
-            try: await update_foreshadowing_statuses(db,job.project_id,ep)
-            except Exception: pass
-            try: await index(chunks(ep))
-            except Exception: pass
-            if n%5==0:
-                try: await check_continuity(db,job.project_id,ep.id)
-                except Exception: pass
-            job.last_message=f'EP.{n}: completed / gate={gate.get("status","UNKNOWN")}'; db.commit()
+                ep = Episode(project_id=job.project_id, number=n,
+                             title=plan.get('title') or f'第{n}話',
+                             summary=plan.get('summary', ''), content=content)
+                db.add(ep)
+            ep_obj.status = 'completed'; db.commit(); db.refresh(ep)
+            ep_id = ep.id
+            ep_chunks = chunks(ep)  # capture before parallel phase
+
+            # ── Phase 6 [PARALLEL]: Post-processing ──────────────────────────
+            # update_plot_statuses is sync and fast; run it first on the main
+            # session, then gather the three AI / vector-store tasks in parallel,
+            # each using its own isolated session.
+            job.last_message = f'EP.{n}: Phase6 後処理(並列)'; db.commit()
+            update_plot_statuses(db, job.project_id, n)
+            await asyncio.gather(
+                _post_char_states(job.project_id, ep_id),
+                _post_foreshadow(job.project_id, ep_id),
+                index(ep_chunks),
+                return_exceptions=True,
+            )
+
+            # ── Every 5 episodes: full continuity check ───────────────────────
+            if n % 5 == 0:
+                try:
+                    await check_continuity(db, job.project_id, ep_id)
+                except Exception:
+                    logger.exception('Continuity check failed for episode %s', ep_id)
+
+            job.last_message = f'EP.{n}: completed / gate={gate.get("status","UNKNOWN")}'; db.commit()
             await asyncio.sleep(0)
+
         # A stop requested during this last episode's remaining
         # post-processing (save/character-state update/RAG index/continuity
         # check) would otherwise never be seen — there's no next loop
         # iteration to catch it at the top — and the job would silently
         # finish as 'completed' instead of the 'stopped' the caller asked
         # for. One last check here closes that gap.
-        if _check_stopped(db,job): return
-        job.status='completed'; job.last_message='全エピソード生成完了'; db.commit()
+        if _check_stopped(db, job): return
+        job.status = 'completed'; job.last_message = '全エピソード生成完了'; db.commit()
     except Exception as ex:
-        job.status='error'; job.last_message=f'{type(ex).__name__}: {ex}'; db.commit()
+        job.status = 'error'; job.last_message = f'{type(ex).__name__}: {ex}'; db.commit()
     finally:
-        running.pop(job_id,None); db.close()
+        running.pop(job_id, None); db.close()
