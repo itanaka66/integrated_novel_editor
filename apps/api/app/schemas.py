@@ -60,6 +60,8 @@ class ContinuityIssueOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 class ContinuityCheck(BaseModel):
     project_id:int; episode_id:int|None=None
+class ReflectEntitiesRequest(BaseModel):
+    kind:str='all'  # characters | plots | foreshadowings | all
 class GraphNode(BaseModel):
     id:int; label:str; node_type:str; meta:dict={}
 class GraphEdge(BaseModel):
