@@ -5,7 +5,7 @@ from .models import Project, Episode, AutoWriteJob, SeriesPlan, ArcPlan, MiniArc
 from .context import build
 from .ollama import controller_generate, generate
 from .llm_queue import purpose, set_project
-from .continuity import update_character_states, check_continuity
+from .continuity import update_character_states, check_continuity, update_plot_statuses, update_foreshadowing_statuses
 from .rag import index
 from .planner.planner_service import PlannerService
 
@@ -143,6 +143,10 @@ Controllerが決めた計画とStory Digital Twinを厳守してください。
                 ep=Episode(project_id=job.project_id,number=n,title=plan.get('title') or f'第{n}話',summary=plan.get('summary',''),content=content); db.add(ep)
             ep_obj.status='completed'; db.commit(); db.refresh(ep)
             try: await update_character_states(db,job.project_id,ep)
+            except Exception: pass
+            try: update_plot_statuses(db,job.project_id,n)
+            except Exception: pass
+            try: await update_foreshadowing_statuses(db,job.project_id,ep)
             except Exception: pass
             try: await index(chunks(ep))
             except Exception: pass
