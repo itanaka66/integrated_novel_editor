@@ -1,7 +1,7 @@
 import json, re, logging
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .models import Episode, Character, CharacterState, ContinuityIssue
+from .models import Episode, Character, CharacterState, ContinuityIssue, Plot, Foreshadowing
 from .ollama import generate
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,59 @@ JSONのみで回答。形式:
         results.append(state)
     db.commit()
     return results
+
+def update_plot_statuses(db: Session, project_id: int, episode_number: int) -> list:
+    """Mark plot arcs active/completed as writing progresses (rule-based)."""
+    plots = db.scalars(select(Plot).where(Plot.project_id == project_id)).all()
+    updated = []
+    for p in plots:
+        if p.start_episode is None or p.end_episode is None:
+            continue
+        if p.start_episode <= episode_number and p.status == 'planned':
+            p.status = 'active'; updated.append(p)
+        elif episode_number > p.end_episode and p.status == 'active':
+            p.status = 'completed'; updated.append(p)
+    if updated:
+        db.commit()
+    return updated
+
+async def update_foreshadowing_statuses(db: Session, project_id: int, episode: Episode) -> list:
+    """Detect foreshadowing setup/payoff in a new episode and update DB."""
+    fs_open = db.scalars(select(Foreshadowing).where(
+        Foreshadowing.project_id == project_id,
+        Foreshadowing.status == 'open'
+    )).all()
+    if not fs_open or not episode.content.strip():
+        return []
+    roster = [{"id": f.id, "title": f.title, "description": f.description,
+               "setup_episode": f.setup_episode, "payoff_episode": f.payoff_episode} for f in fs_open]
+    prompt = f'''あなたは小説の伏線管理AIです。エピソード本文から、伏線の「設置」または「回収」を検出してください。
+伏線一覧:
+{json.dumps(roster, ensure_ascii=False)}
+エピソード #{episode.number} {episode.title}:
+{episode.content[:3000]}
+
+JSONのみで回答。形式:
+{{"updates":[{{"id":1,"action":"setup"または"resolved","notes":"本文中の根拠"}}]}}
+本文に明確な根拠がない場合は含めない。推測で判断しない。'''
+    try:
+        text, _ = await generate(prompt)
+    except Exception as ex:
+        raise RuntimeError(f'foreshadowing-status update AI error: {ex}') from ex
+    data = extract_json(text)
+    updated = []
+    for u in data.get('updates', []):
+        f = next((x for x in fs_open if x.id == u.get('id')), None)
+        if not f:
+            continue
+        action = u.get('action', '')
+        if action == 'setup' and f.setup_episode is None:
+            f.setup_episode = episode.number; updated.append(f)
+        elif action == 'resolved' and f.status == 'open':
+            f.payoff_episode = episode.number; f.status = 'resolved'; updated.append(f)
+    if updated:
+        db.commit()
+    return updated
 
 async def check_continuity(db: Session, project_id: int, episode_id: int | None = None):
     eps=db.scalars(select(Episode).where(Episode.project_id==project_id).order_by(Episode.number)).all()
