@@ -121,14 +121,15 @@ def init():
    d.add(Foreshadowing(project_id=p.id,title='地下の鉱脈',description='集落近くの岩場に金属資源がある',setup_episode=3))
    d.add_all([Episode(project_id=p.id,number=1,title='転移',summary='少年が恐竜時代で目を覚ます',content='少年は見知らぬ森で目を覚ました。遠くから巨大な咆哮が聞こえる。'),Episode(project_id=p.id,number=2,title='最初の火',summary='火を安定利用する',content='乾いた枝を集め、火を起こす方法を試した。何度も失敗した。'),Episode(project_id=p.id,number=3,title='最初の仲間',summary='集落と出会う',content='森を抜けると小さな集落が見えた。')]);d.commit()
   stale_auto_write=_requeue_stale_auto_write_jobs(d)
+  stale_ids=[job.id for job in stale_auto_write]  # capture IDs before session closes
   cleanup_stale_import_jobs(d)
  _background_tasks.add(asyncio.create_task(file_sync.autosync_loop()))
  _background_tasks.add(asyncio.create_task(backup_mod.backup_loop()))
  # Restart auto-write jobs that were running when the server went down.
- for job in stale_auto_write:
-  task=asyncio.create_task(run_job(job.id))
-  auto_write_running[job.id]=task
- if stale_auto_write:logger.info('Resumed %s auto-write job(s) after restart',len(stale_auto_write))
+ for job_id in stale_ids:
+  task=asyncio.create_task(run_job(job_id))
+  auto_write_running[job_id]=task
+ if stale_ids:logger.info('Resumed %s auto-write job(s) after restart',len(stale_ids))
 @app.get('/api/v1/health')
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
 @app.get('/api/v1/llm/queue')
