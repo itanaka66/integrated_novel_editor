@@ -1047,6 +1047,25 @@ async def continuity_check(x:ContinuityCheck,db:Session=Depends(get_db)):
         return {'count':len(issues),'issues':[ContinuityIssueOut.model_validate(i).model_dump() for i in issues]}
     except Exception as ex: raise HTTPException(503,str(ex))
 
+@app.post('/api/v1/projects/{pid}/reflect-to-novel')
+async def reflect_to_novel(pid:int,x:ReflectEntitiesRequest,db:Session=Depends(get_db)):
+    if not db.get(Project,pid): raise HTTPException(404,'Project not found')
+    llm_set_project(pid)
+    char_updates=0
+    if x.kind in ('characters','all'):
+        recent=db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number.desc()).limit(3)).all()
+        for ep in recent:
+            if ep.content.strip():
+                try:
+                    states=await update_character_states(db,pid,ep)
+                    char_updates+=len(states)
+                except Exception:
+                    logger.exception('Character-state update failed during reflect for episode %s',ep.id)
+    try:
+        issues=await check_continuity(db,pid)
+    except Exception as ex: raise HTTPException(503,str(ex))
+    return {'character_updates':char_updates,'issue_count':len(issues),'issues':[ContinuityIssueOut.model_validate(i).model_dump() for i in issues]}
+
 @app.post('/api/v1/episodes/{eid}/character-states')
 async def character_state_update(eid:int,db:Session=Depends(get_db)):
     e=db.get(Episode,eid)

@@ -20,6 +20,14 @@ type EntityConfig = {
   aiKind?: string;
   // Fields that together identify a row, for skipping duplicates on CSV import. Defaults to [titleField].
   keyFields?: string[];
+  // Reflect-to-novel kind (POST /projects/{id}/reflect-to-novel); omit to hide the button.
+  reflectKind?: string;
+};
+
+type ReflectResult = {
+  character_updates: number;
+  issue_count: number;
+  issues: { message: string; severity: string; episode_number: number | null }[];
 };
 
 // Same wording written with different width/case/spacing counts as the same row.
@@ -69,7 +77,10 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [reflectBusy, setReflectBusy] = useState(false);
+  const [reflectResult, setReflectResult] = useState<ReflectResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadRef = useRef<() => void>(() => {});
 
   async function load() {
     setBusy(true);
@@ -80,7 +91,16 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       setBusy(false);
     }
   }
+  loadRef.current = load;
   useEffect(() => { load(); }, [projectId]);
+
+  // Re-fetch whenever the browser tab becomes visible again (auto-writer may
+  // have updated character statuses or other entity data in the background).
+  useEffect(() => {
+    const handler = () => { if (document.visibilityState === "visible") loadRef.current(); };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
 
   function updateField(id: number, key: string, value: unknown) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
@@ -175,6 +195,20 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     }
   }
 
+  async function reflectToNovel() {
+    if (!cfg.reflectKind) return;
+    setReflectBusy(true); setReflectResult(null);
+    try {
+      const r: ReflectResult = await post(`/projects/${projectId}/reflect-to-novel`, { kind: cfg.reflectKind });
+      setReflectResult(r);
+      await load();
+    } catch {
+      setReflectResult({ character_updates: -1, issue_count: -1, issues: [] });
+    } finally {
+      setReflectBusy(false);
+    }
+  }
+
   return (
     <div className="panel">
       <small>STORY KNOWLEDGE</small>
@@ -188,8 +222,31 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           {csvBusy ? t("取り込み中...") : t("CSVインポート")}
         </button>
         <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleCsvFile} />
+        <button type="button" onClick={() => load()} disabled={busy} title={t("最新データを再読み込み")}>↻</button>
+        {cfg.reflectKind && (
+          <button type="button" onClick={reflectToNovel} disabled={reflectBusy}>
+            {reflectBusy ? t("反映中...") : t("小説に反映")}
+          </button>
+        )}
       </div>
       {csvResult && <p className="searchSource">{csvResult}</p>}
+      {reflectResult && (
+        <div className="searchSource">
+          {reflectResult.character_updates < 0
+            ? <span>{t("反映処理に失敗しました。AIサービスを確認してください。")}</span>
+            : <>
+                {reflectResult.character_updates > 0 && <span>{t("キャラクター状態を{n}件更新。", { n: reflectResult.character_updates })}</span>}
+                <span>{t("整合性チェック: {n}件の問題を検出。", { n: reflectResult.issue_count })}</span>
+                {reflectResult.issues.slice(0, 3).map((iss, i) => (
+                  <div key={i} style={{ marginTop: "0.25em", opacity: 0.85 }}>
+                    [{iss.severity}] {iss.episode_number != null ? `EP.${iss.episode_number} ` : ""}{iss.message}
+                  </div>
+                ))}
+                {reflectResult.issue_count > 3 && <div style={{ opacity: 0.7 }}>{t("…他{n}件", { n: reflectResult.issue_count - 3 })}</div>}
+              </>
+          }
+        </div>
+      )}
       <div className="entityTableScroll">
         <table className="entityTable">
           <thead>
@@ -245,7 +302,7 @@ export function CharacterPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("キャラクター"), hint: t("作品の正本情報。AI Context Builderが生成時に参照します。"),
     listPath: (pid) => `/projects/${pid}/characters`, itemPath: (id) => `/characters/${id}`,
-    titleField: "name", aiKind: "characters",
+    titleField: "name", aiKind: "characters", reflectKind: "characters",
     fields: [
       { key: "name", label: t("名前") }, { key: "role", label: t("役割") },
       { key: "personality", label: t("性格"), type: "textarea" }, { key: "speech_style", label: t("口調"), type: "textarea" },
@@ -288,7 +345,7 @@ export function PlotPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("プロット"), hint: t("作品全体および各アークの構成。"),
     listPath: (pid) => `/projects/${pid}/plots`, itemPath: (id) => `/plots/${id}`,
-    titleField: "title", aiKind: "plots",
+    titleField: "title", aiKind: "plots", reflectKind: "plots",
     fields: [
       { key: "title", label: t("タイトル") },
       { key: "plot_type", label: t("種類"), type: "select", options: ["main_arc", "arc", "subplot"] },
@@ -305,7 +362,7 @@ export function ForeshadowPanel({ projectId }: { projectId: number }) {
   return <EntityPanel projectId={projectId} cfg={{
     title: t("伏線"), hint: t("設置・回収の状態を管理します。"),
     listPath: (pid) => `/projects/${pid}/foreshadowings`, itemPath: (id) => `/foreshadowings/${id}`,
-    titleField: "title", aiKind: "foreshadowings",
+    titleField: "title", aiKind: "foreshadowings", reflectKind: "foreshadowings",
     fields: [
       { key: "title", label: t("タイトル") }, { key: "description", label: t("説明"), type: "textarea" },
       { key: "setup_episode", label: t("設置話数"), type: "number" }, { key: "payoff_episode", label: t("回収話数"), type: "number" },
