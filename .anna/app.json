@@ -1,0 +1,8 @@
+{
+  "$schema": "anna-app-identity/v1",
+  "host": "https://anna.partners",
+  "app_id": 672,
+  "slug": "integrated-novel-editor",
+  "handle": "integrated-novel-editor",
+  "first_published_at": "2026-10-24T08:30:27.121Z"
+}
