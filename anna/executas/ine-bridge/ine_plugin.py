@@ -23,12 +23,6 @@ MANIFEST: dict[str, Any] = {
         "List works, read the story twin, search episodes, generate prose "
         "with INE's context builder, and manage auto-write jobs."
     ),
-    "author": "INE",
-    "homepage": "https://github.com/itanaka66/integrated_novel_editor",
-    "license": "GPL-3.0",
-    "icon": "📖",
-    "category": "writing",
-    "tags": ["novel", "writing", "ine", "continuity"],
     "credentials": [
         {
             "name": "INE_BASE_URL",
@@ -58,19 +52,16 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "health",
             "description": "Ping the INE API. Auth is optional for this call.",
-            "timeout": 10,
             "parameters": [],
         },
         {
             "name": "list_projects",
             "description": "List INE works (projects): id, name, genre, description.",
-            "timeout": 15,
             "parameters": [],
         },
         {
             "name": "get_project",
             "description": "Get one INE work by project_id.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
             ],
@@ -78,7 +69,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "create_project",
             "description": "Create a new INE work.",
-            "timeout": 15,
             "parameters": [
                 {"name": "name", "type": "string", "description": "Work title", "required": True},
                 {"name": "description", "type": "string", "description": "Synopsis", "required": False},
@@ -92,7 +82,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "get_story_twin",
             "description": "Story Digital Twin: health score, coverage, continuity, plots. Graphs omitted unless include_graphs=true.",
-            "timeout": 30,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {
@@ -107,7 +96,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "list_episodes",
             "description": "List episodes of a work (paginated).",
-            "timeout": 20,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "limit", "type": "integer", "description": "Page size (default 50, max 200)", "required": False},
@@ -117,7 +105,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "get_episode",
             "description": "Get one episode including full Markdown content.",
-            "timeout": 20,
             "parameters": [
                 {"name": "episode_id", "type": "integer", "description": "INE episode id", "required": True},
             ],
@@ -125,7 +112,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "create_episode",
             "description": "Add an episode to a work.",
-            "timeout": 20,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "number", "type": "integer", "description": "Episode number", "required": True},
@@ -138,7 +124,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "save_episode",
             "description": "Update an episode. Saving also snapshots a revision and may update character state.",
-            "timeout": 60,
             "parameters": [
                 {"name": "episode_id", "type": "integer", "description": "INE episode id", "required": True},
                 {"name": "title", "type": "string", "description": "Episode title", "required": False},
@@ -150,7 +135,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "list_characters",
             "description": "List characters for a work.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
             ],
@@ -158,7 +142,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "create_character",
             "description": "Add a character to a work.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "name", "type": "string", "description": "Character name", "required": True},
@@ -173,7 +156,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "list_world",
             "description": "List world entities (places, tech, glossary, …) for a work.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
             ],
@@ -181,7 +163,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "create_world",
             "description": "Add a world entity.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "name", "type": "string", "description": "Entity name", "required": True},
@@ -195,7 +176,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "search",
             "description": "Semantic (RAG) search over episode text, with PostgreSQL substring fallback.",
-            "timeout": 30,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "query", "type": "string", "description": "Search query", "required": True},
@@ -205,7 +185,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "generate",
             "description": "Ask INE's Writer to continue/summarize/proofread using the project's story context.",
-            "timeout": 120,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "episode_id", "type": "integer", "description": "Episode to ground the prompt", "required": False},
@@ -223,7 +202,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "chat",
             "description": "Send a chat turn on a work. INE persists history and answers from story context.",
-            "timeout": 120,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "content", "type": "string", "description": "User message", "required": True},
@@ -232,7 +210,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "check_continuity",
             "description": "Run INE's continuity audit (timeline / character / world / foreshadowing).",
-            "timeout": 120,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "episode_id", "type": "integer", "description": "Optional episode to focus the audit", "required": False},
@@ -241,7 +218,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "list_continuity_issues",
             "description": "List stored open/recent continuity issues for a work.",
-            "timeout": 15,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
             ],
@@ -249,7 +225,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "start_auto_write",
             "description": "Start INE auto-write (Controller plans, Writer drafts). Existing episodes are skipped unless overwrite=true.",
-            "timeout": 30,
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "start_episode", "type": "integer", "description": "First episode number (default 1)", "required": False},
@@ -263,7 +238,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "get_auto_write_job",
             "description": "Poll an auto-write job's status and progress.",
-            "timeout": 15,
             "parameters": [
                 {"name": "job_id", "type": "integer", "description": "Auto-write job id", "required": True},
             ],
@@ -271,7 +245,6 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "stop_auto_write",
             "description": "Request stop of a running auto-write job.",
-            "timeout": 15,
             "parameters": [
                 {"name": "job_id", "type": "integer", "description": "Auto-write job id", "required": True},
             ],
