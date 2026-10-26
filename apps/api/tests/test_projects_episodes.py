@@ -30,6 +30,12 @@ def test_episode_crud_and_save_warnings(client, project):
     r = client.get(f"/api/v1/projects/{project['id']}/episodes")
     assert len(r.json()) == 1
 
+    r = client.get(f"/api/v1/episodes/{ep['id']}")
+    assert r.status_code == 200
+    assert r.json()["content"] == "本文"
+    r = client.get("/api/v1/episodes/999999")
+    assert r.status_code == 404
+
     # PUT hits RAG indexing and character-state update, both of which fail in
     # the test environment (no Ollama/Qdrant) — they must be reported as
     # warnings, not swallowed or turned into a 500.

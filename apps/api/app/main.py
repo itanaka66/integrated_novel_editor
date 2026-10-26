@@ -800,6 +800,9 @@ def import_jobs_for_project(pid:int,db:Session=Depends(get_db)):
  return [_import_job_out(j) for j in jobs]
 @app.get('/api/v1/projects/{pid}/episodes',response_model=list[EpisodeOut])
 def episodes(pid:int,limit:int=MAX_EPISODE_LIST,offset:int=0,db:Session=Depends(get_db)):return list(db.scalars(select(Episode).where(Episode.project_id==pid).order_by(Episode.number).limit(max(1,min(limit,MAX_EPISODE_LIST))).offset(max(0,offset))).all())
+@app.get('/api/v1/episodes/{eid}',response_model=EpisodeOut)
+def episode_get(eid:int,db:Session=Depends(get_db)):
+ return crud_get_or_404(db,Episode,eid,'Episode')
 @app.post('/api/v1/projects/{pid}/episodes',response_model=EpisodeOut)
 def episode_add(pid:int,x:EpisodeCreate,db:Session=Depends(get_db)):
  e=Episode(project_id=pid,**x.model_dump());db.add(e);db.commit();db.refresh(e)

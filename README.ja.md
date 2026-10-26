@@ -18,6 +18,7 @@ English version → [README.md](README.md)
 | インストールマニュアル | [docs/installation.md](docs/installation.md) | [docs/installation.ja.md](docs/installation.ja.md) |
 | はじめての方向けガイド | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
 | 操作マニュアル | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
+| Anna Framework | [docs/anna.md](docs/anna.md) | [docs/anna.ja.md](docs/anna.ja.md) |
 
 ## 動作要件
 
@@ -85,6 +86,7 @@ ollama pull nomic-embed-text  # RAG用埋め込みモデル
 - **出版支援**：出版情報ダイアログ（タイトル・サブタイトル・著者名・紹介文・キーワード・カテゴリー・対象読者）、**KDP出版パッケージ**ZIP（EPUB＋表紙＋CSV/Markdownの登録情報シートとAI申告の下書き）、編集できる投稿先リンクとメモ、削除前にJSONバックアップを自動ダウンロードする作品削除。自動投稿は行わず、各サイトでの登録・公開はご自身で行います。
 - **バックグラウンド処理とキャンセル**：自動執筆・インポート・翻訳・画像生成はサーバーで動き、ログアウトしても続行されます（ダッシュボードに一覧と個別のキャンセルボタン）。浮動ダイアログでは、LLMキューの各呼び出しの作品名と目的が分かります。10分間操作がないと自動ログアウトします。UIは8言語対応（ログイン画面で選択）です。
 - **設定表のAI補助**：CSVインポートは重複行をスキップし、「＋ AIで10個追加」でキャラクター・世界観・プロット・伏線・年表・用語集の新しい行をAIが10件考えます。
+- **Anna Framework**：[`anna/`](anna/) 配下の Anna App が INE を Executa ツールとして公開します（Anna チャットの `#ine` と小さなダッシュボード）。作品の正本は本アプリにあり、Anna はローカル REST API を INE のログインで呼び出します。[docs/anna.ja.md](docs/anna.ja.md) を参照してください。
 - **自動執筆**：Series（1〜500話全体）→ Arc（100話単位×5）→ Mini Arc（10話単位×各アーク内10個）→ 話ごとの執筆計画という4階層の計画を、独立した「Controller」Ollamaモデルが管理し、本文自体は「Writer」Ollamaモデルが生成します。Controllerは執筆前後の品質チェック（時系列／人物／世界観／プロットのみ。文章の巧拙は判定しません）も行い、必要なら再執筆を強制します。既存エピソードは既定でスキップ（上書きは任意）。5話ごとに連続性の全体監査も自動実行されます。進捗（パーセンテージ、フェーズ、各階層の計画策定数）はAPIで取得でき、「自動執筆」画面に表示されます。詳しい仕組みは[操作マニュアルの自動執筆の項目](docs/user-guide.ja.md#自動執筆)を参照してください。
 - **決定論的なPlanner構造検証**：AIが生成した計画の「内容」とは別に、`apps/api/app/planner/structure_validator.py`がSeries→Arc→Mini Arc→Episode階層の「構造」——ちょうど5アーク×各100話、各アーク内ちょうど10ミニアーク×各10話、欠番・重複・範囲の重なりがなく1〜500話を完全にカバーしていること——を、LLMの生成結果に関わらず検証します。
 

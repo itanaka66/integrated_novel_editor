@@ -1,0 +1,9 @@
+ine_plugin.py
+pyproject.toml
+tests/test_plugin.py
+tool_dev_ine_bridge.egg-info/PKG-INFO
+tool_dev_ine_bridge.egg-info/SOURCES.txt
+tool_dev_ine_bridge.egg-info/dependency_links.txt
+tool_dev_ine_bridge.egg-info/entry_points.txt
+tool_dev_ine_bridge.egg-info/requires.txt
+tool_dev_ine_bridge.egg-info/top_level.txt
