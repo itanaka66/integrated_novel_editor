@@ -1,8 +1,12 @@
 """Keep the on-disk Anna tool manifest aligned with the Executa describe response."""
 import json
+import sys
 from pathlib import Path
 
-import ine_plugin
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PLUGIN_DIR))
+
+import ine_plugin  # noqa: E402
 
 
 def test_manifest_json_is_valid_and_matches_describe_tool_names():
