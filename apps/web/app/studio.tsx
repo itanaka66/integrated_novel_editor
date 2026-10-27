@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { checkSession, clearAuth, getAuth, logout, setUnauthorizedHandler } from "./lib/api";
+import { clearAuth, logout, setUnauthorizedHandler } from "./lib/api";
 import { useResizableWidth } from "./lib/useResizable";
 import { Project } from "./lib/types";
 import Login from "./components/Login";
@@ -21,7 +21,7 @@ import { useOfflineLogout } from "./lib/useOfflineLogout";
 import { getLanguage, t } from "./lib/i18n";
 
 export default function Studio() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [authed, setAuthed] = useState<boolean>(false);
   const [idleNotice, setIdleNotice] = useState(false);
   const [offlineNotice, setOfflineNotice] = useState(false);
 
@@ -31,16 +31,8 @@ export default function Studio() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => { clearAuth(); setAuthed(false); });
-    // A stored Basic Auth pair means "probably logged in" without waiting
-    // on a network round-trip — but an OAuth2 login (Google/GitHub) leaves
-    // no trace in localStorage at all, only an httpOnly session cookie
-    // that JavaScript can't read, so its presence has to be asked of the
-    // server instead.
-    if (getAuth()) {
-      setAuthed(true);
-    } else {
-      checkSession().then(setAuthed);
-    }
+    // Always start signed out. Clear stored credentials and request OAuth session invalidation.
+    void logout();
     return () => setUnauthorizedHandler(null);
   }, []);
 
