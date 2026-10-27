@@ -23,7 +23,7 @@
                               "format":  "static-spa",
                               "entry":  "index.html",
                               "external_origins":  [
-
+                                                       "http://localhost:3000"
                                                    ]
                           },
                "views":  [
@@ -32,20 +32,20 @@
                                  "title":  "INE",
                                  "default":  true,
                                  "entry":  "index.html",
-                                 "min_size": {
-                                   "w": 900,
-                                   "h": 600
-                                 },
-                                 "default_size": {
-                                   "w": 1300,
-                                   "h": 820
-                                 },
-                                 "max_size": {
-                                   "w": 1600,
-                                   "h": 1200
-                                 },
-                                 "resizable": true,
-                                 "movable": true,
+                                 "min_size":  {
+                                                  "w":  900,
+                                                  "h":  600
+                                              },
+                                 "default_size":  {
+                                                      "w":  1300,
+                                                      "h":  820
+                                                  },
+                                 "max_size":  {
+                                                  "w":  1600,
+                                                  "h":  1200
+                                              },
+                                 "resizable":  true,
+                                 "movable":  true,
                                  "single_instance":  true,
                                  "icon":  "icon.svg"
                              }
@@ -92,7 +92,11 @@
                                                    ],
                                      "script-src":  [
                                                         "\u0027self\u0027"
-                                                    ]
+                                                    ],
+                                     "frame-src":  [
+                                                       "\u0027self\u0027",
+                                                       "http://localhost:3000"
+                                                   ]
                                  },
                "state_merge":  "last_writer_wins"
            },
