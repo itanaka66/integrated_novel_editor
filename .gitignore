@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .env
 .venv/
+integrated_novel_editor/
 postgres_data/
 qdrant_storage/
 ollama/
