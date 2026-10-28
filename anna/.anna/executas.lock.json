@@ -1,0 +1,16 @@
+{
+  "$schema": "anna-executas-lock/v1",
+  "host": "https://anna.partners",
+  "executas": {
+    "ine-bridge": {
+      "tool_id": "tool-integrated-novel-editor-ine-bridge-vp9rg9xk",
+      "path": "./executas/ine-bridge",
+      "source": "working"
+    },
+    "novel-coach": {
+      "tool_id": "skill-integrated-novel-editor-novel-coach-hnvmc3ue",
+      "path": "./executas/novel-coach",
+      "source": "working"
+    }
+  }
+}

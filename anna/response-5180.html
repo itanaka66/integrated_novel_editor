@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anna App Harness — Mock Dashboard</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #1a1a1a;
+        --muted: #666;
+        --bg: #f6f6f8;
+        --card: #fff;
+        --border: #e2e2e8;
+        --accent: #4f46e5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #f0f0f0;
+          --muted: #999;
+          --bg: #111114;
+          --card: #1c1c20;
+          --border: #2a2a30;
+          --accent: #818cf8;
+        }
+      }
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+          sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        grid-template-rows: 56px 1fr;
+        grid-template-areas:
+          "header header"
+          "main   side";
+      }
+      header {
+        grid-area: header;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 20px;
+        background: var(--card);
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 0.02em;
+      }
+      header .badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+      }
+      header .meta {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+        font-family:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+      main {
+        grid-area: main;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        /* desktop-like backdrop so the simulated window stands out */
+        background:
+          radial-gradient(
+            circle at 30% 20%,
+            rgba(99, 102, 241, 0.08),
+            transparent 60%
+          ),
+          var(--bg);
+      }
+      .iframe-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        box-shadow:
+          0 8px 24px rgba(0, 0, 0, 0.12),
+          0 2px 6px rgba(0, 0, 0, 0.08);
+        /* width/height set inline from view_meta.default_size */
+        margin: auto;
+        max-width: 100%;
+        max-height: 100%;
+      }
+      .iframe-card .titlebar {
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--muted);
+        border-bottom: 1px solid var(--border);
+        font-family:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-shrink: 0;
+      }
+      .iframe-card .titlebar .size {
+        margin-left: auto;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .ff-toggle {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .ff-toggle button {
+        border: 0;
+        background: var(--card);
+        color: var(--muted);
+        font: inherit;
+        font-size: 11px;
+        padding: 3px 9px;
+        cursor: pointer;
+      }
+      .ff-toggle button.is-active {
+        background: rgba(99, 102, 241, 0.14);
+        color: var(--accent);
+      }
+      .ff-toggle button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .iframe-card iframe {
+        flex: 1;
+        border: 0;
+        background: white;
+        display: block;
+      }
+      aside {
+        grid-area: side;
+        border-left: 1px solid var(--border);
+        background: var(--card);
+        padding: 16px;
+        overflow-y: auto;
+        font-family:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      aside h2 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+          sans-serif;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .log {
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .log .req { color: #6366f1; }
+      .log .res-ok { color: #10b981; }
+      .log .res-err { color: #ef4444; }
+      .log .event { color: #f59e0b; }
+      .log .meta-line { color: var(--muted); }
+      .log .ts { color: var(--muted); margin-right: 6px; }
+      .pill {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(99, 102, 241, 0.12);
+        color: var(--accent);
+        font-size: 10px;
+        margin-right: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Anna App Harness</h1>
+      <span class="badge" id="status">starting…</span>
+      <span class="meta" id="meta"></span>
+      <button id="rec-btn" type="button"
+              style="margin-left:12px;padding:4px 10px;font-size:11px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:6px;cursor:pointer;">
+        ⏺ record
+      </button>
+    </header>
+    <main>
+      <div class="iframe-card" id="frame">
+        <div class="titlebar">
+          <span class="ff-toggle" role="tablist" aria-label="Form factor">
+            <button type="button" id="ff-desktop" class="is-active">🖥 Desktop</button>
+            <button type="button" id="ff-mobile">📱 Mobile</button>
+          </span>
+          <!-- Host context (theme-propagation WI-5): mirrors what the production
+               dashboard sends — initial values on the iframe URL, live changes as
+               `theme.changed` / `locale.changed` broadcast events. -->
+          <span class="ff-toggle" role="group" aria-label="Host context">
+            <button type="button" id="ctx-theme" title="Toggle theme sent to the app">🌙 dark</button>
+            <button type="button" id="ctx-lang" title="Toggle UI language sent to the app">EN</button>
+          </span>
+          <span id="iframe-src">awaiting session…</span>
+          <span class="size" id="size"></span>
+        </div>
+        <!-- allow="microphone": production delegates it only when manifest
+             ui.host_api.audio ∋ "session" (WindowDetail.frame_permissions); the
+             harness always delegates so anna.audio.mic() works locally. -->
+        <iframe id="app" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads" allow="microphone 'src'"></iframe>
+      </div>
+    </main>
+    <aside>
+      <h2>RPC log</h2>
+      <div class="log" id="log"></div>
+    </aside>
+
+    <script>
+      // ---------------------------------------------------------------
+      // Mock dashboard:
+      //   1. POST /api/session/create   → { session_id, window_uuid, token, view }
+      //   2. mount iframe at /anna-apps/<slug>/dev/<entry>?wid=…&t=…
+      //   3. relay postMessage envelopes ⇄ POST /api/session/call
+      //   4. WS at /ws subscribes to drained host events → forward as
+      //      `{kind:"event", event, payload}` postMessages to iframe
+      //
+      // The iframe runs the real production SDK (served at
+      // /static/anna-apps/_sdk/0.1.0/index.js by the harness server),
+      // so byte-identical with production.
+      // ---------------------------------------------------------------
+
+      const log = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+      const metaEl = document.getElementById("meta");
+      const iframeSrc = document.getElementById("iframe-src");
+      const iframe = document.getElementById("app");
+      const frame = document.getElementById("frame");
+      const sizeEl = document.getElementById("size");
+      const recBtn = document.getElementById("rec-btn");
+      const ffDesktopBtn = document.getElementById("ff-desktop");
+      const ffMobileBtn = document.getElementById("ff-mobile");
+
+      let sessionId = null;
+      let windowUuid = null;
+      // Track the freshest dev token: remounts (form-factor toggle) must not
+      // reuse the boot token, which expires in ~30s.
+      let currentToken = null;
+      let harnessCfg = null;
+      let desktopSize = { w: 480, h: 640 };
+      // Phone preset for the mobile entry (≈ iPhone 14 logical viewport).
+      const MOBILE_SIZE = { w: 390, h: 844 };
+      let formFactor = "desktop";
+      let recState = { active: false, t0: 0, lines: [] };
+
+      function recPush(kind, body) {
+        if (!recState.active) return;
+        recState.lines.push({ t: Date.now() - recState.t0, kind, ...body });
+      }
+      recBtn.addEventListener("click", () => {
+        if (!recState.active) {
+          recState = { active: true, t0: Date.now(), lines: [] };
+          recState.lines.push({
+            t: 0,
+            kind: "meta",
+            harness_version: "0.1.0",
+            session_id: sessionId,
+            window_uuid: windowUuid,
+          });
+          recBtn.textContent = "⏹ stop";
+          recBtn.style.background = "#ef4444";
+          recBtn.style.color = "white";
+          logLine("meta-line", "recording started");
+        } else {
+          const blob = new Blob(
+            recState.lines.map((l) => JSON.stringify(l) + "\n"),
+            { type: "application/x-ndjson" },
+          );
+          const a = document.createElement("a");
+          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+          a.href = URL.createObjectURL(blob);
+          a.download = `harness-${stamp}.jsonl`;
+          a.click();
+          recBtn.textContent = "⏺ record";
+          recBtn.style.background = "var(--card)";
+          recBtn.style.color = "var(--fg)";
+          logLine("meta-line", `recording saved (${recState.lines.length} lines)`);
+          recState = { active: false, t0: 0, lines: [] };
+        }
+      });
+
+      function tsNow() {
+        return new Date().toISOString().slice(11, 23);
+      }
+      function logLine(cls, html) {
+        const div = document.createElement("div");
+        div.className = `log-row ${cls}`;
+        div.innerHTML = `<span class="ts">${tsNow()}</span><span class="${cls}">${html}</span>`;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      /** (Re)mount the app iframe in the given form factor. Same wid/session —
+       *  only the served entry and the simulated window size change, mirroring
+       *  production where a mobile_ window source switches to mobile_entry. */
+      // Host context the harness pretends the user chose. Defaults follow the
+      // developer's machine; the titlebar buttons flip them at runtime.
+      const hostCtx = {
+        theme: window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark",
+        mode: "system",
+        lang: (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh-CN" : "en-US",
+      };
+      const ctxThemeBtn = document.getElementById("ctx-theme");
+      const ctxLangBtn = document.getElementById("ctx-lang");
+      function renderCtxButtons() {
+        ctxThemeBtn.textContent = hostCtx.theme === "light" ? "☀ light" : "🌙 dark";
+        ctxLangBtn.textContent = hostCtx.lang === "zh-CN" ? "中" : "EN";
+      }
+      function pushHostEvent(event, payload) {
+        if (!iframe.contentWindow || !windowUuid) return;
+        iframe.contentWindow.postMessage({ wid: windowUuid, kind: "event", event, payload }, "*");
+        logLine("event", `← event <span class="pill">${escapeHtml(event)}</span> ${escapeHtml(JSON.stringify(payload))}`);
+        recPush("event", { event, payload });
+      }
+      ctxThemeBtn.addEventListener("click", () => {
+        hostCtx.theme = hostCtx.theme === "light" ? "dark" : "light";
+        hostCtx.mode = hostCtx.theme;
+        document.documentElement.setAttribute("data-theme", hostCtx.theme);
+        renderCtxButtons();
+        pushHostEvent("theme.changed", { theme: hostCtx.theme, mode: hostCtx.mode });
+      });
+      ctxLangBtn.addEventListener("click", () => {
+        hostCtx.lang = hostCtx.lang === "zh-CN" ? "en-US" : "zh-CN";
+        document.documentElement.lang = hostCtx.lang === "zh-CN" ? "zh-CN" : "en";
+        renderCtxButtons();
+        pushHostEvent("locale.changed", { lang: hostCtx.lang });
+      });
+      renderCtxButtons();
+
+      function mount(ff) {
+        formFactor = ff;
+        const mobile = ff === "mobile";
+        const base = mobile ? harnessCfg.mobile_bundle_base : harnessCfg.bundle_base;
+        const size = mobile ? MOBILE_SIZE : desktopSize;
+        frame.style.width = `${size.w}px`;
+        frame.style.height = `${size.h + 33}px`; // +titlebar
+        sizeEl.textContent = `${size.w}×${size.h}`;
+        const url =
+          `${base}?wid=${encodeURIComponent(windowUuid)}&t=${encodeURIComponent(currentToken)}` +
+          `&theme=${hostCtx.theme}&themeMode=${hostCtx.mode}&lang=${encodeURIComponent(hostCtx.lang)}`;
+        iframeSrc.textContent = url;
+        iframe.src = url;
+        ffDesktopBtn.classList.toggle("is-active", !mobile);
+        ffMobileBtn.classList.toggle("is-active", mobile);
+      }
+
+      ffDesktopBtn.addEventListener("click", () => {
+        if (formFactor !== "desktop" && harnessCfg) {
+          logLine("meta-line", "form factor → desktop — remounting iframe");
+          mount("desktop");
+        }
+      });
+      ffMobileBtn.addEventListener("click", () => {
+        if (formFactor !== "mobile" && harnessCfg) {
+          logLine("meta-line", `form factor → mobile (${harnessCfg.mobile_bundle_base}) — remounting iframe`);
+          mount("mobile");
+        }
+      });
+
+      async function start() {
+        try {
+          const cfg = await (await fetch("/api/config")).json();
+          harnessCfg = cfg;
+          metaEl.textContent = `${cfg.app_slug} · view=${cfg.view ?? "default"}`;
+          if (!cfg.mobile_declared) {
+            // Same gate as production: undeclared apps never get a mobile
+            // container, so don't simulate one.
+            ffMobileBtn.disabled = true;
+            ffMobileBtn.title = 'manifest ui.form_factors does not declare "mobile"';
+          } else if (cfg.mobile_bundle_base !== cfg.bundle_base) {
+            ffMobileBtn.title = `mobile_entry: ${cfg.mobile_bundle_base.split("/").pop()}`;
+          } else {
+            ffMobileBtn.title = "single responsive entry (no mobile_entry)";
+          }
+          const res = await fetch("/api/session/create", { method: "POST" });
+          if (!res.ok) throw new Error(`/api/session/create → ${res.status}`);
+          const out = await res.json();
+          // Size the simulated window from view_meta.default_size so the app
+          // doesn't get a wide-desktop iframe it wasn't designed for.
+          const vm = out.view_meta ?? {};
+          desktopSize = vm.default_size ?? { w: 480, h: 640 };
+          sessionId = out.session_id;
+          windowUuid = out.window_uuid;
+          currentToken = out.token;
+          mount("desktop");
+          statusEl.textContent = "connected";
+          statusEl.style.background = "#10b981";
+          logLine(
+            "meta-line",
+            `session created: <span class="pill">${out.session_id}</span> wid=${out.window_uuid}`,
+          );
+
+          // SSE over WS for emit_event drains.
+          const ws = new WebSocket(
+            `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?session_id=${encodeURIComponent(sessionId)}`,
+          );
+          ws.onmessage = (e) => {
+            try {
+              const env = JSON.parse(e.data);
+              if (env.kind === "reload") {
+                logLine("meta-line", `↻ reload (${env.path}) — reloading iframe`);
+                if (iframe.contentWindow) iframe.contentWindow.location.reload();
+                return;
+              }
+              if (env.kind === "event") {
+                relayEventToIframe(env);
+              }
+            } catch (_) {}
+          };
+
+          // Periodic auth.refresh: dev tokens are short-lived (ttl ≈ 30s).
+          // Refresh every 20s and forward via the SDK's auth.refresh event.
+          setInterval(async () => {
+            try {
+              const r = await fetch("/api/session/refresh-token", {
+                method: "POST",
+              });
+              if (!r.ok) return;
+              const { token } = await r.json();
+              if (!token || !iframe.contentWindow) return;
+              currentToken = token; // keep form-factor remounts mountable
+              iframe.contentWindow.postMessage(
+                {
+                  wid: windowUuid,
+                  kind: "event",
+                  event: "auth.refresh",
+                  token,
+                },
+                "*",
+              );
+              recPush("auth.refresh", { token: token.slice(0, 12) + "…" });
+            } catch (_) {}
+          }, 20000);
+        } catch (e) {
+          statusEl.textContent = "error";
+          statusEl.style.background = "#ef4444";
+          logLine("res-err", `bootstrap failed: ${escapeHtml(String(e))}`);
+        }
+      }
+
+      function relayEventToIframe(ev) {
+        // ev arrives from the WS server as { kind:"event", event:"<name>", payload }
+        // (see server.ts: `ws.send({ kind: "event", ...ev })`). The SDK keys its
+        // handlers off `event` (e.g. "rpc.stream", "auth.refresh"), so we MUST
+        // forward `ev.event` — not `ev.kind`, which is always the literal
+        // string "event" and would drop every frame on the floor.
+        if (!iframe.contentWindow) return;
+        // Voice-session mock: agent runs it started are consumed as
+        // llm_partial/llm_done instead of being shown to the app as rpc.stream.
+        if (ev.event === "rpc.stream" && voiceMock.onStreamFrame(ev.payload)) return;
+        const env = {
+          wid: windowUuid,
+          kind: "event",
+          event: ev.event,
+          payload: ev.payload,
+        };
+        iframe.contentWindow.postMessage(env, "*");
+        logLine(
+          "event",
+          `← event <span class="pill">${escapeHtml(ev.event)}</span> ${escapeHtml(JSON.stringify(ev.payload))}`,
+        );
+        recPush("event", { event: ev.event, payload: ev.payload });
+      }
+
+      // ─────────────────────────────────────────────────────────────────
+      // Voice session mock (anna.audio.session — design matrix-nexus
+      // docs/design/app-realtime-voice-session-and-executa-transcribe.md §5.7)
+      //
+      // Production: the host bridge relays the iframe's audio.session.* to
+      // wss://…/anna-apps/runtime/voice (server ASR → LLM → TTS). Locally we
+      // approximate the SAME event protocol with browser APIs:
+      //   ASR  → window.SpeechRecognition (listens to the mic itself; the PCM
+      //          the app sends via sendAudio is counted for usage but ignored)
+      //   LLM  → the harness agent.session (same llm-bridge the app would use)
+      //   TTS  → window.speechSynthesis (spoken from the host page; no
+      //          tts_audio frames — the app's player simply stays idle)
+      // Events emitted: asr_partial/asr_final, llm_start/llm_partial/llm_done,
+      // tts_done, interrupted, say_start/say_done, context_updated,
+      // session_ended, error. Good enough to exercise push-to-talk, context
+      // injection, say() and barge-in flows end to end without a server.
+      // ─────────────────────────────────────────────────────────────────
+      const voiceMock = (() => {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+        let sess = null; // { id, config, startedAt, agentUuid, recog, audioBytes, ttsChars, run, speaking }
+
+        const emit = (type, extra = {}) => {
+          if (!sess || !iframe.contentWindow) return;
+          const payload = { sessionId: sess.id, type, ...extra };
+          iframe.contentWindow.postMessage({ wid: windowUuid, kind: "event", event: "audio.session", payload }, "*");
+          logLine("event", `← voice <span class="pill">${escapeHtml(type)}</span> ${escapeHtml(JSON.stringify(extra).slice(0, 160))}`);
+          recPush("event", { event: "audio.session", payload });
+        };
+        const err = (code, message) => ({ error: { code, message } });
+
+        async function hostCall(ns, method, args) {
+          const r = await fetch("/api/session/call", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId, ns, method, args }),
+          });
+          const body = await r.json();
+          if (!body.ok) throw Object.assign(new Error(body.error?.message || "host error"), { code: body.error?.code });
+          return body.result;
+        }
+
+        function speak(text, { onStart, onEnd } = {}) {
+          if (!("speechSynthesis" in window)) { onStart && onStart(); onEnd && onEnd(); return; }
+          const u = new SpeechSynthesisUtterance(text);
+          const lang = (sess.config.language || "zh").toLowerCase();
+          u.lang = lang.startsWith("en") ? "en-US" : lang.startsWith("zh") ? "zh-CN" : lang;
+          if (sess.config.speed) u.rate = Math.max(0.5, Math.min(2, Number(sess.config.speed)));
+          u.onstart = () => { sess.speaking = true; onStart && onStart(); };
+          u.onend = u.onerror = () => { sess.speaking = false; onEnd && onEnd(); };
+          sess.ttsChars += text.length;
+          window.speechSynthesis.speak(u);
+        }
+
+        function stopSpeaking() {
+          if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+          if (sess) sess.speaking = false;
+        }
+
+        async function cancelRun() {
+          if (!sess || !sess.run) return;
+          const run = sess.run;
+          sess.run = null;
+          try { await hostCall("agent", "session.cancel", { app_session_uuid: sess.agentUuid, run_id: run.runId }); } catch (_) {}
+        }
+
+        async function onUtterance(text) {
+          if (!sess) return;
+          // Barge-in: user spoke while a reply/say was playing.
+          if (sess.speaking || sess.run) {
+            stopSpeaking();
+            await cancelRun();
+            emit("interrupted", { source: "barge_in" });
+          }
+          if (sess.config.llm === "none") return;
+          emit("llm_start", { user_text: text });
+          const args = { app_session_uuid: sess.agentUuid, content: text, stream: true };
+          const sys = (sess.config.system || "").trim();
+          if (sess.context) {
+            args.systemPrompt = (sys ? sys + "\n\n" : "") + "<live_context>\n" + sess.context + "\n</live_context>";
+          }
+          try {
+            const r = await hostCall("agent", "session.run", args);
+            sess.run = { streamId: r.stream_id, runId: r.run_id, text: "" };
+          } catch (e) {
+            emit("error", { code: "processing_error", message: e.message });
+          }
+        }
+
+        function startRecognition() {
+          if (!SR) {
+            logLine("meta-line", "voice mock: SpeechRecognition unavailable in this browser — asr_* events disabled (use Chrome). say() / setContext still work.");
+            return null;
+          }
+          const recog = new SR();
+          recog.continuous = true;
+          recog.interimResults = true;
+          const lang = (sess.config.language || "zh").toLowerCase();
+          recog.lang = lang.startsWith("en") ? "en-US" : lang.startsWith("zh") ? "zh-CN" : lang;
+          let sentenceId = 0;
+          recog.onresult = (ev) => {
+            if (!sess) return;
+            for (let i = ev.resultIndex; i < ev.results.length; i++) {
+              const res = ev.results[i];
+              const text = res[0].transcript.trim();
+              if (!text) continue;
+              if (res.isFinal) {
+                sentenceId += 1;
+                emit("asr_final", { text, sentence_id: sentenceId });
+                onUtterance(text);
+              } else {
+                emit("asr_partial", { text, sentence_id: sentenceId + 1 });
+              }
+            }
+          };
+          recog.onerror = (e) => {
+            if (!sess) return;
+            if (e.error === "no-speech" || e.error === "aborted") return;
+            emit("error", { code: "asr_error", message: `SpeechRecognition: ${e.error}` });
+          };
+          recog.onend = () => { if (sess && sess.recog === recog && sess.listening) { try { recog.start(); } catch (_) {} } };
+          try { recog.start(); sess.listening = true; } catch (e) { logLine("res-err", `voice mock: recognition start failed ${escapeHtml(String(e))}`); return null; }
+          return recog;
+        }
+
+        return {
+          /** Consume agent-run frames for the voice run → llm_partial / llm_done + TTS. Returns true when swallowed. */
+          onStreamFrame(frame) {
+            if (!sess || !sess.run || !frame || frame.stream_id !== sess.run.streamId) return false;
+            const p = frame.payload || {};
+            const token = p.event === "model_token" ? p.text : (p.choices && p.choices[0] && p.choices[0].delta && p.choices[0].delta.content) || "";
+            if (token) { sess.run.text += token; emit("llm_partial", { text: token }); }
+            if (p.event === "error") { emit("error", { code: "processing_error", message: p.message || "agent error" }); }
+            if (frame.done || p.event === "end") {
+              const full = sess.run.text.trim();
+              sess.run = null;
+              if (full) {
+                emit("llm_done", { text: full });
+                speak(full, { onEnd: () => emit("tts_done") });
+              } else {
+                emit("tts_done");
+              }
+            }
+            return true;
+          },
+
+          async handle(id, method, args) {
+            if (method === "open") {
+              if (sess) return err("concurrency_limit", "a voice session is already open for this window (mock)");
+              const config = Object.assign({ llm: "agent", language: "zh" }, args.config || {});
+              if (!["agent", "none"].includes(config.llm)) return err("invalid_request", "config.llm must be agent|none");
+              if ((config.context || "").length > 4096) return err("context_too_large", "context exceeds 4096 chars");
+              sess = { id: "mock-vs-" + Math.random().toString(36).slice(2, 10), config, startedAt: Date.now(), agentUuid: null, recog: null, audioBytes: 0, ttsChars: 0, run: null, speaking: false, context: (config.context || "").trim() || null, listening: false };
+              if (config.llm === "agent") {
+                try {
+                  const created = await hostCall("agent", "session.create", { submode: config.submode || "auto", fixed_client_id: config.fixed_client_id, system_prompt: config.system || undefined, label: "voice mock" });
+                  sess.agentUuid = created.app_session_uuid;
+                } catch (e) {
+                  sess = null;
+                  return err(e.code === "permission_denied" ? "permission_denied" : "not_granted", `agent session: ${e.message}`);
+                }
+              }
+              sess.recog = startRecognition();
+              const maxDur = Math.min(Number(config.maxDurationSec || config.max_duration_sec || 3600) || 3600, 3 * 3600);
+              return {
+                result: {
+                  sessionId: sess.id,
+                  audio_config: { format: "pcm", sample_rate: 24000, channels: 1, bits_per_sample: 16 },
+                  models: { asr: SR ? "browser:SpeechRecognition" : "none", tts: "browser:speechSynthesis", voice: config.voice || "default" },
+                  max_duration_sec: maxDur,
+                },
+              };
+            }
+            if (!sess) return err("not_open", "no voice session is open (mock)");
+            if (args.sessionId && args.sessionId !== sess.id) return err("not_open", "sessionId mismatch (mock)");
+            switch (method) {
+              case "send": {
+                const b64 = args.audio_b64 || "";
+                sess.audioBytes += Math.floor((b64.length * 3) / 4);
+                return { result: { ok: true } };
+              }
+              case "context": {
+                const t = String(args.text ?? "");
+                if (t.length > 4096) { emit("error", { code: "context_too_large", message: "context exceeds 4096 chars" }); return { result: { ok: false } }; }
+                sess.context = t.trim() || null;
+                emit("context_updated", { chars: (sess.context || "").length });
+                return { result: { ok: true, chars: t.length } };
+              }
+              case "say": {
+                const text = String(args.text || "").trim();
+                if (!text) return err("invalid_arg", "text required");
+                if (text.length > 1000) { emit("error", { code: "say_too_long", message: "say exceeds 1000 chars" }); return { result: { ok: false } }; }
+                const sayId = String(args.say_id || Math.random().toString(36).slice(2, 12));
+                if (args.interrupt || args.priority === "high") {
+                  if (sess.speaking || sess.run) { stopSpeaking(); await cancelRun(); emit("interrupted", { source: "say" }); }
+                }
+                speak(text, { onStart: () => emit("say_start", { say_id: sayId, chars: text.length }), onEnd: () => emit("say_done", { say_id: sayId, status: "done" }) });
+                return { result: { ok: true, sayId } };
+              }
+              case "flush":
+                // SpeechRecognition finalizes on its own VAD; nothing to flush in the mock.
+                return { result: { ok: true } };
+              case "interrupt":
+                stopSpeaking();
+                await cancelRun();
+                return { result: { ok: true } };
+              case "close": {
+                const s = sess;
+                sess = null;
+                s.listening = false;
+                if (s.recog) { try { s.recog.stop(); } catch (_) {} }
+                stopSpeaking();
+                const summary = { duration: Math.round((Date.now() - s.startedAt) / 100) / 10, total_asr_seconds: Math.round((s.audioBytes / 32000) * 10) / 10, total_tts_characters: s.ttsChars };
+                // emit after reset so the event still carries the id
+                sess = s; emit("session_ended", { session_id: s.id, ...summary }); sess = null;
+                return { result: { ok: true, sessionId: s.id, droppedChunks: 0, ...summary } };
+              }
+              default:
+                return err("unknown_method", `audio.session.${method} is not defined`);
+            }
+          },
+        };
+      })();
+
+      // postMessage RPC bridge: iframe → POST /api/session/call → result
+      window.addEventListener("message", async (ev) => {
+        const msg = ev.data;
+        if (!msg || typeof msg !== "object") return;
+        if (msg.kind !== "req") return;
+        if (msg.wid && msg.wid !== windowUuid) return;
+        const { id, ns, method, args } = msg;
+        const isVoice = ns === "audio" && typeof method === "string" && method.startsWith("session.");
+        if (!(isVoice && method === "session.send")) {
+          logLine(
+            "req",
+            `→ req <span class="pill">${escapeHtml(ns)}.${escapeHtml(method)}</span> ${escapeHtml(JSON.stringify(isVoice ? { ...(args ?? {}), audio_b64: undefined } : (args ?? {})))}`,
+          );
+          recPush("req", { id, ns, method, args: args ?? {} });
+        }
+        // App realtime voice session — handled in the HOST page in production
+        // too (anna-app-host-bridge.js owns the WebSocket); the harness mocks
+        // the server with browser SpeechRecognition / speechSynthesis.
+        if (isVoice) {
+          const body = await voiceMock.handle(id, method.slice("session.".length), args ?? {});
+          iframe.contentWindow.postMessage({ wid: windowUuid, kind: "res", id, ...body }, "*");
+          if (body.error) {
+            logLine("res-err", `← res err <span class="pill">${escapeHtml(body.error.code)}</span> ${escapeHtml(body.error.message)}`);
+          } else if (method !== "session.send") {
+            logLine("res-ok", `← res ok <span class="pill">audio.${escapeHtml(method)}</span> ${escapeHtml(JSON.stringify(body.result))}`);
+          }
+          return;
+        }
+        try {
+          const res = await fetch("/api/session/call", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              ns,
+              method,
+              args: args ?? {},
+            }),
+          });
+          const body = await res.json();
+          if (body.ok) {
+            let result = body.result;
+            // files.download — mirror production anna-app-host-bridge.js:
+            // consume the presigned URL at TOP LEVEL (the sandboxed iframe
+            // can't reliably save files), then strip it before relaying the
+            // result into the iframe so the bearer URL never enters app DOM.
+            if (ns === "files" && method === "download" && result && result.get_url) {
+              const a = document.createElement("a");
+              a.href = result.get_url;
+              a.rel = "noopener";
+              if (result.filename) a.download = result.filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              const { get_url, ...rest } = result;
+              result = { ...rest, ok: true };
+              logLine(
+                "meta-line",
+                `⬇ files.download → browser save (${escapeHtml(String(result.filename ?? "file"))})`,
+              );
+            }
+            iframe.contentWindow.postMessage(
+              { wid: windowUuid, kind: "res", id, result },
+              "*",
+            );
+            logLine(
+              "res-ok",
+              `← res ok <span class="pill">${escapeHtml(ns)}.${escapeHtml(method)}</span> ${escapeHtml(JSON.stringify(result))}`,
+            );
+            recPush("res", { id, ok: true, result });
+          } else {
+            iframe.contentWindow.postMessage(
+              { wid: windowUuid, kind: "res", id, error: body.error },
+              "*",
+            );
+            logLine(
+              "res-err",
+              `← res err <span class="pill">${escapeHtml(body.error.code)}</span> ${escapeHtml(body.error.message)}`,
+            );
+            recPush("res", { id, ok: false, error: body.error });
+          }
+        } catch (e) {
+          iframe.contentWindow.postMessage(
+            {
+              wid: windowUuid,
+              kind: "res",
+              id,
+              error: { code: "transport", message: String(e) },
+            },
+            "*",
+          );
+          logLine("res-err", `← res transport-err ${escapeHtml(String(e))}`);
+        }
+      });
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      start();
+    </script>
+  </body>
+</html>

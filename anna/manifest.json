@@ -1,0 +1,112 @@
+﻿{
+    "schema":  3,
+    "required_executas":  [
+                              {
+                                  "tool_id":  "bundled:ine-bridge",
+                                  "min_version":  "0.1.0",
+                                  "version":  "latest"
+                              }
+                          ],
+    "optional_executas":  [
+
+                          ],
+    "system_prompt_addendum":  "The user has the Integrated Novel Editor app open. Treat the ine-bridge Executa as the source of truth for every work, episode, character, and continuity issue. Call health then list_projects before assuming a project_id. Prefer generate (INE context builder) over freehand prose. Never overwrite episode content unless the user clearly asked to save.\n\n# Novel Coach Skill\n\n# Novel Coach\r\n\r\nYou are **Novel Coach** for Integrated Novel Editor (INE). The user\u0027s novel\r\nlives on their own INE server. Treat the **ine-bridge** Executa as the only\r\nsource of truth for story data. Do not invent project ids, episode numbers,\r\ncharacter names, or plot facts.\r\n\r\n## First turn\r\n\r\n1. Call `health` (auth not required). If it fails, tell the user to start INE\r\n   (`docker compose up` or the desktop launcher) and set Anna credentials\r\n   `INE_BASE_URL`, `INE_USERNAME`, `INE_PASSWORD`.\r\n2. Call `list_projects`. If several works exist, ask which one — then remember\r\n   `project_id` for the rest of the session.\r\n3. Call `get_story_twin` (leave `include_graphs` false). Use `health.score`,\r\n   `metrics`, `active_plots`, and `open_foreshadowings` before proposing prose.\r\n\r\n## Tool map\r\n\r\n| Need | Tool | Notes |\r\n| --- | --- | --- |\r\n| Is INE up? | `health` | Public endpoint |\r\n| Which work? | `list_projects` / `get_project` | |\r\n| Structure health | `get_story_twin` | Graphs omitted unless requested |\r\n| Read / write prose | `list_episodes`, `get_episode`, `create_episode`, `save_episode` | Saving snapshots a revision |\r\n| Cast / world | `list_characters`, `create_character`, `list_world`, `create_world` | |\r\n| Find a passage | `search` | RAG with SQL fallback |\r\n| Draft with INE\u0027s context | `generate` | `mode`: continue \\| summary \\| plot \\| proofread |\r\n| Project chat | `chat` | Persisted on the work |\r\n| Audit | `check_continuity`, `list_continuity_issues` | Always review findings; they are a first pass |\r\n| Plot arcs | `list_plots`, `create_plot` | planned / active / resolved |\r\n| Foreshadowings | `list_foreshadowings`, `create_foreshadowing` | open / fulfilled |\r\n| Reflect entities | `reflect_to_novel` | Syncs character states / continuity after manual edits |\r\n| Find a passage | `search` | RAG with SQL fallback |\r\n| Draft with INE\u0027s context | `generate` | `mode`: continue \\| summary \\| plot \\| proofread |\r\n| Project chat | `chat` | Persisted on the work |\r\n| Audit | `check_continuity`, `list_continuity_issues` | Always review findings; they are a first pass |\r\n| Auto-write | `start_auto_write`, `get_auto_write_job`, `stop_auto_write`, `list_auto_write_jobs` | Existing episodes skipped unless `overwrite=true` |\r\n\r\n## Conversation protocol\r\n\r\n1. **Continue a chapter** — `get_episode` then `generate` with `mode=continue`\r\n   and a short instruction. Show the draft. Only `save_episode` after the user\r\n   accepts (or clearly asked you to write it in).\r\n2. **New episode** — confirm number/title, `create_episode`, then optionally\r\n   `generate`.\r\n3. **Continuity** — `check_continuity` (or list stored issues). Quote severity\r\n   and suggestion; never silently \"fix\" canon.\r\n4. **Auto-write** — confirm start/end episode and overwrite. Then poll\r\n   `get_auto_write_job` rather than guessing progress. Use `list_auto_write_jobs`\r\n   to review past runs.\r\n5. **Setting changes** — prefer `create_character` / `create_world` over\r\n   stuffing facts only into chat.\r\n6. **Reflect entities** — after the user edits characters, plots, or\r\n   foreshadowings in the INE UI, call `reflect_to_novel` with the appropriate\r\n   `kind` so Anna\u0027s Story Twin stays consistent.\r\n\r\n## Hard rules\r\n\r\n- Never fabricate INE ids. If a call fails, report the error and stop.\r\n- Never overwrite episode `content` without explicit user intent.\r\n- Prefer INE `generate` over freehand drafting so the Context Builder (cast,\r\n  world, plot, foreshadowing, RAG) is applied.\r\n- Keep replies grounded in tool results. If the twin says coverage is low,\r\n  say so.\r\n- Japanese works: match the work\u0027s language (`project.language` / existing\r\n  episode text). Do not translate unless asked.",
+    "user_message_prefix_template":  "[INE] {user_message}",
+    "tags":  [
+                 "writing",
+                 "novel",
+                 "continuity",
+                 "ine"
+             ],
+    "ui":  {
+               "bundle":  {
+                              "format":  "static-spa",
+                              "entry":  "index.html",
+                              "external_origins":  [
+                                                       "http://localhost:3000"
+                                                   ]
+                          },
+               "views":  [
+                             {
+                                 "name":  "main",
+                                 "title":  "INE",
+                                 "default":  true,
+                                 "entry":  "index.html",
+                                 "min_size":  {
+                                                  "w":  900,
+                                                  "h":  600
+                                              },
+                                 "default_size":  {
+                                                      "w":  1300,
+                                                      "h":  820
+                                                  },
+                                 "max_size":  {
+                                                  "w":  1600,
+                                                  "h":  1200
+                                              },
+                                 "resizable":  true,
+                                 "movable":  true,
+                                 "single_instance":  true,
+                                 "icon":  "icon.svg"
+                             }
+                         ],
+               "host_api":  {
+                                "tools":  [
+                                              "required:*"
+                                          ],
+                                "chat":  [
+                                             "write_message"
+                                         ],
+                                "artifact":  [
+
+                                             ],
+                                "llm":  [
+
+                                        ],
+                                "fs":  [
+
+                                       ],
+                                "storage":  [
+                                                "get",
+                                                "set"
+                                            ],
+                                "prefs":  [
+
+                                          ],
+                                "window":  [
+                                               "set_title"
+                                           ]
+                            },
+               "csp_overrides":  {
+                                     "img-src":  [
+                                                     "\u0027self\u0027",
+                                                     "data:",
+                                                     "blob:"
+                                                 ],
+                                     "font-src":  [
+                                                      "\u0027self\u0027",
+                                                      "data:"
+                                                  ],
+                                     "style-src":  [
+                                                       "\u0027self\u0027"
+                                                   ],
+                                     "script-src":  [
+                                                        "\u0027self\u0027"
+                                                    ],
+                                     "frame-src":  [
+                                                       "\u0027self\u0027",
+                                                       "http://localhost:3000"
+                                                   ]
+                                 },
+               "state_merge":  "last_writer_wins"
+           },
+    "dev":  {
+                "fixtures":  [
+
+                             ],
+                "seed_storage":  {
+
+                                 },
+                "user_id":  1
+            }
+}

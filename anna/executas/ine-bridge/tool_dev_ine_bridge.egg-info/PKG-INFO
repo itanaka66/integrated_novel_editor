@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: tool-dev-ine-bridge
+Version: 0.1.0
+Summary: INE Bridge — Executa stdio tool plugin for the Integrated Novel Editor Anna App
+Author: INE
+License: GPL-3.0
+Requires-Python: >=3.10
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
