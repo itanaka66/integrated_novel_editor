@@ -73,7 +73,7 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   return (
     <div className="autoWrite">
       <div className="card autoWriteForm">
-        <b>{t("500話 自動執筆（A770 Controller × RTX3090 Writer）")}</b>
+        <b>{t("500話 自動執筆")}</b>
         <p>{t("Series → Arc(100話) → Mini Arc(10話) → Episode Planner の階層計画をControllerが管理し、WriterがEP単位で本文を生成します。Controllerが時系列・人物・世界観・プロットを監査し、BLOCK時は自動で修正します。")}</p>
         <div className="autoWriteFields">
           <label>{t("開始EP")}<input type="number" value={startEpisode} min={1} onChange={(x) => setStartEpisode(Number(x.target.value))} disabled={!!active} /></label>
