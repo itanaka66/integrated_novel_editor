@@ -127,9 +127,9 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       <header className="dashboardHeader">
         <div><small>DASHBOARD</small><h1>{t("こんにちは、{name}さん", { name: user?.username ?? t("ユーザー") })}</h1></div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowImport(true)}>{t("ファイルからインポート")}</button>
+          <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("ファイルからインポート")}</button>
           <button className="add" onClick={() => setShowNew(true)}>{t("＋ 新規作品作成")}</button>
-          <button onClick={() => setShowAccount(true)}>{t("⚙ アカウント設定")}</button>
+          <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("⚙ アカウント設定")}</button>
           <button onClick={onLogout}>{t("⏻ ログアウト")}</button>
         </div>
       </header>

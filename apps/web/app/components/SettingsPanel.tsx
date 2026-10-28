@@ -49,7 +49,7 @@ const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "
 
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
-  const [tab, setTab] = useState<"basic" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
+  const [tab, setTab] = useState<"basic" | "import" | "backup" | "export" | "cover" | "delete">("basic");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -205,11 +205,10 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
       <h1>{t("設定")}</h1>
       <div className="twinTabs">
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>{t("基本設定")}</button>
-        <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>{t("接続設定")}</button>
-        <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>{t("インポート")}</button>
-        <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>{t("バックアップ")}</button>
-        <button className={tab === "export" ? "on" : ""} onClick={() => setTab("export")}>{t("エクスポート")}</button>
-        <button className={tab === "cover" ? "on" : ""} onClick={() => setTab("cover")}>{t("表紙画像")}</button>
+        <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("インポート")}</button>
+        <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("バックアップ")}</button>
+        <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("エクスポート")}</button>
+        <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("表紙画像")}</button>
         {onDeleted && <button className={tab === "delete" ? "on" : ""} onClick={() => setTab("delete")}>{t("作品の削除")}</button>}
       </div>
       {tab === "basic" && (
@@ -222,10 +221,10 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
           <label>{t("作品ルール（詳細設定）")}<textarea value={form.rules} onChange={(e) => setForm({ ...form, rules: e.target.value })} /></label>
           <label style={{ gridColumn: "1/-1" }}>
             {t("スタイルガイド")}
-            <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder={t("「スタイルガイド生成」で作成するか、直接入力してください。")} style={{ minHeight: 120 }} />
+            <textarea value={form.style_guide} onChange={(e) => setForm({ ...form, style_guide: e.target.value })} placeholder={t("「スタイルガイド生成」で作成するか、直接入力してください。")} style={{ minHeight: 120 }} disabled />
           </label>
           <div style={{ gridColumn: "1/-1" }}>
-            <button type="button" onClick={() => setShowStyleGuidePicker(true)} disabled={styleGuideBusy}>{styleGuideBusy ? t("生成中...") : t("📐 スタイルガイド生成")}</button>
+            <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("📐 スタイルガイド生成")}</button>
           </div>
           <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12, marginTop: -6 }}>
             {t("用途に近い種類を選ぶと、既存の本文サンプルの文体・表記の傾向も踏まえて、より適したスタイルガイドを生成します。生成後は自由に編集でき、保存すると執筆画面の「文章校正」で使われます。")}

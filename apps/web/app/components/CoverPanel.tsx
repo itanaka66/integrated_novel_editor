@@ -182,12 +182,9 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
         <label><input type="checkbox" checked={state.overlay} onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
-        <button type="button" onClick={generateMany} disabled={batching || generating}>{batching ? t("複数画像作成中 {done}/{total}", { done: batch!.done + batch!.failed, total: batch!.total }) : t("複数画像作成")}</button>
+        <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("複数画像作成")}</button>
       </div>
       <div className="exportButtons">
-        {PROVIDERS.map((p) => (
-          <label key={p.key}><input type="radio" name={`cover-provider-${projectId}`} checked={state.provider === p.key} onChange={() => persist({ ...state, provider: p.key })} /> {p.label}</label>
-        ))}
         <button onClick={generate} disabled={generating || !state.prompt.trim()}>{generating ? t("生成中...") : t("表紙を生成")}</button>
       </div>
       {error && <p style={{ color: "#c0392b" }}>{error}</p>}
