@@ -60,7 +60,7 @@ services:
     build:
       context: ./apps/api
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://novel:novel@neomedia.dynv6.net:6555/novel}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://novel:novel@neomedia.dynv6.net:6555/novel?sslmode=require}
       QDRANT_URL: ${QDRANT_URL:-https://neomedia.dynv6.net:6554}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
@@ -130,3 +130,12 @@ volumes:
   backups:
   certbot_webroot:
   certbot_certs:
+
+networks:
+  default:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "172.20.0.0/16"
+        - subnet: "fd00::/80"
