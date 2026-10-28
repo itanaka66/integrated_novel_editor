@@ -104,6 +104,19 @@ class AutoWriteJobOut(BaseModel):
     episodes_written:int=0
     model_config=ConfigDict(from_attributes=True)
 
+class AutoWriteNextStepOut(BaseModel):
+    done:bool
+    status:str|None=None
+    step_id:str|None=None
+    phase:str|None=None
+    episode_number:int|None=None
+    prompt:str|None=None
+    max_tokens:int=4096
+
+class AutoWriteSubmitStepIn(BaseModel):
+    step_id:str
+    result:str
+
 class PlanGenerate(BaseModel):
     project_id:int
     premise:str=''

@@ -26,6 +26,8 @@ from . import file_sync
 from .revisions import snapshot_revision
 import asyncio
 from .auto_writer import run_job, running as auto_write_running
+from .auto_write_steps import get_next_step as aw_get_next_step, apply_step_result as aw_apply_step
+from .schemas import AutoWriteNextStepOut, AutoWriteSubmitStepIn
 from .importer import run_import_job, running as import_running
 from . import narou_import as ni
 from . import connection_test
@@ -1217,11 +1219,21 @@ async def auto_write_start(x:AutoWriteStart,db:Session=Depends(get_db)):
     p=db.get(Project,x.project_id)
     if not p:raise HTTPException(404,'Project not found')
     job=AutoWriteJob(project_id=x.project_id,start_episode=x.start_episode,end_episode=x.end_episode,current_episode=x.start_episode,status='queued',last_message='キューに追加しました',premise=x.premise,overwrite=x.overwrite)
-    if x.writer_model:job.writer_model=x.writer_model
-    if x.controller_model:job.controller_model=x.controller_model
     db.add(job);db.commit();db.refresh(job)
-    task=asyncio.create_task(run_job(job.id))
-    auto_write_running[job.id]=task
+    return _job_out(job,db)
+
+@app.get('/api/v1/auto-write/{job_id}/next-step',response_model=AutoWriteNextStepOut)
+async def auto_write_next_step(job_id:int,db:Session=Depends(get_db)):
+    job=crud_get_or_404(db,AutoWriteJob,job_id,'Auto-write job')
+    return await aw_get_next_step(db,job)
+
+@app.post('/api/v1/auto-write/{job_id}/submit-step',response_model=AutoWriteJobOut)
+async def auto_write_submit_step(job_id:int,x:AutoWriteSubmitStepIn,db:Session=Depends(get_db)):
+    job=crud_get_or_404(db,AutoWriteJob,job_id,'Auto-write job')
+    try:
+        await aw_apply_step(db,job,x.step_id,x.result)
+    except ValueError as e:
+        raise HTTPException(409,str(e))
     return _job_out(job,db)
 
 @app.post('/api/v1/auto-write/{job_id}/stop',response_model=AutoWriteJobOut)

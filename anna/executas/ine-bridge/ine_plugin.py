@@ -226,15 +226,31 @@ MANIFEST: dict[str, Any] = {
         },
         {
             "name": "start_auto_write",
-            "description": "Start INE auto-write (Controller plans, Writer drafts). Existing episodes are skipped unless overwrite=true.",
+            "description": (
+                "Create an auto-write job (queued state). "
+                "Anna drives the actual writing via auto_write_step — call it after creating the job."
+            ),
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "start_episode", "type": "integer", "description": "First episode number (default 1)", "required": False},
                 {"name": "end_episode", "type": "integer", "description": "Last episode number (default 500)", "required": False},
                 {"name": "premise", "type": "string", "description": "Optional extra premise for planners", "required": False},
                 {"name": "overwrite", "type": "boolean", "description": "Overwrite existing episode text", "required": False, "default": False},
-                {"name": "writer_model", "type": "string", "description": "Ollama Writer model name", "required": False},
-                {"name": "controller_model", "type": "string", "description": "Ollama Controller model name", "required": False},
+            ],
+        },
+        {
+            "name": "auto_write_step",
+            "description": (
+                "Execute one or more LLM steps for an auto-write job using Anna's LLM via sampling. "
+                "Each step is one planning or writing operation (Series plan, Arc plan, Mini Arc plan, "
+                "Episode plan, or episode writing). "
+                "Call repeatedly — up to ~270+ times for a full 500-episode novel — until done=true. "
+                "A full novel requires roughly: 1 series + 5 arcs + 50 mini arcs + N episode plans + N×2 writes. "
+                "Requires sampling context (must be called from an Anna session with sampling enabled)."
+            ),
+            "parameters": [
+                {"name": "job_id", "type": "integer", "description": "Auto-write job id from start_auto_write", "required": True},
+                {"name": "steps", "type": "integer", "description": "Max LLM steps per call (1-6, default 5). Each step = 1 LLM call.", "required": False, "default": 5},
             ],
         },
         {
@@ -842,6 +858,56 @@ def tool_list_auto_write_jobs(args: dict[str, Any], credentials: dict[str, Any] 
     return ine_call(credentials, "GET", f"/projects/{pid}/auto-write/jobs")
 
 
+def tool_auto_write_step(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    """Execute LLM steps for an auto-write job using Anna sampling.
+
+    Calls GET next-step → _sample() → POST submit-step up to `steps` times.
+    Call repeatedly until done=true is returned.
+    """
+    if _sampling_token is None:
+        raise RuntimeError(
+            "Anna LLM sampling is required for auto_write_step. "
+            "This tool must be called from an Anna session with sampling enabled."
+        )
+
+    job_id = _int(args.get("job_id"), "job_id")
+    max_steps = min(_int(args.get("steps"), "steps", required=False, default=5) or 5, 6)
+    steps_done = 0
+
+    for _ in range(max_steps):
+        next_step = ine_call(credentials, "GET", f"/auto-write/{job_id}/next-step")
+
+        if next_step.get("done"):
+            return {
+                "done": True,
+                "status": next_step.get("status", "completed"),
+                "steps_done": steps_done,
+            }
+
+        step_id = next_step.get("step_id")
+        prompt = next_step.get("prompt", "")
+        max_tokens = next_step.get("max_tokens", 4096)
+
+        result_text = _sample(
+            [{"role": "user", "content": {"type": "text", "text": prompt}}],
+            max_tokens=max_tokens,
+        )
+
+        ine_call(credentials, "POST", f"/auto-write/{job_id}/submit-step",
+                 json_body={"step_id": step_id, "result": result_text})
+        steps_done += 1
+
+    job = ine_call(credentials, "GET", f"/auto-write/{job_id}")
+    return {
+        "done": False,
+        "steps_done": steps_done,
+        "progress_percent": job.get("progress_percent", 0),
+        "current_phase": job.get("current_phase", ""),
+        "current_episode": job.get("current_episode", 0),
+        "last_message": job.get("last_message", ""),
+    }
+
+
 def tool_list_plots(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
     pid = _int(args.get("project_id"), "project_id")
     return ine_call(credentials, "GET", f"/projects/{pid}/plots")
@@ -931,6 +997,7 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "check_continuity": tool_check_continuity,
     "list_continuity_issues": tool_list_continuity_issues,
     "start_auto_write": tool_start_auto_write,
+    "auto_write_step": tool_auto_write_step,
     "get_auto_write_job": tool_get_auto_write_job,
     "stop_auto_write": tool_stop_auto_write,
     "list_auto_write_jobs": tool_list_auto_write_jobs,

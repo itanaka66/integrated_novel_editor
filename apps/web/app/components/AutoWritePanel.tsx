@@ -33,9 +33,6 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   useEffect(() => { loadJobs(); }, [projectId]);
   useEffect(() => {
     if (!job || !ACTIVE_STATUSES.includes(job.status)) return;
-    // Server-Sent Events instead of polling: the backend pushes an update
-    // every ~1.5s while the job is active and closes the stream once it
-    // finishes, so we don't need our own interval/cleanup logic here.
     const stop = streamSSE(`/auto-write/${job.id}/stream`, (data: any) => {
       if (data.error) return;
       setJob(data);
@@ -51,7 +48,7 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
     return stop;
   }, [job?.id]);
 
-  async function start() {
+  async function createJob() {
     setBusy(true);
     ensureNotificationPermission();
     try {
@@ -68,8 +65,16 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   return (
     <div className="autoWrite">
       <div className="card autoWriteForm">
-        <b>{t("500話 自動執筆")}</b>
-        <p>{t("Series → Arc(100話) → Mini Arc(10話) → Episode Planner の階層計画をControllerが管理し、WriterがEP単位で本文を生成します。Controllerが時系列・人物・世界観・プロットを監査し、BLOCK時は自動で修正します。")}</p>
+        <b>{t("500話 自動執筆（Anna AI OS）")}</b>
+        <p>{t("Anna AI OS が自動執筆を実行します。Series → Arc → Mini Arc → Episode の階層計画を立て、Writer が EP 単位で本文を生成し、Controller が時系列・人物・世界観・プロットを監査します。")}</p>
+        <div className="card autoWriteAnnaHint">
+          <b>▶ {t("実行方法")}</b>
+          <ol>
+            <li>{t("下のフォームでジョブを作成してください。")}</li>
+            <li>{t("Anna に「auto_write_step でジョブ {id} を実行してください」と依頼してください。", { id: job ? `ID: ${job.id}` : "（作成後に ID が表示されます）" })}</li>
+            <li>{t("Anna が完了するまで auto_write_step を繰り返し呼び出します。")}</li>
+          </ol>
+        </div>
         <div className="autoWriteFields">
           <label>{t("開始EP")}<input type="number" value={startEpisode} min={1} onChange={(x) => setStartEpisode(Number(x.target.value))} disabled={!!active} /></label>
           <label>{t("終了EP")}<input type="number" value={endEpisode} min={startEpisode} onChange={(x) => setEndEpisode(Number(x.target.value))} disabled={!!active} /></label>
@@ -79,7 +84,7 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
         {active ? (
           <button className="check" onClick={stop}>{t("■ 停止する（EP.{n}）", { n: job.current_episode })}</button>
         ) : (
-          <button className="add" onClick={start} disabled={busy}>{busy ? t("起動中...") : t("▶ 自動執筆を開始")}</button>
+          <button className="add" onClick={createJob} disabled={busy}>{busy ? t("作成中...") : t("＋ ジョブを作成")}</button>
         )}
       </div>
       {job && (

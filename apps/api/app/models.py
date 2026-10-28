@@ -95,6 +95,8 @@ class AutoWriteJob(Base):
     last_message:Mapped[str]=mapped_column(Text,default='')
     premise:Mapped[str]=mapped_column(Text,default='',server_default='')
     overwrite:Mapped[bool]=mapped_column(default=False,server_default='0')
+    pending_step_id:Mapped[str|None]=mapped_column(String(100),nullable=True)
+    current_write_context:Mapped[str]=mapped_column(Text,default='',server_default='')
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)
     updated_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow,onupdate=datetime.utcnow)
 
