@@ -1,7 +1,7 @@
 ---
 name: novel-coach
 title: Novel Coach
-version: 0.1.0
+version: 0.1.1
 description: >-
   Writing-coach protocol for the Integrated Novel Editor Anna App. Use when
   the user wants to draft, continue, audit, or plan a long-form novel that
