@@ -29,10 +29,10 @@ MANIFEST: dict[str, Any] = {
         {
             "name": "INE_BASE_URL",
             "display_name": "INE API base URL",
-            "description": "Origin of the INE API, without a trailing slash. Default https://neomedia.dynv6.net:6547",
+            "description": "Origin of the INE API, without a trailing slash. Default https://neomedia.dynv6.net:6556",
             "required": False,
             "sensitive": False,
-            "default": "https://neomedia.dynv6.net:6547",
+            "default": "https://neomedia.dynv6.net:6556",
         },
         {
             "name": "INE_USERNAME",
@@ -460,7 +460,7 @@ def resolve_connection(credentials: dict[str, Any] | None) -> tuple[str, str, st
     base = (
         creds.get("INE_BASE_URL")
         or os.environ.get("INE_BASE_URL")
-        or "https://neomedia.dynv6.net:6547"
+        or "https://neomedia.dynv6.net:6556"
     ).rstrip("/")
     user = creds.get("INE_USERNAME") or os.environ.get("INE_USERNAME") or ""
     password = creds.get("INE_PASSWORD") or os.environ.get("INE_PASSWORD") or ""

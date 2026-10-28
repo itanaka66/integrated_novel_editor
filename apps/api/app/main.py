@@ -16,6 +16,7 @@ from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
 from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot, set_project as llm_set_project
 from .cors import DynamicCORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from . import export as export_mod
 from . import translator
 from . import cover as cover_mod
@@ -45,6 +46,7 @@ app=FastAPI(title='Integrated Novel Editor (INE) API',version='0.5.0')
 app.add_middleware(PurposeMiddleware)
 app.add_middleware(AuthMiddleware)
 app.add_middleware(DynamicCORSMiddleware,allow_methods=['*'],allow_headers=['*'],allow_credentials=True)
+app.add_middleware(ProxyHeadersMiddleware,trusted_hosts='*')
 def _oauth_get_or_create_user(email,name):
  # A fresh short-lived session, same reasoning as auth.py's _authenticate:
  # this runs from inside editor_common.oauth's own route handler, outside
