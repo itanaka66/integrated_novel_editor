@@ -1,5 +1,6 @@
 ine_plugin.py
 pyproject.toml
+tests/test_manifest.py
 tests/test_plugin.py
 tool_dev_ine_bridge.egg-info/PKG-INFO
 tool_dev_ine_bridge.egg-info/SOURCES.txt

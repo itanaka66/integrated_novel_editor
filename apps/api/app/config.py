@@ -12,6 +12,10 @@ class Settings(BaseSettings):
  database_url:str='postgresql+psycopg2://novel:novel@localhost:5432/novel'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
  admin_username:str='admin'; admin_password:str='novel-studio-change-me'
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
+ # Unified Anna LLM: when anna_llm_url is set it overrides both ollama_url and
+ # controller_ollama_url (Writer + Controller share one endpoint). Set
+ # ANNA_LLM_URL / ANNA_LLM_API_KEY / ANNA_LLM_MODEL in .env to use Anna's LLM.
+ anna_llm_url:str=''; anna_llm_api_key:str=''; anna_llm_model:str=''
  # Translation model: blank = use the Controller's server/model.
  translator_ollama_url:str=''; translator_ollama_model:str=''
  # Seconds to wait for one translation call (a chunk of ~2500 characters). Local

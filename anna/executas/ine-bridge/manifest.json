@@ -1,7 +1,10 @@
 {
-    "version":  "0.1.3",
+    "version":  "0.1.4",
     "display_name":  "INE Bridge",
-    "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, generate prose with INE\u0027s context builder, and manage auto-write jobs.",
+    "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM for prose generation and chat. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, and manage auto-write jobs.",
+    "host_capabilities":  [
+                              "llm.sample"
+                          ],
     "credentials":  [
                         {
                             "name":  "INE_BASE_URL",

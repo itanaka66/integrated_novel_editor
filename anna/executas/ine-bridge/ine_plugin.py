@@ -11,27 +11,28 @@ import base64
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
-        "foreshadowings, reflect entities to novel, generate prose with "
-        "INE's context builder, and manage auto-write jobs."
+        "foreshadowings, reflect entities to novel, generate prose and chat "
+        "using Anna's own LLM, and manage auto-write jobs."
     ),
     "credentials": [
         {
             "name": "INE_BASE_URL",
             "display_name": "INE API base URL",
-            "description": "Origin of the INE API, without a trailing slash. Default http://localhost:8000",
+            "description": "Origin of the INE API, without a trailing slash. Default https://neomedia.dynv6.net:6547",
             "required": False,
             "sensitive": False,
-            "default": "http://localhost:8000",
+            "default": "https://neomedia.dynv6.net:6547",
         },
         {
             "name": "INE_USERNAME",
@@ -317,12 +318,116 @@ MANIFEST: dict[str, Any] = {
                 },
             ],
         },
+        {
+            "name": "list_covers",
+            "description": "List cover images generated for a work. Each item includes filename, url, style, and created_at.",
+            "parameters": [
+                {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
+            ],
+        },
     ],
 }
 
 
 def _log(message: str) -> None:
     print(f"[ine-bridge] {message}", file=sys.stderr)
+
+
+# ── Anna sampling (reverse JSON-RPC 2.0) ──────────────────────────────────────
+# Set to the sampling_token from the current invoke context; None outside invokes.
+_sampling_token: str | None = None
+_sampling_invoke_id: str | None = None
+_sample_seq: list[int] = [0]
+
+
+def _sample(
+    messages: list[dict[str, Any]],
+    *,
+    system_prompt: str | None = None,
+    max_tokens: int = 4096,
+) -> str:
+    """Send sampling/createMessage to Anna and return the assistant text.
+
+    Blocks synchronously by reading stdin until the response arrives.
+    Must only be called during an invoke (i.e. _sampling_token is set).
+    """
+    if _sampling_token is None:
+        raise RuntimeError("Anna sampling not available in this invoke context")
+    _sample_seq[0] += 1
+    req_id = f"sample-{_sample_seq[0]}-{int(time.time() * 1000)}"
+    params: dict[str, Any] = {
+        "messages": messages,
+        "maxTokens": max_tokens,
+        "metadata": {},
+    }
+    if _sampling_invoke_id:
+        params["metadata"]["executa_invoke_id"] = _sampling_invoke_id
+    if system_prompt:
+        params["systemPrompt"] = system_prompt
+    send({"jsonrpc": "2.0", "id": req_id, "method": "sampling/createMessage", "params": params})
+    # Read stdin until the matching response arrives.
+    while True:
+        raw = sys.stdin.readline()
+        if not raw:
+            raise RuntimeError("stdin closed while waiting for Anna sampling response")
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            msg = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if msg.get("id") == req_id:
+            if "error" in msg:
+                err = msg["error"]
+                raise RuntimeError(f"sampling error {err.get('code')}: {err.get('message')}")
+            return msg["result"]["content"]["text"]
+        _log(f"unexpected message during sampling (id={msg.get('id')}), buffering")
+        # Push back: prepend to a small buffer read by the main loop after this invoke finishes.
+        _inbox_buffer.append(raw)
+
+
+# Lines received out-of-band during a sampling call, to be processed after invoke returns.
+_inbox_buffer: list[str] = []
+
+
+def _fetch_context(
+    credentials: dict[str, Any] | None,
+    project_id: int,
+    *,
+    episode_id: int | None = None,
+    rag_query: str | None = None,
+    rag_limit: int = 6,
+) -> dict[str, Any]:
+    """Fetch story context from INE REST API — mirrors the backend's build() function."""
+    characters = ine_call(credentials, "GET", f"/projects/{project_id}/characters") or []
+    world = ine_call(credentials, "GET", f"/projects/{project_id}/world") or []
+    plots = ine_call(credentials, "GET", f"/projects/{project_id}/plots") or []
+    foreshadowings = ine_call(credentials, "GET", f"/projects/{project_id}/foreshadowings") or []
+    episode: dict[str, Any] | None = None
+    if episode_id:
+        try:
+            episode = ine_call(credentials, "GET", f"/episodes/{episode_id}")
+        except Exception:
+            pass
+    rag: list[Any] = []
+    if rag_query:
+        try:
+            result = ine_call(
+                credentials, "POST", "/rag/search",
+                json_body={"project_id": project_id, "query": rag_query, "limit": max(1, min(rag_limit, 20))},
+            )
+            rag = result.get("results", result) if isinstance(result, dict) else (result or [])
+        except Exception:
+            pass
+    return {
+        "characters": characters[:30],
+        "world": world[:30],
+        "plots": plots[:15],
+        "foreshadowings": foreshadowings[:15],
+        "rag": rag,
+        "episode": episode,
+    }
 
 
 def _int(value: Any, name: str, *, required: bool = True, default: int | None = None) -> int | None:
@@ -355,7 +460,7 @@ def resolve_connection(credentials: dict[str, Any] | None) -> tuple[str, str, st
     base = (
         creds.get("INE_BASE_URL")
         or os.environ.get("INE_BASE_URL")
-        or "http://localhost:8000"
+        or "https://neomedia.dynv6.net:6547"
     ).rstrip("/")
     user = creds.get("INE_USERNAME") or os.environ.get("INE_USERNAME") or ""
     password = creds.get("INE_PASSWORD") or os.environ.get("INE_PASSWORD") or ""
@@ -593,19 +698,66 @@ def tool_search(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any
     )
 
 
+_TASK_LABEL = {
+    "continue": "本文の続きを書く",
+    "summary": "本文を要約する",
+    "plot": "次の展開を提案する",
+    "proofread": "設定・表現・時系列を校正する",
+}
+_GENERATE_SYSTEM = (
+    "あなたは長編小説の編集長AIです。作品の正本設定を最優先してください。"
+)
+
+
 def tool_generate(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
     pid = _int(args.get("project_id"), "project_id")
     mode = (args.get("mode") or "continue").strip()
-    allowed = {"continue", "summary", "plot", "proofread"}
+    allowed = set(_TASK_LABEL)
     if mode not in allowed:
         raise ValueError(f"mode must be one of {sorted(allowed)}")
+    rag_limit = _int(args.get("rag_limit"), "rag_limit", required=False, default=6) or 6
+    instruction = args.get("instruction") or ""
+    episode_id = _int(args.get("episode_id"), "episode_id", required=False)
+
+    if _sampling_token is not None:
+        ctx = _fetch_context(
+            credentials, pid,
+            episode_id=episode_id,
+            rag_query=instruction or "recent story context",
+            rag_limit=rag_limit,
+        )
+        task = _TASK_LABEL.get(mode, "依頼を実行する")
+        user_text = (
+            f"作業: {task}\n\n"
+            f"Context:\n{json.dumps(ctx, ensure_ascii=False, indent=2)}\n\n"
+            f"指示: {instruction or '続きを書いてください。'}\n"
+            "日本語で出力してください。"
+        )
+        text = _sample(
+            [{"role": "user", "content": {"type": "text", "text": user_text}}],
+            system_prompt=_GENERATE_SYSTEM,
+            max_tokens=4096,
+        )
+        return {
+            "text": text,
+            "model": "anna",
+            "context": {
+                "characters": len(ctx["characters"]),
+                "world": len(ctx["world"]),
+                "plots": len(ctx["plots"]),
+                "foreshadowings": len(ctx["foreshadowings"]),
+                "rag": len(ctx["rag"]),
+            },
+            "source": "anna_sampling",
+        }
+
     body = _omit_none(
         {
             "project_id": pid,
-            "episode_id": _int(args.get("episode_id"), "episode_id", required=False),
-            "instruction": args.get("instruction") or "",
+            "episode_id": episode_id,
+            "instruction": instruction,
             "mode": mode,
-            "rag_limit": _int(args.get("rag_limit"), "rag_limit", required=False, default=6),
+            "rag_limit": rag_limit,
         }
     )
     return ine_call(credentials, "POST", "/ai/generate", json_body=body, timeout=120)
@@ -616,6 +768,24 @@ def tool_chat(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
     content = (args.get("content") or "").strip()
     if not content:
         raise ValueError("content is required")
+
+    if _sampling_token is not None:
+        ctx = _fetch_context(credentials, pid, rag_query=content, rag_limit=8)
+        user_text = (
+            f"Context:\n{json.dumps(ctx, ensure_ascii=False, indent=2)}\n\n"
+            f"質問: {content}\n"
+            "日本語で出力してください。"
+        )
+        text = _sample(
+            [{"role": "user", "content": {"type": "text", "text": user_text}}],
+            system_prompt="あなたは長編小説のAIチャットアシスタントです。作品の正本設定を最優先してください。",
+            max_tokens=2048,
+        )
+        return [
+            {"role": "user", "content": content},
+            {"role": "assistant", "content": text, "source": "anna_sampling"},
+        ]
+
     return ine_call(
         credentials,
         "POST",
@@ -728,6 +898,19 @@ def tool_reflect_to_novel(args: dict[str, Any], credentials: dict[str, Any] | No
     return ine_call(credentials, "POST", f"/projects/{pid}/reflect-to-novel", json_body={"kind": kind}, timeout=60)
 
 
+def tool_list_covers(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    """Return cover images for a project, each with url and metadata."""
+    pid = _int(args.get("project_id"), "project_id")
+    covers = ine_call(credentials, "GET", f"/projects/{pid}/covers") or []
+    base_url = (credentials or {}).get("INE_BASE_URL") or "http://localhost:8000"
+    base_url = base_url.rstrip("/")
+    for c in covers:
+        filename = c.get("filename") or c.get("file") or ""
+        if filename and not c.get("url"):
+            c["url"] = f"{base_url}/api/v1/projects/{pid}/covers/{filename}"
+    return covers
+
+
 TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]] = {
     "health": tool_health,
     "list_projects": tool_list_projects,
@@ -756,6 +939,7 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "list_foreshadowings": tool_list_foreshadowings,
     "create_foreshadowing": tool_create_foreshadowing,
     "reflect_to_novel": tool_reflect_to_novel,
+    "list_covers": tool_list_covers,
 }
 
 
@@ -763,15 +947,28 @@ def handle_describe(_params: dict[str, Any]) -> dict[str, Any]:
     return MANIFEST
 
 
+def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "protocolVersion": "1.0",
+        "server_info": {"name": MANIFEST["display_name"], "version": MANIFEST["version"]},
+        "capabilities": {},
+    }
+
+
 def handle_invoke(params: dict[str, Any]) -> dict[str, Any]:
+    global _sampling_token, _sampling_invoke_id
     if not isinstance(params, dict):
         return {"success": False, "error": "params must be an object"}
     tool_name = params.get("tool")
     args = params.get("arguments") or {}
+    ctx = params.get("context") or {}
+    # Stash the sampling token for use by _sample() during this invoke.
+    _sampling_token = ctx.get("sampling_token") or None
+    _sampling_invoke_id = ctx.get("invoke_id") or None
     try:
         if not isinstance(args, dict):
             raise ValueError("`arguments` must be an object")
-        credentials = (params.get("context") or {}).get("credentials") or {}
+        credentials = ctx.get("credentials") or {}
         fn = TOOL_DISPATCH.get(tool_name)
         if fn is None:
             raise ValueError(f"unknown tool: {tool_name!r}")
@@ -779,6 +976,9 @@ def handle_invoke(params: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 — surface as InvokeResult, not a transport crash
         _log(f"{tool_name} failed: {type(exc).__name__}")
         return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+    finally:
+        _sampling_token = None
+        _sampling_invoke_id = None
     return {"success": True, "data": payload}
 
 
@@ -787,6 +987,7 @@ def handle_health(_params: dict[str, Any]) -> dict[str, Any]:
 
 
 METHOD_DISPATCH = {
+    "initialize": handle_initialize,
     "describe": handle_describe,
     "invoke": handle_invoke,
     "health": handle_health,
@@ -798,29 +999,39 @@ def send(message: dict[str, Any]) -> None:
     sys.stdout.flush()
 
 
+def _process_line(line: str) -> None:
+    line = line.strip()
+    if not line:
+        return
+    try:
+        request = json.loads(line)
+    except json.JSONDecodeError as exc:
+        send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"parse error: {exc}"}})
+        return
+    req_id = request.get("id")
+    method = request.get("method")
+    params = request.get("params") or {}
+    handler = METHOD_DISPATCH.get(method)
+    if handler is None:
+        send({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"method not found: {method}"}})
+        return
+    try:
+        result = handler(params)
+        send({"jsonrpc": "2.0", "id": req_id, "result": result})
+    except Exception as exc:  # noqa: BLE001
+        send({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(exc)}})
+
+
 def main() -> None:
     _log(f"{MANIFEST['display_name']} v{MANIFEST['version']} ready")
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            request = json.loads(line)
-        except json.JSONDecodeError as exc:
-            send({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"parse error: {exc}"}})
-            continue
-        req_id = request.get("id")
-        method = request.get("method")
-        params = request.get("params") or {}
-        handler = METHOD_DISPATCH.get(method)
-        if handler is None:
-            send({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"method not found: {method}"}})
-            continue
-        try:
-            result = handler(params)
-            send({"jsonrpc": "2.0", "id": req_id, "result": result})
-        except Exception as exc:  # noqa: BLE001
-            send({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(exc)}})
+    while True:
+        # Drain any lines buffered by _sample() during a previous invoke.
+        while _inbox_buffer:
+            _process_line(_inbox_buffer.pop(0))
+        raw = sys.stdin.readline()
+        if not raw:
+            break
+        _process_line(raw)
 
 
 if __name__ == "__main__":

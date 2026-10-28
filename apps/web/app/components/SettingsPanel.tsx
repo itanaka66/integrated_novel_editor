@@ -4,7 +4,6 @@ import CoverSettings from "./CoverSettings";
 import DeleteProjectPanel from "./DeleteProjectPanel";
 import { api, downloadFile, post, postFile, put } from "../lib/api";
 import { Project } from "../lib/types";
-import { loadModelDefaults, saveModelDefaults } from "../lib/modelDefaults";
 import { ensureNotificationPermission, notify } from "../lib/notify";
 import { t } from "../lib/i18n";
 
@@ -22,15 +21,6 @@ type BackupResult = { timestamp: string; postgres_ok: boolean; postgres_error: s
 type SystemSettings = {
   database_url_masked: string;
   qdrant_url: string; qdrant_url_is_override: boolean;
-  ollama_url: string; ollama_url_is_override: boolean;
-  ollama_model: string; ollama_model_is_override: boolean;
-  ollama_embed_model: string; ollama_embed_model_is_override: boolean;
-  controller_ollama_url: string; controller_ollama_url_is_override: boolean;
-  controller_ollama_model: string; controller_ollama_model_is_override: boolean;
-  translator_ollama_url: string; translator_ollama_url_is_override: boolean;
-  translator_ollama_model: string; translator_ollama_model_is_override: boolean;
-  translator_pool: { url: string; model: string; enabled?: boolean; languages?: string[] }[];
-  cors_origins: string; // read-only — env/.env only, not editable from here
 };
 
 // A style guide is never required to write, but leaving it truly blank
@@ -57,10 +47,9 @@ const STYLE_GUIDE_CATEGORIES: { key: string; label: string; hint: string }[] = [
 ];
 const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "その他"];
 
-const TRANSLATION_LANGS: [string, string][] = [["ja", "日本語"], ["en", "English"], ["zh-CN", "简体中文"], ["ko", "한국어"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["pt-BR", "Português (BR)"], ["it", "Italiano"], ["other", t("その他の言語")]];
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
-  const [tab, setTab] = useState<"basic" | "ai" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
+  const [tab, setTab] = useState<"basic" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);
@@ -88,14 +77,8 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
       setPendingAcademic(false);
     } finally { setStyleGuideBusy(false); }
   }
-  const [defaults, setDefaults] = useState(loadModelDefaults());
   const [sys, setSys] = useState<SystemSettings | null>(null);
-  const [sysForm, setSysForm] = useState({
-    qdrant_url: "", ollama_url: "", ollama_model: "", ollama_embed_model: "",
-    controller_ollama_url: "", controller_ollama_model: "",
-    translator_ollama_url: "", translator_ollama_model: "",
-    translator_pool: [] as { url: string; model: string; enabled?: boolean; languages?: string[] }[],
-  });
+  const [sysForm, setSysForm] = useState({ qdrant_url: "" });
   const [sysBusy, setSysBusy] = useState(false);
   const [sysSaved, setSysSaved] = useState(false);
   type TestResult = { ok: boolean; message: string; latency_ms: number };
@@ -148,13 +131,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     if (tab !== "connection") return;
     api("/system-settings").then((s: SystemSettings) => {
       setSys(s);
-      setSysForm({
-        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
-        translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
-        translator_pool: s.translator_pool ?? [],
-      });
+      setSysForm({ qdrant_url: s.qdrant_url });
     });
   }, [tab]);
 
@@ -168,13 +145,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     try {
       const s: SystemSettings = await put("/system-settings", sysForm);
       setSys(s);
-      setSysForm({
-        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
-        translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
-        translator_pool: s.translator_pool ?? [],
-      });
+      setSysForm({ qdrant_url: s.qdrant_url });
       setSysSaved(true);
     } finally { setSysBusy(false); }
   }
@@ -184,13 +155,7 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
     try {
       const s: SystemSettings = await put("/system-settings", { [field]: "" });
       setSys(s);
-      setSysForm({
-        qdrant_url: s.qdrant_url, ollama_url: s.ollama_url, ollama_model: s.ollama_model,
-        ollama_embed_model: s.ollama_embed_model, controller_ollama_url: s.controller_ollama_url,
-        controller_ollama_model: s.controller_ollama_model,
-        translator_ollama_url: s.translator_ollama_url, translator_ollama_model: s.translator_ollama_model,
-        translator_pool: s.translator_pool ?? [],
-      });
+      setSysForm({ qdrant_url: s.qdrant_url });
       setSysSaved(true);
     } finally { setSysBusy(false); }
   }
@@ -240,7 +205,6 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
       <h1>{t("設定")}</h1>
       <div className="twinTabs">
         <button className={tab === "basic" ? "on" : ""} onClick={() => setTab("basic")}>{t("基本設定")}</button>
-        <button className={tab === "ai" ? "on" : ""} onClick={() => setTab("ai")}>{t("AI設定")}</button>
         <button className={tab === "connection" ? "on" : ""} onClick={() => setTab("connection")}>{t("接続設定")}</button>
         <button className={tab === "import" ? "on" : ""} onClick={() => setTab("import")}>{t("インポート")}</button>
         <button className={tab === "backup" ? "on" : ""} onClick={() => setTab("backup")}>{t("バックアップ")}</button>
@@ -313,19 +277,6 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
           </div>
         </div>
       )}
-      {tab === "ai" && (
-        <div className="entityForm" style={{ marginTop: 14 }}>
-          <label>{t("Writerモデル（既定値）")}<input value={defaults.writer} onChange={(e) => setDefaults({ ...defaults, writer: e.target.value })} placeholder="qwen3.8:27b" /></label>
-          <label>{t("Controllerモデル（既定値）")}<input value={defaults.controller} onChange={(e) => setDefaults({ ...defaults, controller: e.target.value })} placeholder="qwen3:14b" /></label>
-          <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-            {t("ここで保存した値は、このブラウザでの「自動執筆」開始フォームの初期値として使われます。実際のOllama接続先（A770 / RTX3090のURL）はサーバー側の環境変数（CONTROLLER_OLLAMA_URL / OLLAMA_URL）で設定してください。")}
-          </p>
-          <div className="entityFormActions">
-            <button className="saveButton" onClick={() => { saveModelDefaults(defaults); setSaved(true); }}>{t("保存")}</button>
-            {saved && <span className="savedNote">{t("保存しました")}</span>}
-          </div>
-        </div>
-      )}
       {tab === "connection" && (
         <div className="entityForm" style={{ marginTop: 14 }}>
           {!sys && <p style={{ gridColumn: "1/-1" }}>{t("読み込み中...")}</p>}
@@ -348,89 +299,8 @@ export default function SettingsPanel({ project, onSaved, onDeleted }: { project
                 {sys.qdrant_url_is_override && <button type="button" onClick={() => resetField("qdrant_url")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
               </div>
 
-              <label>
-                {t("Ollama 1（Writer）URL")} {sys.ollama_url_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.ollama_url} onChange={(e) => setSysForm({ ...sysForm, ollama_url: e.target.value })} placeholder="http://ollama:11434" />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="ollama" url={sysForm.ollama_url} model={sysForm.ollama_model} />
-                {sys.ollama_url_is_override && <button type="button" onClick={() => resetField("ollama_url")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-              </div>
-
-              <label>
-                {t("Ollama 1（Writer）モデル")} {sys.ollama_model_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.ollama_model} onChange={(e) => setSysForm({ ...sysForm, ollama_model: e.target.value })} />
-              </label>
-              {sys.ollama_model_is_override && <button type="button" onClick={() => resetField("ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-
-              <label>
-                {t("Ollama 1（Writer）埋め込みモデル")} {sys.ollama_embed_model_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.ollama_embed_model} onChange={(e) => setSysForm({ ...sysForm, ollama_embed_model: e.target.value })} />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="ollama" resultKey="ollama_embed" url={sysForm.ollama_url} model={sysForm.ollama_embed_model} />
-                {sys.ollama_embed_model_is_override && <button type="button" onClick={() => resetField("ollama_embed_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-              </div>
-
-              <label>
-                {t("Ollama 2（Controller）URL")} {sys.controller_ollama_url_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.controller_ollama_url} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_url: e.target.value })} placeholder="http://ollama:11434" />
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <TestButton target="controller_ollama" url={sysForm.controller_ollama_url} model={sysForm.controller_ollama_model} />
-                {sys.controller_ollama_url_is_override && <button type="button" onClick={() => resetField("controller_ollama_url")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-              </div>
-
-              <label>
-                {t("Ollama 2（Controller）モデル")} {sys.controller_ollama_model_is_override && <span className="savedNote">{t("（上書き中）")}</span>}
-                <input value={sysForm.controller_ollama_model} onChange={(e) => setSysForm({ ...sysForm, controller_ollama_model: e.target.value })} />
-              </label>
-              {sys.controller_ollama_model_is_override && <button type="button" onClick={() => resetField("controller_ollama_model")} disabled={sysBusy}>{t("既定値に戻す")}</button>}
-
-              <div style={{ gridColumn: "1/-1" }}>
-                <b>{t("翻訳LLM（複数台可）")}</b>
-                <p style={{ color: "#687386", fontSize: 12, margin: "4px 0 8px" }}>
-                  {t("翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。")}
-                </p>
-                {sysForm.translator_pool.map((row, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6, opacity: row.enabled === false ? 0.55 : 1 }}>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-                      <input type="checkbox" checked={row.enabled !== false}
-                        onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, enabled: e.target.checked } : r)) })} />
-                      {t("有効")}
-                    </label>
-                    <input style={{ flex: "2 1 220px" }} value={row.url} placeholder="http://ollama:11434"
-                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, url: e.target.value } : r)) })} />
-                    <input style={{ flex: "1 1 140px" }} value={row.model} placeholder="qwen3:8b"
-                      onChange={(e) => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, model: e.target.value } : r)) })} />
-                    <TestButton target="translator_ollama" resultKey={`translator_pool_${i}`} url={row.url} model={row.model} />
-                    <button type="button" style={{ color: "#c0392b" }} onClick={() => setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.filter((_, j) => j !== i) })}>{t("削除")}</button>
-                    <div style={{ flexBasis: "100%", display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, paddingLeft: 4 }}>
-                      <span style={{ color: "#687386" }}>{t("翻訳できる言語")}</span>
-                      {TRANSLATION_LANGS.map(([code, label]) => {
-                        const on = (row.languages ?? TRANSLATION_LANGS.map(([c]) => c)).includes(code);
-                        return (
-                          <label key={code} style={{ display: "inline-flex", alignItems: "center", gap: 3, whiteSpace: "nowrap" }}>
-                            <input type="checkbox" checked={on} onChange={(e) => {
-                              const cur = row.languages ?? TRANSLATION_LANGS.map(([c]) => c);
-                              const next = e.target.checked ? [...cur, code] : cur.filter((c) => c !== code);
-                              setSysForm({ ...sysForm, translator_pool: sysForm.translator_pool.map((r, j) => (j === i ? { ...r, languages: TRANSLATION_LANGS.map(([c]) => c).filter((c) => next.includes(c)) } : r)) });
-                            }} />
-                            {label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {!sysForm.translator_pool.some((r) => r.enabled !== false) && <p style={{ fontSize: 12 }}>{sysForm.translator_pool.length === 0 ? t("未設定：Controllerが翻訳します") : t("有効な翻訳LLMがありません：Controllerが翻訳します")}</p>}
-                {sysForm.translator_pool.length < 8 && (
-                  <button type="button" onClick={() => setSysForm({ ...sysForm, translator_pool: [...sysForm.translator_pool, { url: "", model: "", enabled: true, languages: TRANSLATION_LANGS.map(([c]) => c) }] })}>{t("＋ 翻訳LLMを追加")}</button>
-                )}
-              </div>
-
               <p style={{ gridColumn: "1/-1", color: "#687386", fontSize: 12 }}>
-                {t("各項目を空欄にして保存すると、サーバーの環境変数の既定値に戻ります。Qdrant・Ollamaはいずれも保存すると次回の呼び出しから即座に反映されます（再起動不要）。")}
+                {t("空欄にして保存するとサーバーの環境変数の既定値に戻ります。保存すると次回の呼び出しから即座に反映されます（再起動不要）。")}
               </p>
               <div className="entityFormActions">
                 <button className="saveButton" onClick={saveConnection} disabled={sysBusy}>{sysBusy ? t("保存中...") : t("保存")}</button>

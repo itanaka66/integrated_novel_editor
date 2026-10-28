@@ -1,19 +1,45 @@
 {
     "slug":  "ine-bridge",
     "name":  "INE Bridge",
-    "version":  "0.1.3",
+    "version":  "0.1.4",
     "executa_type":  "tool",
-    "description":  "Connects Anna to a running Integrated Novel Editor API (projects, episodes, story twin, plots, foreshadowings, reflect-to-novel, generate, auto-write).",
+    "description":  "Connects Anna to a running Integrated Novel Editor API. Uses Anna\u0027s own LLM (via sampling) for prose generation and chat. Supports projects, episodes, story twin, plots, foreshadowings, reflect-to-novel, and auto-write.",
     "tool_id":  "tool-dev-ine-bridge",
     "type":  "python",
     "enabled":  true,
     "distribution":  {
-                         "active":  "local",
+                         "active":  "binary",
                          "profiles":  {
                                           "local":  {
                                                         "type":  "local",
                                                         "supports_protocol":  true
-                                                    }
+                                                    },
+                                          "binary":  {
+                                                         "type":  "binary",
+                                                         "supports_protocol":  true,
+                                                         "binary_artifacts":  {
+                                                                                  "darwin-arm64":  {
+                                                                                                       "path":  "dist/integrated-novel-editor-ine-bridge-{version}-darwin-arm64.tar.gz",
+                                                                                                       "entrypoint":  "integrated-novel-editor-ine-bridge",
+                                                                                                       "format":  "tar.gz"
+                                                                                                   },
+                                                                                  "darwin-x86_64":  {
+                                                                                                        "path":  "dist/integrated-novel-editor-ine-bridge-{version}-darwin-x86_64.tar.gz",
+                                                                                                        "entrypoint":  "integrated-novel-editor-ine-bridge",
+                                                                                                        "format":  "tar.gz"
+                                                                                                    },
+                                                                                  "linux-x86_64":  {
+                                                                                                       "path":  "dist/integrated-novel-editor-ine-bridge-{version}-linux-x86_64.tar.gz",
+                                                                                                       "entrypoint":  "integrated-novel-editor-ine-bridge",
+                                                                                                       "format":  "tar.gz"
+                                                                                                   },
+                                                                                  "windows-x86_64":  {
+                                                                                                         "path":  "dist/integrated-novel-editor-ine-bridge-{version}-windows-x86_64.zip",
+                                                                                                         "entrypoint":  "integrated-novel-editor-ine-bridge.exe",
+                                                                                                         "format":  "zip"
+                                                                                                     }
+                                                                              }
+                                                     }
                                       }
                      }
 }

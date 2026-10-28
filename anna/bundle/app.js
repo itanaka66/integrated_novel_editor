@@ -12,6 +12,7 @@ const TOOL_ID =
     window.__ANNA_TOOL_IDS__["ine-bridge"]) ||
   DEV_FALLBACK_TOOL_ID;
 const STORAGE_KEY = "ine:last-project-id";
+const COVER_STORAGE_KEY = "ine:cover";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -26,6 +27,7 @@ const els = {
   ch: $("#m-ch"),
   iss: $("#m-iss"),
   episodes: $("#episodes"),
+  cover: $("#cover-img"),
 };
 
 let anna = null;
@@ -164,11 +166,42 @@ async function loadTwin() {
       const name = twin?.project?.name || "INE";
       anna.window.set_title({ title: `${name} — INE` }).catch(() => {});
     }
+    loadCover(Number(id));
   } catch (e) {
     setStatus(e?.message || String(e));
   } finally {
     setBusy(false);
   }
+}
+
+async function loadCover(pid) {
+  const storageKey = `${COVER_STORAGE_KEY}:${pid}`;
+  // Show cached cover immediately while fetching.
+  try {
+    const cached = localStorage.getItem(storageKey);
+    if (cached && els.cover) {
+      els.cover.src = cached;
+      els.cover.hidden = false;
+    }
+  } catch { /* localStorage unavailable */ }
+
+  try {
+    const covers = await invoke("list_covers", { project_id: pid });
+    if (!Array.isArray(covers) || !covers.length) return;
+    // Use the most recently created cover.
+    const latest = covers.reduce((a, b) =>
+      (a.created_at || "") >= (b.created_at || "") ? a : b
+    );
+    const url = latest.url || latest.thumbnail_url || "";
+    if (!url) return;
+    if (els.cover) {
+      els.cover.src = url;
+      els.cover.hidden = false;
+    }
+    try {
+      localStorage.setItem(storageKey, url);
+    } catch { /* quota exceeded or unavailable */ }
+  } catch { /* covers not available */ }
 }
 
 function renderEpisodes(items) {

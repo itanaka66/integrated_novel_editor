@@ -23,14 +23,37 @@ WRITER_GENERATION_OPTIONS = {
 }
 
 
+def _resolve_writer_endpoint(cfg, url=None, model=None, api_key=None):
+    """Return (url, model, key) for the Writer, honouring ANNA_LLM_URL when set."""
+    anna = env_settings.anna_llm_url
+    resolved_url = url or (anna if anna else cfg.ollama_url)
+    resolved_model = model or (env_settings.anna_llm_model if anna else None) or cfg.ollama_model
+    resolved_key = api_key if api_key is not None else (
+        (env_settings.anna_llm_api_key or None) if anna
+        else (env_settings.ollama_api_key or None)
+    )
+    return resolved_url, resolved_model, resolved_key
+
+
+def _resolve_controller_endpoint(cfg, url=None, model=None, api_key=None):
+    """Return (url, model, key) for the Controller, honouring ANNA_LLM_URL when set."""
+    anna = env_settings.anna_llm_url
+    resolved_url = url or (anna if anna else cfg.controller_ollama_url)
+    resolved_model = model or (env_settings.anna_llm_model if anna else None) or cfg.controller_ollama_model
+    resolved_key = api_key if api_key is not None else (
+        (env_settings.anna_llm_api_key or None) if anna
+        else (env_settings.controller_ollama_api_key or None)
+    )
+    return resolved_url, resolved_model, resolved_key
+
+
 async def generate(prompt, model=None, url=None, timeout=240, options=WRITER_GENERATION_OPTIONS, api_key=None, kind='writer'):
     # api_key=None here means "use the Writer's own key" (env_settings.
     # ollama_api_key), not "no key" — controller_generate below passes its
     # own key explicitly to override that, since Controller is typically a
     # separate Ollama instance behind its own auth, if any.
     cfg = get_effective_config()
-    key = api_key if api_key is not None else (env_settings.ollama_api_key or None)
-    model, url = model or cfg.ollama_model, url or cfg.ollama_url
+    url, model, key = _resolve_writer_endpoint(cfg, url, model, api_key)
     async with slot(kind=kind, model=model, url=url):
         return await _common_ollama.generate(prompt, model, url, timeout, options=options, api_key=key)
 
@@ -42,11 +65,11 @@ async def generate_stream(prompt, model=None, url=None):
     (a buffered single response was observed to sit idle long enough to trip
     an intermediate proxy's idle timeout)."""
     cfg = get_effective_config()
-    model, url = model or cfg.ollama_model, url or cfg.ollama_url
+    url, model, key = _resolve_writer_endpoint(cfg, url, model)
     async with slot(kind='writer', model=model, url=url):
         async for event in _common_ollama.stream_generate(
             prompt, model, url,
-            options=WRITER_GENERATION_OPTIONS, api_key=env_settings.ollama_api_key or None,
+            options=WRITER_GENERATION_OPTIONS, api_key=key,
         ):
             if event.get('done'):
                 yield {'done': True, 'model': event.get('model')}
@@ -134,12 +157,12 @@ async def reviewer_generate(prompt):
     reference setup — a stronger judge than the translation model) with the
     long reasoning phase switched off for Qwen3, and the translator's timeout."""
     cfg = get_effective_config()
-    model = cfg.controller_ollama_model
+    url, model, key = _resolve_controller_endpoint(cfg)
     if model.lower().startswith('qwen3'):
         prompt = prompt.rstrip() + ' /no_think'
     return await generate(
-        prompt, model, cfg.controller_ollama_url, env_settings.translator_timeout_seconds,
-        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='controller',
+        prompt, model, url, env_settings.translator_timeout_seconds,
+        options=None, api_key=key, kind='controller',
     )
 
 
@@ -147,12 +170,12 @@ async def controller_generate(prompt):
     # No options override — the Controller (planning/quality-gate) model
     # runs on its own, smaller GPU; Ollama's own defaults are what that
     # hardware was sized for, unlike the Writer's num_ctx=65536 above.
-    # Its own api_key (possibly blank/unset, independently of the Writer's)
-    # since it's typically a separate Ollama instance.
+    # Honours ANNA_LLM_URL when set so Writer + Controller share one endpoint.
     cfg = get_effective_config()
+    url, model, key = _resolve_controller_endpoint(cfg)
     return await generate(
-        prompt, cfg.controller_ollama_model, cfg.controller_ollama_url, 180,
-        options=None, api_key=env_settings.controller_ollama_api_key or None, kind='controller',
+        prompt, model, url, 180,
+        options=None, api_key=key, kind='controller',
     )
 
 
