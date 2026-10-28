@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, post, streamSSE } from "../lib/api";
-import { loadModelDefaults } from "../lib/modelDefaults";
 import { ensureNotificationPermission, notify } from "../lib/notify";
 import { t } from "../lib/i18n";
 
@@ -17,15 +16,12 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   const [jobs, setJobs] = useState<any[]>([]);
   const [job, setJob] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
-  const defaults = loadModelDefaults();
   const [startEpisode, setStartEpisode] = useState(1);
   const [endEpisode, setEndEpisode] = useState(500);
   // Default the range to the work's own episode goal (not a fixed 500).
   useEffect(() => { api(`/projects/${projectId}`).then((p) => { if (p?.episode_goal) setEndEpisode(p.episode_goal); }).catch(() => {}); }, [projectId]);
   const [premise, setPremise] = useState("");
   const [overwrite, setOverwrite] = useState(false);
-  const [writerModel, setWriterModel] = useState(defaults.writer);
-  const [controllerModel, setControllerModel] = useState(defaults.controller);
   const notifiedJobIds = useRef<Set<number>>(new Set());
 
   async function loadJobs() {
@@ -61,7 +57,6 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
     try {
       const x = await post("/auto-write/start", {
         project_id: projectId, start_episode: startEpisode, end_episode: endEpisode, premise, overwrite,
-        writer_model: writerModel, controller_model: controllerModel,
       });
       setJob(x);
       setJobs((js) => [x, ...js]);
@@ -78,8 +73,6 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
         <div className="autoWriteFields">
           <label>{t("開始EP")}<input type="number" value={startEpisode} min={1} onChange={(x) => setStartEpisode(Number(x.target.value))} disabled={!!active} /></label>
           <label>{t("終了EP")}<input type="number" value={endEpisode} min={startEpisode} onChange={(x) => setEndEpisode(Number(x.target.value))} disabled={!!active} /></label>
-          <label>Writer<input value={writerModel} onChange={(x) => setWriterModel(x.target.value)} disabled={!!active} /></label>
-          <label>Controller<input value={controllerModel} onChange={(x) => setControllerModel(x.target.value)} disabled={!!active} /></label>
           <label className="autoWriteOverwrite"><input type="checkbox" checked={overwrite} onChange={(x) => setOverwrite(x.target.checked)} disabled={!!active} /> {t("既存エピソードを上書き")}</label>
         </div>
         <textarea className="instruction" value={premise} onChange={(x) => setPremise(x.target.value)} placeholder={t("追加方針（任意）：世界観の補足や外せない大筋があれば入力")} disabled={!!active} />

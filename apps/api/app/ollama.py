@@ -24,26 +24,28 @@ WRITER_GENERATION_OPTIONS = {
 
 
 def _resolve_writer_endpoint(cfg, url=None, model=None, api_key=None):
-    """Return (url, model, key) for the Writer, honouring ANNA_LLM_URL when set."""
+    """Return (url, model, key) for the Writer, honouring ANNA_LLM_URL when set.
+    When ANNA_LLM_URL is configured it takes full priority — caller-supplied url/model
+    (e.g. per-job overrides stored in AutoWriteJob) are ignored so .env always wins."""
     anna = env_settings.anna_llm_url
-    resolved_url = url or (anna if anna else cfg.ollama_url)
-    resolved_model = model or (env_settings.anna_llm_model if anna else None) or cfg.ollama_model
-    resolved_key = api_key if api_key is not None else (
-        (env_settings.anna_llm_api_key or None) if anna
-        else (env_settings.ollama_api_key or None)
-    )
+    if anna:
+        return anna, env_settings.anna_llm_model or cfg.ollama_model, env_settings.anna_llm_api_key or None
+    resolved_url = url or cfg.ollama_url
+    resolved_model = model or cfg.ollama_model
+    resolved_key = api_key if api_key is not None else (env_settings.ollama_api_key or None)
     return resolved_url, resolved_model, resolved_key
 
 
 def _resolve_controller_endpoint(cfg, url=None, model=None, api_key=None):
-    """Return (url, model, key) for the Controller, honouring ANNA_LLM_URL when set."""
+    """Return (url, model, key) for the Controller, honouring ANNA_LLM_URL when set.
+    When ANNA_LLM_URL is configured it takes full priority — caller-supplied url/model
+    (e.g. per-job overrides stored in AutoWriteJob) are ignored so .env always wins."""
     anna = env_settings.anna_llm_url
-    resolved_url = url or (anna if anna else cfg.controller_ollama_url)
-    resolved_model = model or (env_settings.anna_llm_model if anna else None) or cfg.controller_ollama_model
-    resolved_key = api_key if api_key is not None else (
-        (env_settings.anna_llm_api_key or None) if anna
-        else (env_settings.controller_ollama_api_key or None)
-    )
+    if anna:
+        return anna, env_settings.anna_llm_model or cfg.controller_ollama_model, env_settings.anna_llm_api_key or None
+    resolved_url = url or cfg.controller_ollama_url
+    resolved_model = model or cfg.controller_ollama_model
+    resolved_key = api_key if api_key is not None else (env_settings.controller_ollama_api_key or None)
     return resolved_url, resolved_model, resolved_key
 
 
