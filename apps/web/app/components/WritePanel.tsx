@@ -166,7 +166,7 @@ export default function WritePanel({ project }: { project: Project }) {
     } finally { setBusy(false); }
   }
 
-  if (!e) return <div className="panel"><p>{t("エピソードがまだありません。")}</p><button className="add" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("＋ エピソードを追加")}</button></div>;
+  if (!e) return <div className="panel"><p>{t("エピソードがまだありません。")}</p><button className="add" onClick={addEpisode}>{t("＋ エピソードを追加")}</button></div>;
 
   return (
     <div className="writeLayout" style={{ "--ep-w": `${episodeList.width}px`, "--right-w": `${rightPanel.width}px` } as React.CSSProperties}>
