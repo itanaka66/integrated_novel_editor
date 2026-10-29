@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['/build/_launcher.py'],
+    ['_launcher.py'],
     pathex=[],
     binaries=[],
     datas=[],
