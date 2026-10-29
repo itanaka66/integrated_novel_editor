@@ -18,12 +18,12 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
         "foreshadowings, reflect entities to novel, generate prose and chat "
-        "using Anna's own LLM, and manage auto-write jobs."
+        "using Anna's own LLM, generate cover prompts, and manage auto-write jobs."
     ),
     "credentials": [
         {
@@ -339,6 +339,19 @@ MANIFEST: dict[str, Any] = {
             "description": "List cover images generated for a work. Each item includes filename, url, style, and created_at.",
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
+            ],
+        },
+        {
+            "name": "generate_cover_prompt",
+            "description": (
+                "Generate an English text-to-image prompt for a novel cover illustration "
+                "using Anna's LLM, drawing on the project's synopsis, genre, recent episodes "
+                "and characters. Returns a ready-to-use prompt string. "
+                "Requires sampling context (must be called from an Anna session with sampling enabled)."
+            ),
+            "parameters": [
+                {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
+                {"name": "style", "type": "string", "description": "Art style hint: anime, realistic, watercolor, …", "required": False},
             ],
         },
     ],
@@ -977,6 +990,66 @@ def tool_list_covers(args: dict[str, Any], credentials: dict[str, Any] | None) -
     return covers
 
 
+_COVER_PROMPT_SYSTEM = (
+    "You are an art director for a published novel. Write ONE English text-to-image prompt "
+    "for its book-cover illustration: a single striking key scene or symbolic image that "
+    "captures the story's genre, mood and protagonist. "
+    "Requirements: vertical 2:3 composition, painterly/cinematic professional book-cover quality, "
+    "leave calm space in the upper third for a title, and absolutely NO text, letters, or "
+    "typography in the image. Output only the prompt (comma-separated phrases, under 120 words)."
+)
+
+
+def tool_generate_cover_prompt(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    if _sampling_token is None:
+        raise RuntimeError(
+            "Anna LLM sampling is required for generate_cover_prompt. "
+            "This tool must be called from an Anna session with sampling enabled."
+        )
+    pid = _int(args.get("project_id"), "project_id")
+    style = (args.get("style") or "").strip()
+
+    project = ine_call(credentials, "GET", f"/projects/{pid}")
+    episodes = ine_call(
+        credentials, "GET", f"/projects/{pid}/episodes",
+        query={"limit": 5, "offset": max(0, (project.get("episode_count") or 0) - 5)},
+    ) or []
+    if isinstance(episodes, dict):
+        episodes = episodes.get("episodes") or episodes.get("items") or []
+    characters = ine_call(credentials, "GET", f"/projects/{pid}/characters") or []
+
+    lines = [
+        f"Title: {project.get('name', '')}",
+        f"Genre: {project.get('genre', '')}",
+        f"Synopsis: {project.get('description', '')}",
+    ]
+    if characters:
+        ch_names = ", ".join(c.get("name", "") for c in characters[:6] if c.get("name"))
+        lines.append(f"Main characters: {ch_names}")
+    if episodes:
+        ep_summaries = "; ".join(
+            e.get("summary") or e.get("title") or ""
+            for e in episodes[-3:]
+            if e.get("summary") or e.get("title")
+        )
+        lines.append(f"Recent episodes: {ep_summaries}")
+    if style:
+        lines.append(f"Art style: {style}")
+
+    user_text = "\n".join(lines)
+    prompt_text = _sample(
+        [{"role": "user", "content": {"type": "text", "text": user_text}}],
+        system_prompt=_COVER_PROMPT_SYSTEM,
+        max_tokens=300,
+    )
+    return {
+        "prompt": (prompt_text or "").strip().strip('"'),
+        "project_id": pid,
+        "style": style,
+        "source": "anna_sampling",
+    }
+
+
 TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]] = {
     "health": tool_health,
     "list_projects": tool_list_projects,
@@ -1007,6 +1080,7 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "create_foreshadowing": tool_create_foreshadowing,
     "reflect_to_novel": tool_reflect_to_novel,
     "list_covers": tool_list_covers,
+    "generate_cover_prompt": tool_generate_cover_prompt,
 }
 
 
