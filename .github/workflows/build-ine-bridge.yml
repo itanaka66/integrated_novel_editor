@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g. 0.1.4)'
+        description: 'Version to build (e.g. 0.2.14)'
         required: true
-        default: '0.1.4'
+        default: '0.2.14'
 
 jobs:
   build:
@@ -18,19 +18,15 @@ jobs:
         include:
           - platform: darwin-arm64
             runner: macos-latest
-            ext: ''
             archive: tar.gz
           - platform: darwin-x86_64
             runner: macos-13
-            ext: ''
             archive: tar.gz
           - platform: linux-x86_64
             runner: ubuntu-latest
-            ext: ''
             archive: tar.gz
           - platform: windows-x86_64
             runner: windows-latest
-            ext: .exe
             archive: zip
 
     steps:
@@ -40,34 +36,32 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+      - name: Install dependencies
+        run: pip install pyinstaller && pip install anna/executas/ine-bridge/
 
       - name: Build standalone binary
         shell: bash
         run: |
           pyinstaller --onefile \
             --name integrated-novel-editor-ine-bridge \
-            anna/executas/ine-bridge/ine_plugin.py
+            anna/executas/ine-bridge/_launcher.py
 
       - name: Package (tar.gz)
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
-          ARCHIVE="integrated-novel-editor-ine-bridge-${{ github.event.inputs.version }}-${{ matrix.platform }}.tar.gz"
+          ARCHIVE="integrated-novel-editor-ine-bridge-${{ inputs.version }}-${{ matrix.platform }}.tar.gz"
           tar -czf "$ARCHIVE" -C dist integrated-novel-editor-ine-bridge
-          sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
-        shell: powershell
+        shell: pwsh
         run: |
-          $version = "${{ github.event.inputs.version }}"
+          $version  = "${{ inputs.version }}"
           $platform = "${{ matrix.platform }}"
-          $archive = "integrated-novel-editor-ine-bridge-${version}-${platform}.zip"
-          Compress-Archive `
-            -Path "dist\integrated-novel-editor-ine-bridge.exe" `
-            -DestinationPath $archive
+          $archive  = "integrated-novel-editor-ine-bridge-${version}-${platform}.zip"
+          Compress-Archive -Path "dist\integrated-novel-editor-ine-bridge.exe" -DestinationPath $archive
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
           "$hash  $archive" | Out-File -Encoding ascii "${archive}.sha256"
 
@@ -75,5 +69,5 @@ jobs:
         with:
           name: ine-bridge-${{ matrix.platform }}
           path: |
-            integrated-novel-editor-ine-bridge-${{ github.event.inputs.version }}-${{ matrix.platform }}.*
+            integrated-novel-editor-ine-bridge-${{ inputs.version }}-${{ matrix.platform }}.*
           if-no-files-found: error
