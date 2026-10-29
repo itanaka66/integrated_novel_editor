@@ -1,7 +1,7 @@
 {
   "slug": "novel-coach",
   "name": "Novel Coach",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "executa_type": "skill",
   "tool_id": "skill-integrated-novel-editor-novel-coach-hnvmc3ue",
   "description": "Writing-coach protocol for the Integrated Novel Editor. Helps draft, continue, plan, and audit long-form novels using INE as the source of truth.",
