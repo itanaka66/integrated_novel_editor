@@ -1532,7 +1532,7 @@ def handle_describe(_params: dict[str, Any]) -> dict[str, Any]:
 def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
     return {
         "protocolVersion": "2.0",
-        "server_info": {"name": MANIFEST["display_name"], "version": MANIFEST["version"]},
+        "server_info": {"name": MANIFEST["ine_bridge"], "version": MANIFEST["0.0.1"]},
         "capabilities": {},
         "client_capabilities": {"sampling": {}},
     }

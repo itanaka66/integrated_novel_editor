@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -428,6 +428,7 @@ def _sample(
     params: dict[str, Any] = {
         "messages": messages,
         "maxTokens": max_tokens,
+        "sampling_token": _sampling_token,
         "metadata": {"invoke_id": _sampling_invoke_id} if _sampling_invoke_id else {},
     }
     if system_prompt:
@@ -1531,7 +1532,7 @@ def handle_describe(_params: dict[str, Any]) -> dict[str, Any]:
 def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
     return {
         "protocolVersion": "2.0",
-        "server_info": {"name": MANIFEST["display_name"], "version": MANIFEST["version"]},
+        "server_info": {"name": MANIFEST["ine_bridge"], "version": MANIFEST["0.0.1"]},
         "capabilities": {},
         "client_capabilities": {"sampling": {}},
     }
@@ -1544,9 +1545,9 @@ def handle_invoke(params: dict[str, Any]) -> dict[str, Any]:
     tool_name = params.get("tool")
     args = params.get("arguments") or {}
     ctx = params.get("context") or {}
-    # Stash the sampling token for use by _sample() during this invoke.
-    _sampling_token = ctx.get("sampling_token") or None
-    _sampling_invoke_id = ctx.get("invoke_id") or None
+    # sampling_token and invoke_id are at params top-level (protocol v2).
+    _sampling_token = params.get("sampling_token") or ctx.get("sampling_token") or None
+    _sampling_invoke_id = params.get("invoke_id") or ctx.get("invoke_id") or None
     try:
         if not isinstance(args, dict):
             raise ValueError("`arguments` must be an object")
