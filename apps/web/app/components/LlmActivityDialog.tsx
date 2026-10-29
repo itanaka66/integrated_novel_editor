@@ -90,7 +90,7 @@ export default function LlmActivityDialog() {
               <span className="llmQueueState">{r.state === "running" ? t("実行中") : t("待機中")}</span>
               <span className="llmQueueMain">
                 {r.head}
-                {r.detail && <small>{r.detail}</small>}
+                {false && r.detail && <small>{r.detail}</small>}
               </span>
               <small>{t("{n}秒", { n: r.seconds })}{r.state === "waiting" ? t("待ち") : ""}</small>
             </li>
