@@ -1,5 +1,5 @@
 {
-    "version":  "0.2.10",
+    "version":  "0.2.11",
     "display_name":  "INE Bridge",
     "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM for prose generation and chat. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, and manage auto-write jobs.",
     "host_capabilities":  [
@@ -716,6 +716,24 @@
                                              "name":  "style",
                                              "type":  "string",
                                              "description":  "Art style hint: anime, realistic, watercolor, ...",
+                                             "required":  false
+                                         }
+                                     ]
+                  },
+                  {
+                      "name":  "proofread_episode",
+                      "description":  "Proofread an episode using the project's style guide and Anna's LLM via reverse RPC sampling. Returns suggested corrections (original, suggested, reason). With apply=true, saves all corrections back to the episode. Requires a style guide to be set on the project. Requires sampling context.",
+                      "parameters":  [
+                                         {
+                                             "name":  "episode_id",
+                                             "type":  "integer",
+                                             "description":  "INE episode id",
+                                             "required":  true
+                                         },
+                                         {
+                                             "name":  "apply",
+                                             "type":  "boolean",
+                                             "description":  "If true, save all corrections back to the episode (default false)",
                                              "required":  false
                                          }
                                      ]

@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -18,7 +19,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -352,6 +353,26 @@ MANIFEST: dict[str, Any] = {
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "style", "type": "string", "description": "Art style hint: anime, realistic, watercolor, …", "required": False},
+            ],
+        },
+        {
+            "name": "proofread_episode",
+            "description": (
+                "Proofread an episode using the project's style guide and Anna's LLM via reverse RPC sampling. "
+                "Returns a list of suggested corrections (original → suggested, with reason). "
+                "With apply=true, saves all corrections back to the episode automatically. "
+                "Requires a style guide to be set on the project first (use 「スタイルガイド生成」). "
+                "Requires sampling context (must be called from an Anna session with sampling enabled)."
+            ),
+            "parameters": [
+                {"name": "episode_id", "type": "integer", "description": "INE episode id", "required": True},
+                {
+                    "name": "apply",
+                    "type": "boolean",
+                    "description": "If true, save all corrections back to the episode (default false — preview only)",
+                    "required": False,
+                    "default": False,
+                },
             ],
         },
     ],
@@ -1050,6 +1071,81 @@ def tool_generate_cover_prompt(args: dict[str, Any], credentials: dict[str, Any]
     }
 
 
+def _build_proofread_prompt(style_guide: str, content: str) -> str:
+    return (
+        "あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。\n\n"
+        f"スタイルガイド:\n{style_guide}\n\n"
+        f"本文:\n{content}\n\n"
+        "出力は必ず次のJSON配列のみとし、他の説明文は一切含めないでください。修正不要なら空配列 [] を返してください。\n"
+        '[{"original": "本文中に完全一致する修正対象の原文", "suggested": "修正後の文字列", "reason": "修正理由（簡潔に）"}]'
+    )
+
+
+def _parse_proofread_diffs(text: str, content: str) -> list[dict[str, str]]:
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    try:
+        raw = json.loads(match.group(0) if match else text)
+    except Exception:
+        raw = []
+    return [
+        {"original": d.get("original", ""), "suggested": d.get("suggested", ""), "reason": d.get("reason", "")}
+        for d in raw
+        if isinstance(d, dict) and d.get("original") and d.get("original") in content
+    ]
+
+
+def tool_proofread_episode(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    if _sampling_token is None:
+        raise RuntimeError(
+            "Anna LLM sampling is required for proofread_episode. "
+            "This tool must be called from an Anna session with sampling enabled."
+        )
+    eid = _int(args.get("episode_id"), "episode_id")
+    apply_diffs = _bool(args.get("apply"), default=False)
+
+    episode = ine_call(credentials, "GET", f"/episodes/{eid}")
+    pid = episode.get("project_id")
+    if pid is None:
+        raise ValueError("episode has no project_id")
+
+    project = ine_call(credentials, "GET", f"/projects/{pid}")
+    style_guide = (project.get("style_guide") or "").strip()
+    if not style_guide:
+        raise ValueError(
+            "スタイルガイドが設定されていません。先に「スタイルガイド生成」で作成してください。"
+        )
+
+    content = (episode.get("content") or "").strip()
+    if not content:
+        return {"diffs": [], "applied": 0, "message": "本文が空のため校正できません。"}
+
+    prompt = _build_proofread_prompt(style_guide, content)
+    result_text = _sample(
+        [{"role": "user", "content": {"type": "text", "text": prompt}}],
+        max_tokens=4096,
+    )
+
+    diffs = _parse_proofread_diffs(result_text, content)
+
+    applied = 0
+    if apply_diffs and diffs:
+        new_content = content
+        for d in diffs:
+            new_content = new_content.replace(d["original"], d["suggested"], 1)
+        if new_content != content:
+            ine_call(credentials, "PUT", f"/episodes/{eid}", json_body={"content": new_content}, timeout=60)
+            applied = len(diffs)
+
+    return {
+        "episode_id": eid,
+        "episode_title": episode.get("title", ""),
+        "diffs": diffs,
+        "diff_count": len(diffs),
+        "applied": applied,
+        "source": "anna_sampling",
+    }
+
+
 TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]] = {
     "health": tool_health,
     "list_projects": tool_list_projects,
@@ -1081,6 +1177,7 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "reflect_to_novel": tool_reflect_to_novel,
     "list_covers": tool_list_covers,
     "generate_cover_prompt": tool_generate_cover_prompt,
+    "proofread_episode": tool_proofread_episode,
 }
 
 
