@@ -198,7 +198,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
       <small className="searchSource">{saved ? t("自動保存しました") : t("編集は自動保存されます")}</small>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-        <label><input type="checkbox" checked={state.overlay} onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
+        <label style={{ opacity: 0.4, cursor: "not-allowed" }}><input type="checkbox" checked={state.overlay} disabled onChange={(e) => persist({ ...state, overlay: e.target.checked })} /> {t("タイトルと著者名を画像に入れる")}</label>
         <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("複数画像作成")}</button>
       </div>
       <div className="exportButtons">

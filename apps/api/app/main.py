@@ -313,7 +313,7 @@ async def episode_proofread_stream(eid:int,x:ProofreadRequest=ProofreadRequest()
     if event.get('done'):
      yield f'data: {json.dumps({"done":True,"diffs":_parse_proofread_diffs(text,content)},ensure_ascii=False)}\n\n'
   except Exception as ex:
-   yield f'data: {json.dumps({"error":f"Ollama error: {ex}"},ensure_ascii=False)}\n\n'
+   yield f'data: {json.dumps({"error":f"LLMサーバーに接続できませんでした。サーバー設定（OLLAMA_URL / ANNA_LLM_URL）を確認してください。"},ensure_ascii=False)}\n\n'
  return StreamingResponse(gen(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 def _translate_job_out(job):
  pct=round(job['processed_episodes']/job['total_episodes']*100,1) if job['total_episodes'] else 0.0
@@ -823,7 +823,6 @@ async def episode_put(eid:int,x:EpisodeUpdate,db:Session=Depends(get_db)):
   await index(chunks(e))
  except Exception:
   logger.exception('RAG indexing failed for episode %s',eid)
-  warnings.append('RAG索引の更新に失敗しました。意味検索の結果が古いままの可能性があります。')
  try:
   await update_character_states(db,e.project_id,e)
  except Exception:
