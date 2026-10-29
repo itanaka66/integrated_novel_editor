@@ -49,7 +49,7 @@ const ACADEMIC_CITATION_STYLES = ["APA", "MLA", "シカゴ・マニュアル", "
 
 
 export default function SettingsPanel({ project, onSaved, onDeleted }: { project: Project; onSaved: (p: Project) => void; onDeleted?: () => void }) {
-  const [tab, setTab] = useState<"basic" | "import" | "backup" | "export" | "cover" | "delete">("basic");
+  const [tab, setTab] = useState<"basic" | "connection" | "import" | "backup" | "export" | "cover" | "delete">("basic");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importJob, setImportJob] = useState<ImportJob | null>(null);
   const [importBusy, setImportBusy] = useState(false);

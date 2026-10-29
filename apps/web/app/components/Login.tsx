@@ -4,8 +4,8 @@ import { api, API_ROOT, forgotPassword, setAuth } from "../lib/api";
 import { applyStoredLanguage, isLangCode, LANGUAGES, readStoredLanguage, storeLanguage } from "../lib/i18n";
 
 export default function Login({ onLoggedIn, notice }: { onLoggedIn: () => void; notice?: string }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("novel");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauthProviders, setOauthProviders] = useState<string[]>([]);
@@ -79,7 +79,7 @@ export default function Login({ onLoggedIn, notice }: { onLoggedIn: () => void; 
   return (
     <div className="center">
       <form className="loginCard" onSubmit={submit}>
-        <b>✦ Integrated Novel Editor</b>
+        <b>✦ Integrated Novel Editor (DEMO)</b>
         <p>Write your story with AI</p>
         {notice && <div className="loginNotice" role="status">{notice}</div>}
         <label className="loginLang">
