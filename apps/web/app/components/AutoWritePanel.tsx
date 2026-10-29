@@ -82,9 +82,9 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
         </div>
         <textarea className="instruction" value={premise} onChange={(x) => setPremise(x.target.value)} placeholder={t("追加方針（任意）：世界観の補足や外せない大筋があれば入力")} disabled={!!active} />
         {active ? (
-          <button className="check" onClick={stop}>{t("■ 停止する（EP.{n}）", { n: job.current_episode })}</button>
+          <button className="check" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("■ 停止する（EP.{n}）", { n: job.current_episode })}</button>
         ) : (
-          <button className="add" onClick={createJob} disabled={busy}>{busy ? t("作成中...") : t("＋ ジョブを作成")}</button>
+          <button className="add" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{busy ? t("作成中...") : t("＋ ジョブを作成")}</button>
         )}
       </div>
       {job && (
