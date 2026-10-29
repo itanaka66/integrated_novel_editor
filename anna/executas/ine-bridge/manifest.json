@@ -1,7 +1,7 @@
 {
     "version":  "0.2.14",
     "display_name":  "INE Bridge",
-    "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM for prose generation and chat. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, and manage auto-write jobs.",
+    "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM (via reverse-RPC sampling) for prose generation, chat, cover prompt creation, proofreading, and AI entity generation. Generates cover images by producing an English text-to-image prompt with Anna\u0027s LLM and rendering it through the INE server\u0027s image backend (ComfyUI or Higgsfield). Also provides list, search, plot, foreshadowing, reflect-to-novel, and auto-write job management.",
     "host_capabilities":  [
                               "llm.sample"
                           ],
@@ -728,7 +728,7 @@
                   },
                   {
                       "name":  "generate_cover_prompt",
-                      "description":  "Generate an English text-to-image prompt for a novel cover illustration using Anna's LLM. Draws on the project synopsis, genre, recent episodes and characters. Returns a ready-to-use prompt string. Requires sampling context.",
+                      "description":  "Use Anna\u0027s LLM (reverse-RPC sampling) to write an English text-to-image prompt for a novel cover illustration. Reads the project synopsis, genre, recent episodes and main characters from INE, then asks Anna\u0027s LLM to compose a single cinematic, painterly cover scene (under 120 words, comma-separated phrases, no text in image). Returns the prompt string only. Requires sampling context.",
                       "parameters":  [
                                          {
                                              "name":  "project_id",
@@ -753,7 +753,7 @@
                   },
                   {
                       "name":  "generate_cover",
-                      "description":  "Generate a cover image for a project. If prompt is omitted, an English text-to-image prompt is auto-generated from the project's story context via Anna's LLM. The image is rendered by the INE server using ComfyUI or Higgsfield and saved under the project's cover directory. Returns job status, filename and URL when completed.",
+                      "description":  "Two-step cover generation using Anna\u0027s LLM and an image backend. Step 1 (LLM \u2013 Anna reverse-RPC sampling): if prompt is omitted, Anna\u0027s LLM reads the project synopsis, genre, episodes and characters and writes an English text-to-image prompt (cinematic, painterly, vertical 2:3, no text in image). Step 2 (image \u2013 INE server): the prompt is sent to the INE server\u0027s image backend (ComfyUI or Higgsfield), which renders a PNG/JPEG and saves it to the project\u0027s cover directory. The tool polls until the job completes (up to 10 min) and returns job status, filename and a direct URL.",
                       "parameters":  [
                                          {
                                              "name":  "project_id",
