@@ -1,24 +1,18 @@
-html {
-    height: 100%;
-}
-
-body {
+html, body {
+    width: 100%;
     height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /* positioning context for the absolute iframe */
-    position: relative;
 }
 
 /* Mini-app HTML is hidden; scripts still run in the background */
 .top, main, footer { display: none !important; }
 
-/* absolute instead of fixed: avoids Anna's sub-window transform context
-   breaking position:fixed, while still filling the full body area */
 #ine-main-frame {
-    position: absolute;
-    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
     border: 0;
     background: #fff;
 }
