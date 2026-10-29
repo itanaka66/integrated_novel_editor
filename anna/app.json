@@ -1,7 +1,7 @@
 {
   "slug": "ine",
   "name": "Integrated Novel Editor",
-  "version": "0.1.0",
+  "version": "0.2.4",
   "tagline": "Bring a local INE novel into Anna — continuity, context, and auto-write as tools.",
   "description": "Connect Anna to a running Integrated Novel Editor instance. List works, inspect the Story Digital Twin, search episodes, draft with INE's context builder, audit continuity, and start auto-write jobs — all against the novel that already lives on your machine.\n\n**What's inside**\n\n- `ine-bridge` — Executa stdio plugin that calls the INE REST API with HTTP Basic credentials.\n- `novel-coach` — skill that tells Anna how to use those tools without inventing canon.\n- A compact dashboard window for health, works, and twin metrics.\n\n**How to use**\n\nStart INE (`docker compose up` or the desktop launcher), then set Anna credentials `INE_BASE_URL` (default `http://localhost:8000`), `INE_USERNAME`, and `INE_PASSWORD`. Mention `#ine` in chat or open the window.",
   "category": "creative",
