@@ -81,6 +81,15 @@ async function init() {
     } catch {
       /* optional */
     }
+    try {
+      await anna.window.maximize();
+    } catch {
+      try {
+        await anna.window.resize({ w: 1920, h: 1080 });
+      } catch {
+        /* resize not supported */
+      }
+    }
   } catch (e) {
     setConn(false);
     setStatus("Standalone preview — open this app with `anna-app dev` to call INE.");
