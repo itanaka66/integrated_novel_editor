@@ -84,11 +84,7 @@ async function init() {
     try {
       await anna.window.maximize();
     } catch {
-      try {
-        await anna.window.resize({ w: 1920, h: 1080 });
-      } catch {
-        /* resize not supported */
-      }
+      /* maximize not supported — window opens at default_size from manifest */
     }
   } catch (e) {
     setConn(false);

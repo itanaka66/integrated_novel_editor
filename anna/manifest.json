@@ -37,12 +37,12 @@
                                                   "h":  600
                                               },
                                  "default_size":  {
-                                                      "w":  1920,
-                                                      "h":  1080
+                                                      "w":  1300,
+                                                      "h":  900
                                                   },
                                  "max_size":  {
-                                                  "w":  3840,
-                                                  "h":  2160
+                                                  "w":  2560,
+                                                  "h":  1600
                                               },
                                  "resizable":  true,
                                  "movable":  true,
