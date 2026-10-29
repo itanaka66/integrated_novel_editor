@@ -1,803 +1,827 @@
 {
-    "version":  "0.2.14",
-    "display_name":  "INE Bridge",
-    "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM (via reverse-RPC sampling) for prose generation, chat, cover prompt creation, proofreading, and AI entity generation. Generates cover images by producing an English text-to-image prompt with Anna\u0027s LLM and rendering it through the INE server\u0027s image backend (ComfyUI or Higgsfield). Also provides list, search, plot, foreshadowing, reflect-to-novel, and auto-write job management.",
-    "host_capabilities":  [
-                              "llm.sample"
-                          ],
-    "credentials":  [
-                        {
-                            "name":  "INE_BASE_URL",
-                            "display_name":  "INE API base URL",
-                            "description":  "Origin of the INE API, without a trailing slash. Default http://localhost:8000",
-                            "required":  false,
-                            "sensitive":  false,
-                            "default":  "http://localhost:8000"
-                        },
-                        {
-                            "name":  "INE_USERNAME",
-                            "display_name":  "INE username",
-                            "description":  "HTTP Basic username for the INE API (same as the web login).",
-                            "required":  true,
-                            "sensitive":  false
-                        },
-                        {
-                            "name":  "INE_PASSWORD",
-                            "display_name":  "INE password",
-                            "description":  "HTTP Basic password for the INE API.",
-                            "required":  true,
-                            "sensitive":  true
-                        }
-                    ],
-    "runtime":  {
-                    "type":  "uv",
-                    "min_version":  "0.1.0"
+    "version": "0.2.14",
+    "display_name": "INE Bridge",
+    "description": "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna's own LLM (via reverse-RPC sampling) for prose generation, chat, cover prompt creation, proofreading, and AI entity generation. Generates cover images by producing an English text-to-image prompt with Anna's LLM and rendering it through the INE server's image backend (ComfyUI or Higgsfield). Also provides list, search, plot, foreshadowing, reflect-to-novel, and auto-write job management.",
+    "host_capabilities": [
+        "llm.sample"
+    ],
+    "credentials": [
+        {
+            "name": "INE_BASE_URL",
+            "display_name": "INE API base URL",
+            "description": "Origin of the INE API, without a trailing slash. Default http://localhost:8000",
+            "required": false,
+            "sensitive": false,
+            "default": "http://localhost:8000"
+        },
+        {
+            "name": "INE_USERNAME",
+            "display_name": "INE username",
+            "description": "HTTP Basic username for the INE API (same as the web login).",
+            "required": true,
+            "sensitive": false
+        },
+        {
+            "name": "INE_PASSWORD",
+            "display_name": "INE password",
+            "description": "HTTP Basic password for the INE API.",
+            "required": true,
+            "sensitive": true
+        }
+    ],
+    "runtime": {
+        "type": "uv",
+        "min_version": "0.1.0"
+    },
+    "tools": [
+        {
+            "name": "health",
+            "description": "Ping the INE API. Auth is optional for this call.",
+            "parameters": []
+        },
+        {
+            "name": "list_projects",
+            "description": "List INE works (projects): id, name, genre, description.",
+            "parameters": []
+        },
+        {
+            "name": "get_project",
+            "description": "Get one INE work by project_id.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_project",
+            "description": "Create a new INE work.",
+            "parameters": [
+                {
+                    "name": "name",
+                    "type": "string",
+                    "description": "Work title",
+                    "required": true
                 },
-    "tools":  [
-                  {
-                      "name":  "health",
-                      "description":  "Ping the INE API. Auth is optional for this call.",
-                      "parameters":  [
-
-                                     ]
-                  },
-                  {
-                      "name":  "list_projects",
-                      "description":  "List INE works (projects): id, name, genre, description.",
-                      "parameters":  [
-
-                                     ]
-                  },
-                  {
-                      "name":  "get_project",
-                      "description":  "Get one INE work by project_id.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_project",
-                      "description":  "Create a new INE work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "name",
-                                             "type":  "string",
-                                             "description":  "Work title",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "description",
-                                             "type":  "string",
-                                             "description":  "Synopsis",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "genre",
-                                             "type":  "string",
-                                             "description":  "Genre",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "rules",
-                                             "type":  "string",
-                                             "description":  "Hard setting rules the AI must obey",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "language",
-                                             "type":  "string",
-                                             "description":  "Language code",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "author",
-                                             "type":  "string",
-                                             "description":  "Author name",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "episode_goal",
-                                             "type":  "integer",
-                                             "description":  "Target episode count",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "get_story_twin",
-                      "description":  "Story Digital Twin: health score, coverage, continuity, plots. Graphs omitted unless include_graphs=true.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "include_graphs",
-                                             "type":  "boolean",
-                                             "description":  "Include character/world/timeline graphs",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_episodes",
-                      "description":  "List episodes of a work (paginated).",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "limit",
-                                             "type":  "integer",
-                                             "description":  "Page size",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "offset",
-                                             "type":  "integer",
-                                             "description":  "Offset",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "get_episode",
-                      "description":  "Get one episode including full Markdown content.",
-                      "parameters":  [
-                                         {
-                                             "name":  "episode_id",
-                                             "type":  "integer",
-                                             "description":  "INE episode id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_episode",
-                      "description":  "Add an episode to a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "number",
-                                             "type":  "integer",
-                                             "description":  "Episode number",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "title",
-                                             "type":  "string",
-                                             "description":  "Episode title",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "summary",
-                                             "type":  "string",
-                                             "description":  "Short summary",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "content",
-                                             "type":  "string",
-                                             "description":  "Markdown body",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "chapter",
-                                             "type":  "string",
-                                             "description":  "Chapter label",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "save_episode",
-                      "description":  "Update an episode. Saving also snapshots a revision and may update character state.",
-                      "parameters":  [
-                                         {
-                                             "name":  "episode_id",
-                                             "type":  "integer",
-                                             "description":  "Episode id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "title",
-                                             "type":  "string",
-                                             "description":  "Episode title",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "summary",
-                                             "type":  "string",
-                                             "description":  "Short summary",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "content",
-                                             "type":  "string",
-                                             "description":  "Markdown body",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "chapter",
-                                             "type":  "string",
-                                             "description":  "Chapter label",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_characters",
-                      "description":  "List characters for a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_character",
-                      "description":  "Add a character to a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "name",
-                                             "type":  "string",
-                                             "description":  "Character name",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "role",
-                                             "type":  "string",
-                                             "description":  "Role",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "personality",
-                                             "type":  "string",
-                                             "description":  "Personality",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "speech_style",
-                                             "type":  "string",
-                                             "description":  "Speech style",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "goal",
-                                             "type":  "string",
-                                             "description":  "Goal",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "status",
-                                             "type":  "string",
-                                             "description":  "Character status",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "description",
-                                             "type":  "string",
-                                             "description":  "Notes",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_world",
-                      "description":  "List world entities for a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_world",
-                      "description":  "Add a world entity to a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "name",
-                                             "type":  "string",
-                                             "description":  "Entity name",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "entity_type",
-                                             "type":  "string",
-                                             "description":  "Entity type",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "description",
-                                             "type":  "string",
-                                             "description":  "Description",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "rules",
-                                             "type":  "string",
-                                             "description":  "Hard rules",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "location",
-                                             "type":  "string",
-                                             "description":  "Location",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "era",
-                                             "type":  "string",
-                                             "description":  "Era",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "search",
-                      "description":  "Semantic RAG search over episode text, with PostgreSQL substring fallback.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "query",
-                                             "type":  "string",
-                                             "description":  "Search query",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "limit",
-                                             "type":  "integer",
-                                             "description":  "Max hits",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "generate",
-                      "description":  "Ask INE\u0027s Writer to continue, summarize, plot, or proofread using the project\u0027s story context.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "episode_id",
-                                             "type":  "integer",
-                                             "description":  "Episode to ground the prompt",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "instruction",
-                                             "type":  "string",
-                                             "description":  "Extra instruction",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "mode",
-                                             "type":  "string",
-                                             "description":  "continue, summary, plot, or proofread",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "rag_limit",
-                                             "type":  "integer",
-                                             "description":  "RAG snippets to include",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "chat",
-                      "description":  "Send a chat turn on a work. INE persists history and answers from story context.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "content",
-                                             "type":  "string",
-                                             "description":  "User message",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "check_continuity",
-                      "description":  "Run INE\u0027s continuity audit (timeline, character, world, foreshadowing).",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "episode_id",
-                                             "type":  "integer",
-                                             "description":  "Optional episode to focus the audit",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_continuity_issues",
-                      "description":  "List stored open/recent continuity issues for a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "start_auto_write",
-                      "description":  "Start INE auto-write (Controller plans, Writer drafts). Existing episodes are skipped unless overwrite=true.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "start_episode",
-                                             "type":  "integer",
-                                             "description":  "First episode number",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "end_episode",
-                                             "type":  "integer",
-                                             "description":  "Last episode number",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "premise",
-                                             "type":  "string",
-                                             "description":  "Extra premise",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "overwrite",
-                                             "type":  "boolean",
-                                             "description":  "Overwrite existing episode text",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "writer_model",
-                                             "type":  "string",
-                                             "description":  "Writer model name",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "controller_model",
-                                             "type":  "string",
-                                             "description":  "Controller model name",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "get_auto_write_job",
-                      "description":  "Poll an auto-write job\u0027s status and progress.",
-                      "parameters":  [
-                                         {
-                                             "name":  "job_id",
-                                             "type":  "integer",
-                                             "description":  "Auto-write job id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "stop_auto_write",
-                      "description":  "Request stop of a running auto-write job.",
-                      "parameters":  [
-                                         {
-                                             "name":  "job_id",
-                                             "type":  "integer",
-                                             "description":  "Auto-write job id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_auto_write_jobs",
-                      "description":  "List all auto-write jobs for a work (including completed and stopped ones).",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_plots",
-                      "description":  "List plot arcs for a work (planned, active, resolved, ...).",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_plot",
-                      "description":  "Add a plot arc to a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "title",
-                                             "type":  "string",
-                                             "description":  "Plot title",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "plot_type",
-                                             "type":  "string",
-                                             "description":  "arc / sub / twist / ... (default arc)",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "status",
-                                             "type":  "string",
-                                             "description":  "planned / active / resolved (default planned)",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "start_episode",
-                                             "type":  "integer",
-                                             "description":  "Episode number where the arc begins",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "end_episode",
-                                             "type":  "integer",
-                                             "description":  "Episode number where the arc ends",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "objective",
-                                             "type":  "string",
-                                             "description":  "What needs to happen",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "conflict",
-                                             "type":  "string",
-                                             "description":  "The central conflict",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "resolution",
-                                             "type":  "string",
-                                             "description":  "How it resolves",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "list_foreshadowings",
-                      "description":  "List foreshadowing items for a work (open, fulfilled, ...).",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "create_foreshadowing",
-                      "description":  "Add a foreshadowing item to a work.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "title",
-                                             "type":  "string",
-                                             "description":  "Foreshadowing title / label",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "description",
-                                             "type":  "string",
-                                             "description":  "What is foreshadowed",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "setup_episode",
-                                             "type":  "integer",
-                                             "description":  "Episode where it is set up",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "payoff_episode",
-                                             "type":  "integer",
-                                             "description":  "Episode where it pays off",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "status",
-                                             "type":  "string",
-                                             "description":  "open / fulfilled (default open)",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "reflect_to_novel",
-                      "description":  "Re-sync entity data back into the novel. For characters: re-runs character-state extraction on the 3 most recent episodes. For plots / foreshadowings: re-runs the continuity checker. Use after manually editing characters, plots, or foreshadowings to keep the Story Twin consistent.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "kind",
-                                             "type":  "string",
-                                             "description":  "characters | plots | foreshadowings | all (default all)",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "add_ai_entities",
-                      "description":  "Generate and add story-knowledge rows (characters, world, glossary, plots, foreshadowings, timeline) to a project using Anna's LLM via reverse RPC sampling. Reads existing rows to avoid duplicates. Requires sampling context.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "kind",
-                                             "type":  "string",
-                                             "description":  "characters | world | glossary | plots | foreshadowings | timeline",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "count",
-                                             "type":  "integer",
-                                             "description":  "Number of rows to generate (default 10, max 30)",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "generate_cover_prompt",
-                      "description":  "Use Anna\u0027s LLM (reverse-RPC sampling) to write an English text-to-image prompt for a novel cover illustration. Reads the project synopsis, genre, recent episodes and main characters from INE, then asks Anna\u0027s LLM to compose a single cinematic, painterly cover scene (under 120 words, comma-separated phrases, no text in image). Returns the prompt string only. Requires sampling context.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "style",
-                                             "type":  "string",
-                                             "description":  "Art style hint: anime, realistic, watercolor, ...",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "check_cover_services",
-                      "description":  "Diagnostic: report available image-generation services in the runtime environment. Returns Python version, relevant environment variable names (without values), and the INE server's cover configuration (providers, ComfyUI URL, Higgsfield model, etc.).",
-                      "parameters":  [
-
-                                     ]
-                  },
-                  {
-                      "name":  "generate_cover",
-                      "description":  "Two-step cover generation using Anna\u0027s LLM and an image backend. Step 1 (LLM \u2013 Anna reverse-RPC sampling): if prompt is omitted, Anna\u0027s LLM reads the project synopsis, genre, episodes and characters and writes an English text-to-image prompt (cinematic, painterly, vertical 2:3, no text in image). Step 2 (image \u2013 INE server): the prompt is sent to the INE server\u0027s image backend (ComfyUI or Higgsfield), which renders a PNG/JPEG and saves it to the project\u0027s cover directory. The tool polls until the job completes (up to 10 min) and returns job status, filename and a direct URL.",
-                      "parameters":  [
-                                         {
-                                             "name":  "project_id",
-                                             "type":  "integer",
-                                             "description":  "INE project id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "prompt",
-                                             "type":  "string",
-                                             "description":  "English text-to-image prompt. Omit to auto-generate via Anna LLM.",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "style",
-                                             "type":  "string",
-                                             "description":  "Art style: anime | gekiga | watercolor | photo | ukiyoe | pixel | adult | other. Default anime.",
-                                             "required":  false
-                                         },
-                                         {
-                                             "name":  "provider",
-                                             "type":  "string",
-                                             "description":  "Image backend: comfyui | higgsfield. Default comfyui.",
-                                             "required":  false
-                                         }
-                                     ]
-                  },
-                  {
-                      "name":  "proofread_episode",
-                      "description":  "Proofread an episode using the project's style guide and Anna's LLM via reverse RPC sampling. Returns suggested corrections (original, suggested, reason). With apply=true, saves all corrections back to the episode. Requires a style guide to be set on the project. Requires sampling context.",
-                      "parameters":  [
-                                         {
-                                             "name":  "episode_id",
-                                             "type":  "integer",
-                                             "description":  "INE episode id",
-                                             "required":  true
-                                         },
-                                         {
-                                             "name":  "apply",
-                                             "type":  "boolean",
-                                             "description":  "If true, save all corrections back to the episode (default false)",
-                                             "required":  false
-                                         }
-                                     ]
-                  }
-              ]
+                {
+                    "name": "description",
+                    "type": "string",
+                    "description": "Synopsis",
+                    "required": false
+                },
+                {
+                    "name": "genre",
+                    "type": "string",
+                    "description": "Genre",
+                    "required": false
+                },
+                {
+                    "name": "rules",
+                    "type": "string",
+                    "description": "Hard setting rules the AI must obey",
+                    "required": false
+                },
+                {
+                    "name": "language",
+                    "type": "string",
+                    "description": "Language code",
+                    "required": false
+                },
+                {
+                    "name": "author",
+                    "type": "string",
+                    "description": "Author name",
+                    "required": false
+                },
+                {
+                    "name": "episode_goal",
+                    "type": "integer",
+                    "description": "Target episode count",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "get_story_twin",
+            "description": "Story Digital Twin: health score, coverage, continuity, plots. Graphs omitted unless include_graphs=true.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "include_graphs",
+                    "type": "boolean",
+                    "description": "Include character/world/timeline graphs",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_episodes",
+            "description": "List episodes of a work (paginated).",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "limit",
+                    "type": "integer",
+                    "description": "Page size",
+                    "required": false
+                },
+                {
+                    "name": "offset",
+                    "type": "integer",
+                    "description": "Offset",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "get_episode",
+            "description": "Get one episode including full Markdown content.",
+            "parameters": [
+                {
+                    "name": "episode_id",
+                    "type": "integer",
+                    "description": "INE episode id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_episode",
+            "description": "Add an episode to a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "number",
+                    "type": "integer",
+                    "description": "Episode number",
+                    "required": true
+                },
+                {
+                    "name": "title",
+                    "type": "string",
+                    "description": "Episode title",
+                    "required": true
+                },
+                {
+                    "name": "summary",
+                    "type": "string",
+                    "description": "Short summary",
+                    "required": false
+                },
+                {
+                    "name": "content",
+                    "type": "string",
+                    "description": "Markdown body",
+                    "required": false
+                },
+                {
+                    "name": "chapter",
+                    "type": "string",
+                    "description": "Chapter label",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "save_episode",
+            "description": "Update an episode. Saving also snapshots a revision and may update character state.",
+            "parameters": [
+                {
+                    "name": "episode_id",
+                    "type": "integer",
+                    "description": "Episode id",
+                    "required": true
+                },
+                {
+                    "name": "title",
+                    "type": "string",
+                    "description": "Episode title",
+                    "required": false
+                },
+                {
+                    "name": "summary",
+                    "type": "string",
+                    "description": "Short summary",
+                    "required": false
+                },
+                {
+                    "name": "content",
+                    "type": "string",
+                    "description": "Markdown body",
+                    "required": false
+                },
+                {
+                    "name": "chapter",
+                    "type": "string",
+                    "description": "Chapter label",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_characters",
+            "description": "List characters for a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_character",
+            "description": "Add a character to a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "name",
+                    "type": "string",
+                    "description": "Character name",
+                    "required": true
+                },
+                {
+                    "name": "role",
+                    "type": "string",
+                    "description": "Role",
+                    "required": false
+                },
+                {
+                    "name": "personality",
+                    "type": "string",
+                    "description": "Personality",
+                    "required": false
+                },
+                {
+                    "name": "speech_style",
+                    "type": "string",
+                    "description": "Speech style",
+                    "required": false
+                },
+                {
+                    "name": "goal",
+                    "type": "string",
+                    "description": "Goal",
+                    "required": false
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "description": "Character status",
+                    "required": false
+                },
+                {
+                    "name": "description",
+                    "type": "string",
+                    "description": "Notes",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_world",
+            "description": "List world entities for a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_world",
+            "description": "Add a world entity to a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "name",
+                    "type": "string",
+                    "description": "Entity name",
+                    "required": true
+                },
+                {
+                    "name": "entity_type",
+                    "type": "string",
+                    "description": "Entity type",
+                    "required": false
+                },
+                {
+                    "name": "description",
+                    "type": "string",
+                    "description": "Description",
+                    "required": false
+                },
+                {
+                    "name": "rules",
+                    "type": "string",
+                    "description": "Hard rules",
+                    "required": false
+                },
+                {
+                    "name": "location",
+                    "type": "string",
+                    "description": "Location",
+                    "required": false
+                },
+                {
+                    "name": "era",
+                    "type": "string",
+                    "description": "Era",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "search",
+            "description": "Semantic RAG search over episode text, with PostgreSQL substring fallback.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "query",
+                    "type": "string",
+                    "description": "Search query",
+                    "required": true
+                },
+                {
+                    "name": "limit",
+                    "type": "integer",
+                    "description": "Max hits",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "generate",
+            "description": "Use Anna's LLM (reverse-RPC sampling when available, INE server LLM otherwise) to continue, summarize, plot, or draft using the project's Story Digital Twin as context.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "episode_id",
+                    "type": "integer",
+                    "description": "Episode to ground the prompt",
+                    "required": false
+                },
+                {
+                    "name": "instruction",
+                    "type": "string",
+                    "description": "Extra instruction",
+                    "required": false
+                },
+                {
+                    "name": "mode",
+                    "type": "string",
+                    "description": "continue, summary, plot, or proofread",
+                    "required": false
+                },
+                {
+                    "name": "rag_limit",
+                    "type": "integer",
+                    "description": "RAG snippets to include",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "chat",
+            "description": "Send a chat message about a work. Uses Anna's LLM (reverse-RPC sampling when available) with the project's story context and persisted chat history.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "content",
+                    "type": "string",
+                    "description": "User message",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "check_continuity",
+            "description": "Run INE's continuity audit (timeline, character, world, foreshadowing).",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "episode_id",
+                    "type": "integer",
+                    "description": "Optional episode to focus the audit",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_continuity_issues",
+            "description": "List stored open/recent continuity issues for a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "start_auto_write",
+            "description": "Start an auto-write job. Anna's LLM (via auto_write_step) will plan arcs and draft episodes. Call auto_write_step in a loop until done=true to drive the job forward. Existing episodes are skipped unless overwrite=true.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "start_episode",
+                    "type": "integer",
+                    "description": "First episode number",
+                    "required": false
+                },
+                {
+                    "name": "end_episode",
+                    "type": "integer",
+                    "description": "Last episode number",
+                    "required": false
+                },
+                {
+                    "name": "premise",
+                    "type": "string",
+                    "description": "Extra premise",
+                    "required": false
+                },
+                {
+                    "name": "overwrite",
+                    "type": "boolean",
+                    "description": "Overwrite existing episode text",
+                    "required": false
+                },
+                {
+                    "name": "writer_model",
+                    "type": "string",
+                    "description": "Writer model name",
+                    "required": false
+                },
+                {
+                    "name": "controller_model",
+                    "type": "string",
+                    "description": "Controller model name",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "get_auto_write_job",
+            "description": "Poll an auto-write job's status and progress.",
+            "parameters": [
+                {
+                    "name": "job_id",
+                    "type": "integer",
+                    "description": "Auto-write job id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "stop_auto_write",
+            "description": "Request stop of a running auto-write job.",
+            "parameters": [
+                {
+                    "name": "job_id",
+                    "type": "integer",
+                    "description": "Auto-write job id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "list_auto_write_jobs",
+            "description": "List all auto-write jobs for a work (including completed and stopped ones).",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "auto_write_step",
+            "description": "Drive an auto-write job forward by executing up to “steps” LLM steps using Anna’s LLM (reverse-RPC sampling). Each step follows the pipeline: series plan → arc plan → mini-arc plan → episode outline → episode prose. Returns done=true when the job is finished; call repeatedly until done=true. Requires sampling context.",
+            "parameters": [
+                {
+                    "name": "job_id",
+                    "type": "integer",
+                    "description": "Auto-write job id (from start_auto_write)",
+                    "required": true
+                },
+                {
+                    "name": "steps",
+                    "type": "integer",
+                    "description": "LLM steps to run in this call (default 5, max 6)",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_covers",
+            "description": "List cover images for a project. Returns filename, style, provider, and direct URL for each stored image.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "list_plots",
+            "description": "List plot arcs for a work (planned, active, resolved, ...).",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_plot",
+            "description": "Add a plot arc to a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "title",
+                    "type": "string",
+                    "description": "Plot title",
+                    "required": true
+                },
+                {
+                    "name": "plot_type",
+                    "type": "string",
+                    "description": "arc / sub / twist / ... (default arc)",
+                    "required": false
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "description": "planned / active / resolved (default planned)",
+                    "required": false
+                },
+                {
+                    "name": "start_episode",
+                    "type": "integer",
+                    "description": "Episode number where the arc begins",
+                    "required": false
+                },
+                {
+                    "name": "end_episode",
+                    "type": "integer",
+                    "description": "Episode number where the arc ends",
+                    "required": false
+                },
+                {
+                    "name": "objective",
+                    "type": "string",
+                    "description": "What needs to happen",
+                    "required": false
+                },
+                {
+                    "name": "conflict",
+                    "type": "string",
+                    "description": "The central conflict",
+                    "required": false
+                },
+                {
+                    "name": "resolution",
+                    "type": "string",
+                    "description": "How it resolves",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "list_foreshadowings",
+            "description": "List foreshadowing items for a work (open, fulfilled, ...).",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                }
+            ]
+        },
+        {
+            "name": "create_foreshadowing",
+            "description": "Add a foreshadowing item to a work.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "title",
+                    "type": "string",
+                    "description": "Foreshadowing title / label",
+                    "required": true
+                },
+                {
+                    "name": "description",
+                    "type": "string",
+                    "description": "What is foreshadowed",
+                    "required": false
+                },
+                {
+                    "name": "setup_episode",
+                    "type": "integer",
+                    "description": "Episode where it is set up",
+                    "required": false
+                },
+                {
+                    "name": "payoff_episode",
+                    "type": "integer",
+                    "description": "Episode where it pays off",
+                    "required": false
+                },
+                {
+                    "name": "status",
+                    "type": "string",
+                    "description": "open / fulfilled (default open)",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "reflect_to_novel",
+            "description": "Re-sync entity data back into the novel. For characters: re-runs character-state extraction on the 3 most recent episodes. For plots / foreshadowings: re-runs the continuity checker. Use after manually editing characters, plots, or foreshadowings to keep the Story Twin consistent.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "kind",
+                    "type": "string",
+                    "description": "characters | plots | foreshadowings | all (default all)",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "add_ai_entities",
+            "description": "Generate and add story-knowledge rows (characters, world, glossary, plots, foreshadowings, timeline) to a project using Anna's LLM via reverse RPC sampling. Reads existing rows to avoid duplicates. Requires sampling context.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "kind",
+                    "type": "string",
+                    "description": "characters | world | glossary | plots | foreshadowings | timeline",
+                    "required": true
+                },
+                {
+                    "name": "count",
+                    "type": "integer",
+                    "description": "Number of rows to generate (default 10, max 30)",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "generate_cover_prompt",
+            "description": "Use Anna's LLM (reverse-RPC sampling) to write an English text-to-image prompt for a novel cover illustration. Reads the project synopsis, genre, recent episodes and main characters from INE, then asks Anna's LLM to compose a single cinematic, painterly cover scene (under 120 words, comma-separated phrases, no text in image). Returns the prompt string only. Requires sampling context.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "style",
+                    "type": "string",
+                    "description": "Art style hint: anime, realistic, watercolor, ...",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "check_cover_services",
+            "description": "Diagnostic: report available image-generation services in the runtime environment. Returns Python version, relevant environment variable names (without values), and the INE server's cover configuration (providers, ComfyUI URL, Higgsfield model, etc.).",
+            "parameters": []
+        },
+        {
+            "name": "generate_cover",
+            "description": "Two-step cover generation using Anna's LLM and an image backend. Step 1 (LLM – Anna reverse-RPC sampling): if prompt is omitted, Anna's LLM reads the project synopsis, genre, episodes and characters and writes an English text-to-image prompt (cinematic, painterly, vertical 2:3, no text in image). Step 2 (image – INE server): the prompt is sent to the INE server's image backend (ComfyUI or Higgsfield), which renders a PNG/JPEG and saves it to the project's cover directory. The tool polls until the job completes (up to 10 min) and returns job status, filename and a direct URL.",
+            "parameters": [
+                {
+                    "name": "project_id",
+                    "type": "integer",
+                    "description": "INE project id",
+                    "required": true
+                },
+                {
+                    "name": "prompt",
+                    "type": "string",
+                    "description": "English text-to-image prompt. Omit to auto-generate via Anna LLM.",
+                    "required": false
+                },
+                {
+                    "name": "style",
+                    "type": "string",
+                    "description": "Art style: anime | gekiga | watercolor | photo | ukiyoe | pixel | adult | other. Default anime.",
+                    "required": false
+                },
+                {
+                    "name": "provider",
+                    "type": "string",
+                    "description": "Image backend: comfyui | higgsfield. Default comfyui.",
+                    "required": false
+                }
+            ]
+        },
+        {
+            "name": "proofread_episode",
+            "description": "Proofread an episode using the project's style guide and Anna's LLM via reverse RPC sampling. Returns suggested corrections (original, suggested, reason). With apply=true, saves all corrections back to the episode. Requires a style guide to be set on the project. Requires sampling context.",
+            "parameters": [
+                {
+                    "name": "episode_id",
+                    "type": "integer",
+                    "description": "INE episode id",
+                    "required": true
+                },
+                {
+                    "name": "apply",
+                    "type": "boolean",
+                    "description": "If true, save all corrections back to the episode (default false)",
+                    "required": false
+                }
+            ]
+        }
+    ]
 }
