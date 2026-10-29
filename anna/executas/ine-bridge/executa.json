@@ -23,11 +23,6 @@
                                                                                                        "entrypoint":  "integrated-novel-editor-ine-bridge",
                                                                                                        "format":  "tar.gz"
                                                                                                    },
-                                                                                  "darwin-x86_64":  {
-                                                                                                        "path":  "dist/integrated-novel-editor-ine-bridge-{version}-darwin-x86_64.tar.gz",
-                                                                                                        "entrypoint":  "integrated-novel-editor-ine-bridge",
-                                                                                                        "format":  "tar.gz"
-                                                                                                    },
                                                                                   "linux-x86_64":  {
                                                                                                        "path":  "dist/integrated-novel-editor-ine-bridge-{version}-linux-x86_64.tar.gz",
                                                                                                        "entrypoint":  "integrated-novel-editor-ine-bridge",
