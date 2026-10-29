@@ -1,5 +1,5 @@
 {
-    "version":  "0.2.13",
+    "version":  "0.2.14",
     "display_name":  "INE Bridge",
     "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM for prose generation and chat. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, and manage auto-write jobs.",
     "host_capabilities":  [
@@ -740,6 +740,43 @@
                                              "name":  "style",
                                              "type":  "string",
                                              "description":  "Art style hint: anime, realistic, watercolor, ...",
+                                             "required":  false
+                                         }
+                                     ]
+                  },
+                  {
+                      "name":  "check_cover_services",
+                      "description":  "Diagnostic: report available image-generation services in the runtime environment. Returns Python version, relevant environment variable names (without values), and the INE server's cover configuration (providers, ComfyUI URL, Higgsfield model, etc.).",
+                      "parameters":  [
+
+                                     ]
+                  },
+                  {
+                      "name":  "generate_cover",
+                      "description":  "Generate a cover image for a project. If prompt is omitted, an English text-to-image prompt is auto-generated from the project's story context via Anna's LLM. The image is rendered by the INE server using ComfyUI or Higgsfield and saved under the project's cover directory. Returns job status, filename and URL when completed.",
+                      "parameters":  [
+                                         {
+                                             "name":  "project_id",
+                                             "type":  "integer",
+                                             "description":  "INE project id",
+                                             "required":  true
+                                         },
+                                         {
+                                             "name":  "prompt",
+                                             "type":  "string",
+                                             "description":  "English text-to-image prompt. Omit to auto-generate via Anna LLM.",
+                                             "required":  false
+                                         },
+                                         {
+                                             "name":  "style",
+                                             "type":  "string",
+                                             "description":  "Art style: anime | gekiga | watercolor | photo | ukiyoe | pixel | adult | other. Default anime.",
+                                             "required":  false
+                                         },
+                                         {
+                                             "name":  "provider",
+                                             "type":  "string",
+                                             "description":  "Image backend: comfyui | higgsfield. Default comfyui.",
                                              "required":  false
                                          }
                                      ]

@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.9",
+    "version": "0.2.0",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -1089,6 +1089,123 @@ def tool_generate_cover_prompt(args: dict[str, Any], credentials: dict[str, Any]
     }
 
 
+def tool_check_cover_services(_args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    """Diagnostic: report available image-generation services in the runtime environment."""
+    env_vars: dict[str, str] = {}
+    for key in sorted(os.environ):
+        if any(word in key.lower() for word in ("anna", "image", "llm", "api_url", "comfy", "higgs")):
+            env_vars[key] = "<設定済み>" if os.environ[key] else "<空>"
+
+    cover_config: Any = None
+    try:
+        cover_config = ine_call(credentials, "GET", "/cover/config")
+    except Exception as exc:
+        cover_config = {"error": str(exc)}
+
+    return {
+        "python_version": sys.version,
+        "relevant_env_vars": env_vars,
+        "ine_cover_config": cover_config,
+    }
+
+
+def tool_generate_cover(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    """Generate a cover image for a project.
+
+    If *prompt* is omitted and Anna sampling is available, a prompt is
+    auto-generated from the project's story context via Anna's LLM.
+    The image is rendered by the INE server using ComfyUI or Higgsfield.
+    """
+    pid = _int(args.get("project_id"), "project_id")
+    prompt = (args.get("prompt") or "").strip()
+    style = (args.get("style") or "").strip()
+    provider = (args.get("provider") or "comfyui").strip()
+    prompt_source = "provided"
+
+    if not prompt:
+        if _sampling_token is None:
+            raise RuntimeError(
+                "prompt パラメーターが必要です。または Anna チャットから呼び出して LLM で自動生成してください。"
+            )
+        project = ine_call(credentials, "GET", f"/projects/{pid}")
+        episodes = ine_call(
+            credentials, "GET", f"/projects/{pid}/episodes",
+            query={"limit": 5, "offset": max(0, (project.get("episode_count") or 0) - 5)},
+        ) or []
+        if isinstance(episodes, dict):
+            episodes = episodes.get("episodes") or episodes.get("items") or []
+        characters = ine_call(credentials, "GET", f"/projects/{pid}/characters") or []
+
+        lines = [
+            f"Title: {project.get('name', '')}",
+            f"Genre: {project.get('genre', '')}",
+            f"Synopsis: {project.get('description', '')}",
+        ]
+        if characters:
+            ch_names = ", ".join(c.get("name", "") for c in characters[:6] if c.get("name"))
+            lines.append(f"Main characters: {ch_names}")
+        if isinstance(episodes, list) and episodes:
+            ep_summaries = "; ".join(
+                e.get("summary") or e.get("title") or ""
+                for e in episodes[-3:]
+                if e.get("summary") or e.get("title")
+            )
+            if ep_summaries:
+                lines.append(f"Recent episodes: {ep_summaries}")
+        if style:
+            lines.append(f"Art style: {style}")
+
+        prompt = _sample(
+            [{"role": "user", "content": {"type": "text", "text": "\n".join(lines)}}],
+            system_prompt=_COVER_PROMPT_SYSTEM,
+            max_tokens=300,
+        )
+        prompt = (prompt or "").strip().strip('"')
+        prompt_source = "anna_sampling"
+
+    if not prompt:
+        raise ValueError("プロンプトを生成できませんでした。prompt パラメーターを直接指定してください。")
+
+    job = ine_call(
+        credentials, "POST", f"/projects/{pid}/cover/generate",
+        json_body={"prompt": prompt, "style": style, "provider": provider, "overlay": False},
+        timeout=30,
+    )
+    job_id = job.get("id")
+    if not job_id:
+        raise RuntimeError(f"ジョブの作成に失敗しました: {job}")
+
+    _log(f"generate_cover: job {job_id} started pid={pid} provider={provider}")
+
+    for _ in range(120):  # poll up to 10 minutes
+        time.sleep(5)
+        status = ine_call(credentials, "GET", f"/cover-jobs/{job_id}")
+        st = status.get("status", "")
+        if st in ("completed", "error", "cancelled"):
+            base_url = ((credentials or {}).get("INE_BASE_URL") or "http://localhost:8000").rstrip("/")
+            result: dict[str, Any] = {
+                "project_id": pid,
+                "job_id": job_id,
+                "status": st,
+                "filename": status.get("filename"),
+                "prompt": prompt,
+                "style": style,
+                "provider": provider,
+                "message": status.get("last_message", ""),
+                "prompt_source": prompt_source,
+            }
+            if status.get("filename"):
+                result["url"] = f"{base_url}/api/v1/projects/{pid}/covers/{status['filename']}"
+            return result
+
+    return {
+        "job_id": job_id,
+        "status": "timeout",
+        "message": "10 分以内に完了しませんでした。cover-jobs/{id} で状態を確認してください。",
+        "prompt": prompt,
+    }
+
+
 _AI_ENTITY_KINDS: dict[str, dict] = {
     "characters": {
         "label": "キャラクター",
@@ -1400,6 +1517,8 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "reflect_to_novel": tool_reflect_to_novel,
     "list_covers": tool_list_covers,
     "generate_cover_prompt": tool_generate_cover_prompt,
+    "check_cover_services": tool_check_cover_services,
+    "generate_cover": tool_generate_cover,
     "add_ai_entities": tool_add_ai_entities,
     "proofread_episode": tool_proofread_episode,
 }
