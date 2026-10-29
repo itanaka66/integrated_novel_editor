@@ -199,7 +199,7 @@ export default function WritePanel({ project }: { project: Project }) {
           <div><small>EPISODE {e.number}</small><input value={e.title} onChange={(x) => setE({ ...e, title: x.target.value })} /></div>
           <div className="writeHeadActions">
             <button className="historyButton" onClick={openHistory}>{t("🕘 履歴")}</button>
-            <button className="historyButton" onClick={() => setShowProofread(true)} title={t("スタイルガイドと照合し、差分を1件ずつ確認しながら修正します")}>{t("📐 文章校正")}</button>
+            <button className="historyButton" disabled style={{ opacity: 0.4, cursor: "not-allowed" }} title={t("Anna チャットの proofread_episode ツールをご利用ください")}>{t("📐 文章校正")}</button>
             <button className="saveButton" onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? t("保存中") : t("保存＋人物状態更新")}</button>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function WritePanel({ project }: { project: Project }) {
           <button onClick={() => aiRun("continue")}>{t("▶ 続きを書く")}</button>
           <button onClick={() => aiRun("plot")}>{t("◆ 次の展開")}</button>
           <button onClick={() => aiRun("summary")}>{t("要約")}</button>
-          <button onClick={() => aiRun("proofread")}>{t("校正")}</button>
+          <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("校正")}</button>
         </div>
         <div className="customTitle"><small>QUICK CUSTOM CHECKS</small><span>{t("ボタンを押すと専用プロンプトを送信")}</span></div>
         <div className="customActions">{CUSTOM_ACTIONS.map((a) => <button key={a.label} disabled={busy} onClick={() => { setInst(a.prompt); aiRun("custom", a.prompt); }}>{a.label}</button>)}</div>
