@@ -1,9 +1,9 @@
 {
     "slug":  "ine-bridge",
     "name":  "INE Bridge",
-    "version":  "0.2.14",
+    "version":  "0.2.15",
     "executa_type":  "tool",
-    "description":  "Connects Anna to a running Integrated Novel Editor API. Uses Anna\u0027s own LLM (via sampling) for prose generation and chat. Supports projects, episodes, story twin, plots, foreshadowings, reflect-to-novel, and auto-write.",
+    "description":  "Connects Anna to a running Integrated Novel Editor API. Uses Anna's own LLM (via sampling) for prose generation and chat. Supports projects, episodes, story twin, plots, foreshadowings, reflect-to-novel, and auto-write.",
     "tool_id":  "tool-dev-ine-bridge",
     "type":  "python",
     "enabled":  true,
