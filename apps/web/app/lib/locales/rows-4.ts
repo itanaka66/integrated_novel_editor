@@ -129,7 +129,6 @@ export const ROWS_4: Row[] = [
 
   // cover delete
   ["この画像を削除", "Delete this image", "删除此图片", "刪除此圖片", "이 이미지 삭제", "Eliminar esta imagen", "Supprimer cette image", "Dieses Bild löschen"],
-  ["この画像を削除しますか？", "Delete this image?", "要删除此图片吗？", "要刪除此圖片嗎？", "이 이미지를 삭제할까요?", "¿Eliminar esta imagen?", "Supprimer cette image ?", "Dieses Bild löschen?"],
   ["削除できませんでした", "Could not delete", "无法删除", "無法刪除", "삭제하지 못했습니다", "No se pudo eliminar", "Suppression impossible", "Löschen fehlgeschlagen"],
 
   // checkpoint list

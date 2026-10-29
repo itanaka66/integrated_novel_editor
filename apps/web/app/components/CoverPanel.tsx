@@ -163,7 +163,6 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
     if (Array.isArray(r)) setImages(r);
   }
   async function remove(filename: string) {
-    if (!confirm(t("この画像を削除しますか？"))) return;
     setError("");
     try {
       const r = await api(`/projects/${projectId}/covers/${encodeURIComponent(filename)}`, { method: "DELETE" });
