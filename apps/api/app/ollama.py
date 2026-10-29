@@ -5,6 +5,15 @@ from editor_common import ollama as _common_ollama
 from .config import settings as env_settings
 from .llm_queue import slot
 from .runtime_config import get_effective_config, language_box
+from . import openai_client as _openai_client
+
+
+def _llm_client(url: str):
+    """Return the right LLM client for the given URL.
+    When ANNA_LLM_URL is active and the URL matches, use the OpenAI-compatible client."""
+    if env_settings.anna_llm_url and url == env_settings.anna_llm_url:
+        return _openai_client
+    return _common_ollama
 
 # Sent as Ollama's own "options" object on every Writer /api/generate call
 # only (see controller_generate below — the Controller model runs on
@@ -56,8 +65,9 @@ async def generate(prompt, model=None, url=None, timeout=240, options=WRITER_GEN
     # separate Ollama instance behind its own auth, if any.
     cfg = get_effective_config()
     url, model, key = _resolve_writer_endpoint(cfg, url, model, api_key)
+    client = _llm_client(url)
     async with slot(kind=kind, model=model, url=url):
-        return await _common_ollama.generate(prompt, model, url, timeout, options=options, api_key=key)
+        return await client.generate(prompt, model, url, timeout, options=options, api_key=key)
 
 
 async def generate_stream(prompt, model=None, url=None):
@@ -68,8 +78,9 @@ async def generate_stream(prompt, model=None, url=None):
     an intermediate proxy's idle timeout)."""
     cfg = get_effective_config()
     url, model, key = _resolve_writer_endpoint(cfg, url, model)
+    client = _llm_client(url)
     async with slot(kind='writer', model=model, url=url):
-        async for event in _common_ollama.stream_generate(
+        async for event in client.stream_generate(
             prompt, model, url,
             options=WRITER_GENERATION_OPTIONS, api_key=key,
         ):
