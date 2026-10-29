@@ -92,15 +92,11 @@ export default function Login({ onLoggedIn, notice }: { onLoggedIn: () => void; 
         <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         {error && <div className="loginError">{error}</div>}
         <button type="submit" disabled={busy}>{busy ? "Checking..." : "Sign in"}</button>
-        <button type="button" className="loginOAuth loginOAuthLink" onClick={() => setShowForgot(true)}>Forgot your password?</button>
+        <button type="button" className="loginOAuth loginOAuthLink" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>Forgot your password?</button>
         <div className="loginDivider">or</div>
-        {["google", "github"].map((p) =>
-          oauthProviders.includes(p) ? (
-            <a key={p} className="loginOAuth loginOAuthLink" href={`${API_ROOT}/auth/login/${p}`}>{PROVIDER_LABELS[p]}</a>
-          ) : (
-            <button key={p} type="button" className="loginOAuth" disabled title="This sign-in method is not configured on the server">{PROVIDER_LABELS[p]}</button>
-          ),
-        )}
+        {["google", "github"].map((p) => (
+          <button key={p} type="button" className="loginOAuth" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{PROVIDER_LABELS[p]}</button>
+        ))}
       </form>
     </div>
   );
