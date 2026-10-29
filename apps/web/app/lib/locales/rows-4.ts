@@ -72,6 +72,16 @@ export const ROWS_4: Row[] = [
 
   ["更新", "Update", "更新", "更新", "업데이트", "Actualizar", "Mettre à jour", "Aktualisieren"],
 
+  // CoverPanel (style labels from API config)
+  ["アニメ風", "Anime", "动漫风", "動漫風", "애니풍", "Anime", "Anime", "Anime"],
+  ["劇画風", "Gekiga", "剧画风", "劇畫風", "극화풍", "Gekiga", "Gekiga", "Gekiga"],
+  ["実写風", "Live-action style", "实写风", "實寫風", "실사풍", "Estilo real", "Style réel", "Realstil"],
+  ["水彩画", "Watercolor", "水彩画", "水彩畫", "수채화", "Acuarela", "Aquarelle", "Aquarell"],
+  ["浮世絵風", "Ukiyo-e", "浮世绘风", "浮世繪風", "우키요에풍", "Ukiyo-e", "Ukiyo-e", "Ukiyo-e"],
+  ["ドット絵", "Pixel art", "像素画", "像素畫", "도트 그림", "Pixel art", "Pixel art", "Pixel-Art"],
+  ["アダルト", "Adult", "成人向", "成人向", "성인용", "Adulto", "Adulte", "Erwachsene"],
+  ["その他", "Other", "其他", "其他", "기타", "Otro", "Autre", "Andere"],
+
   // CoverPanel (styles / auto-save)
   ["どんなイメージにしますか？", "What look do you want?", "想要什么样的画面风格？", "想要什麼樣的畫面風格？", "어떤 이미지로 만들까요?", "¿Qué aspecto quieres?", "Quel rendu souhaitez-vous ?", "Welchen Look wünschen Sie?"],
   ["表紙のイメージ", "Cover look", "封面风格", "封面風格", "표지 이미지", "Aspecto de la portada", "Rendu de la couverture", "Cover-Look"],
@@ -126,7 +136,6 @@ export const ROWS_4: Row[] = [
   ["共通設定を使用", "Use the common setting", "使用通用设置", "使用共通設定", "공통 설정 사용", "Usar el ajuste común", "Utiliser le réglage commun", "Gemeinsame Einstellung verwenden"],
 
   // translate all
-  ["全翻訳中 {i}/{n}（{label}）", "Translating all {i}/{n} ({label})", "全部翻译中 {i}/{n}（{label}）", "全部翻譯中 {i}/{n}（{label}）", "전체 번역 중 {i}/{n}({label})", "Traduciendo todo {i}/{n} ({label})", "Tout traduire {i}/{n} ({label})", "Alles übersetzen {i}/{n} ({label})"],
   ["全翻訳", "Translate all", "全部翻译", "全部翻譯", "전체 번역", "Traducir todo", "Tout traduire", "Alles übersetzen"],
 
   // publishing dialog

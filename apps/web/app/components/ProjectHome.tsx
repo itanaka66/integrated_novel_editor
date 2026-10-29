@@ -152,8 +152,8 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <button onClick={() => setShowPub(true)}>{t("出版情報を開く")}</button>
         <p style={{ margin: "10px 0 4px", fontSize: 13 }}>{t("投稿先")}</p>
         <div className="exportButtons">
-          {targets.map((x, i) => safeUrl(x.postUrl || x.officialUrl) && <a key={i} className="button" href={safeUrl(x.postUrl || x.officialUrl)} target="_blank" rel="noopener noreferrer">{x.name} ↗</a>)}
-          <button onClick={() => setShowTargets(true)}>{t("投稿先の詳細")}</button>
+          {targets.map((x, i) => safeUrl(x.postUrl || x.officialUrl) && <a key={i} className="button" style={{ opacity: 0.4, cursor: "not-allowed", pointerEvents: "none" }}>{x.name} ↗</a>)}
+          <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("投稿先の詳細")}</button>
         </div>
       </div>
       {showTargets && <PublishTargetsDialog targets={targets} onChange={setTargets} onClose={() => setShowTargets(false)} />}
@@ -163,12 +163,11 @@ export default function ProjectHome({ project, onSection, onOpenProject }: { pro
         <small>{t("多言語化（全編翻訳）")}</small>
         <p>{t("作品全編を選択した言語に翻訳し、新しい作品として作成します。")}</p>
         <div className="exportButtons">
-          <button className="primary" onClick={translateAll} disabled={tBusy || episodes.length === 0}>{allRun ? t("全翻訳中 {i}/{n}（{label}）", { i: allRun.index, n: allRun.total, label: allRun.label }) : t("全翻訳")}</button>
-          <select value={targetLang} onChange={(e) => setTargetLang(e.target.value)} disabled={tBusy} aria-label={t("翻訳する言語")}>
+          <button className="primary" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("全翻訳")}</button>
+          <select disabled style={{ opacity: 0.4, cursor: "not-allowed" }} aria-label={t("翻訳する言語")}>
             <option value="">{t("翻訳する言語を選択")}</option>
-            {TRANSLATION_LANGUAGES.filter((l) => l.code !== (project.language || "ja")).map((l) => <option key={l.code} value={l.code}>{languageOptionLabel(l)}</option>)}
           </select>
-          <button onClick={() => { const l = TRANSLATION_LANGUAGES.find((x) => x.code === targetLang); if (l) translate(l.code, `${l.native}（${l.japanese}）`); }} disabled={tBusy || episodes.length === 0 || !targetLang}>{t("翻訳")}</button>
+          <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("翻訳")}</button>
         </div>
         {tError && <p style={{ color: "#c0392b" }}>{tError}</p>}
         {allActive && allJob && <button type="button" style={{ color: "#c0392b" }} onClick={() => cancelTranslation("translate_all", allJob.id)}>{t("全翻訳をキャンセル")}</button>}

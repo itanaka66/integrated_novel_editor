@@ -166,7 +166,7 @@ export default function WritePanel({ project }: { project: Project }) {
     } finally { setBusy(false); }
   }
 
-  if (!e) return <div className="panel"><p>{t("エピソードがまだありません。")}</p><button className="add" onClick={addEpisode}>{t("＋ エピソードを追加")}</button></div>;
+  if (!e) return <div className="panel"><p>{t("エピソードがまだありません。")}</p><button className="add" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("＋ エピソードを追加")}</button></div>;
 
   return (
     <div className="writeLayout" style={{ "--ep-w": `${episodeList.width}px`, "--right-w": `${rightPanel.width}px` } as React.CSSProperties}>
@@ -180,8 +180,8 @@ export default function WritePanel({ project }: { project: Project }) {
             </div>
           ))}
         </div>
-        <button className="newEpisode" onClick={addEpisode}>{t("＋ 新規エピソード")}</button>
-        <button className="newEpisode" onClick={insertAfterOpen} disabled={bulkBusy}>{t("＋ この話の次に挿入")}</button>
+        <button className="newEpisode" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("＋ 新規エピソード")}</button>
+        <button className="newEpisode" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("＋ この話の次に挿入")}</button>
         <div style={{ display: "flex", gap: 4 }}>
           <button className="newEpisode" style={{ flex: 1 }} onClick={() => moveOpenEpisode(-1)} disabled={bulkBusy || es.findIndex((x) => x.id === e.id) <= 0} title={t("開いている話を前の話と入れ替えます")}>↑</button>
           <button className="newEpisode" style={{ flex: 1 }} onClick={() => moveOpenEpisode(1)} disabled={bulkBusy || es.findIndex((x) => x.id === e.id) >= es.length - 1} title={t("開いている話を次の話と入れ替えます")}>↓</button>

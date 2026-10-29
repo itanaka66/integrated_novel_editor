@@ -13,6 +13,18 @@ const PROVIDERS = [
   { key: "comfyui", label: t("ComfyUI（ローカル）") },
   { key: "higgsfield", label: t("Higgsfield（クラウド）") },
 ];
+
+function styleLabel(label: string): string {
+  if (label === "アニメ風") return t("アニメ風");
+  if (label === "劇画風") return t("劇画風");
+  if (label === "実写風") return t("実写風");
+  if (label === "水彩画") return t("水彩画");
+  if (label === "浮世絵風") return t("浮世絵風");
+  if (label === "ドット絵") return t("ドット絵");
+  if (label === "アダルト") return t("アダルト");
+  if (label === "その他") return t("その他");
+  return label;
+}
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
 function useImageUrl(projectId: number, filename: string) {
@@ -172,7 +184,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
       <div className="exportButtons" role="radiogroup" aria-label={t("表紙のイメージ")}>
         {styles.map((s) => (
           <label key={s.key}>
-            <input type="radio" name={`cover-style-${projectId}`} checked={state.style === s.key} onChange={() => persist({ ...state, style: s.key })} /> {s.label}
+            <input type="radio" name={`cover-style-${projectId}`} checked={state.style === s.key} onChange={() => persist({ ...state, style: s.key })} /> {styleLabel(s.label)}
           </label>
         ))}
       </div>
