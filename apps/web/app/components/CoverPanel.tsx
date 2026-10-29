@@ -152,8 +152,14 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
   }
   async function remove(filename: string) {
     if (!confirm(t("この画像を削除しますか？"))) return;
-    const r = await api(`/projects/${projectId}/covers/${encodeURIComponent(filename)}`, { method: "DELETE" });
-    if (Array.isArray(r)) { setImages(r); setViewing(null); } else setError(r?.detail || t("削除できませんでした"));
+    setError("");
+    try {
+      const r = await api(`/projects/${projectId}/covers/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      if (Array.isArray(r)) { setImages(r); setViewing(null); } else { setViewing(null); setError(r?.detail || t("削除できませんでした")); }
+    } catch (e) {
+      setViewing(null);
+      setError(e instanceof Error ? e.message : t("削除できませんでした"));
+    }
   }
   const open = images.find((im) => im.filename === viewing) ?? null;
 
