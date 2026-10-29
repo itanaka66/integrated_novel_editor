@@ -171,7 +171,6 @@ export const ROWS_4: Row[] = [
 
   // cover batch
   ["複数画像作成", "Create multiple images", "批量生成图片", "批次產生圖片", "여러 이미지 만들기", "Crear varias imágenes", "Créer plusieurs images", "Mehrere Bilder erstellen"],
-  ["複数画像作成中 {done}/{total}", "Creating images {done}/{total}", "批量生成中 {done}/{total}", "批次產生中 {done}/{total}", "여러 이미지 생성 중 {done}/{total}", "Creando imágenes {done}/{total}", "Création des images {done}/{total}", "Bilder werden erstellt {done}/{total}"],
   ["複数画像を作成します（アニメ風10・劇画風10・水彩画5・浮世絵風5・ドット絵5・アダルト10 の計45枚）。時間がかかります。よろしいですか？", "Create multiple images (anime 10, gekiga 10, watercolor 5, ukiyo-e 5, pixel art 5, adult 10 — 45 in total). This takes a long time. Continue?", "将批量生成图片（动漫风10、剧画风10、水彩画5、浮世绘风5、像素画5、成人向10，共45张）。需要较长时间。是否继续？", "將批次產生圖片（動漫風10、劇畫風10、水彩畫5、浮世繪風5、像素畫5、成人向10，共45張）。需要較長時間。是否繼續？", "여러 이미지를 만듭니다(애니풍 10, 극화풍 10, 수채화 5, 우키요에풍 5, 도트 그래픽 5, 성인용 10, 총 45장). 시간이 오래 걸립니다. 계속할까요?", "Se crearán varias imágenes (anime 10, gekiga 10, acuarela 5, ukiyo-e 5, pixel art 5, adulto 10; 45 en total). Tardará mucho. ¿Continuar?", "Création de plusieurs images (anime 10, gekiga 10, aquarelle 5, ukiyo-e 5, pixel art 5, adulte 10 ; 45 au total). Cela prend du temps. Continuer ?", "Es werden mehrere Bilder erstellt (Anime 10, Gekiga 10, Aquarell 5, Ukiyo-e 5, Pixel-Art 5, Erwachsene 10 – insgesamt 45). Das dauert lange. Fortfahren?"],
 
   // background jobs
@@ -220,23 +219,9 @@ export const ROWS_4: Row[] = [
   ["章（Word出力の見出し1）", "Chapter (Heading 1 in Word export)", "章节（Word 导出的标题 1）", "章節（Word 匯出的標題 1）", "장(Word 내보내기의 제목 1)", "Capítulo (Título 1 en la exportación a Word)", "Chapitre (Titre 1 dans l'export Word)", "Kapitel (Überschrift 1 im Word-Export)"],
   ["例）第一部 序章（空欄なら章なし）", "e.g. Part 1: Prologue (blank = no chapter)", "例）第一部 序章（留空表示无章节）", "例）第一部 序章（留空表示無章節）", "예) 제1부 서장(비우면 장 없음)", "p. ej. Parte 1: Prólogo (vacío = sin capítulo)", "p. ex. Partie 1 : Prologue (vide = pas de chapitre)", "z. B. Teil 1: Prolog (leer = kein Kapitel)"],
 
-  // translator pool
-  ["翻訳LLM（複数台可）", "Translation LLMs (several allowed)", "翻译 LLM（可多台）", "翻譯 LLM（可多台）", "번역 LLM(여러 대 가능)", "LLM de traducción (varios)", "LLM de traduction (plusieurs possibles)", "Übersetzungs-LLMs (mehrere möglich)"],
-  ["翻訳は空いている翻訳LLMに順に割り当てます。Controllerは翻訳チェックに専念し、ここが空のときだけControllerも翻訳します。", "Translation work goes to whichever translation LLM is free. The Controller concentrates on checking translations and translates too only when this list is empty.", "翻译任务会依次分配给空闲的翻译 LLM。Controller 专注于翻译检查，仅在此列表为空时才参与翻译。", "翻譯任務會依序分配給閒置的翻譯 LLM。Controller 專注於翻譯檢查，僅在此清單為空時才參與翻譯。", "번역은 비어 있는 번역 LLM에 차례로 배정합니다. Controller는 번역 검사에 집중하고, 이 목록이 비어 있을 때만 번역도 합니다.", "El trabajo de traducción va al LLM de traducción libre. El Controller se centra en revisar y solo traduce si esta lista está vacía.", "Le travail de traduction va au LLM de traduction disponible. Le Controller se concentre sur la vérification et ne traduit que si cette liste est vide.", "Übersetzungen gehen an das jeweils freie Übersetzungs-LLM. Der Controller konzentriert sich auf die Prüfung und übersetzt nur, wenn diese Liste leer ist."],
-  ["未設定：Controllerが翻訳します", "Not set: the Controller translates", "未设置：由 Controller 翻译", "未設定：由 Controller 翻譯", "미설정: Controller가 번역합니다", "Sin configurar: traduce el Controller", "Non défini : le Controller traduit", "Nicht gesetzt: Der Controller übersetzt"],
-  ["＋ 翻訳LLMを追加", "+ Add translation LLM", "+ 添加翻译 LLM", "+ 新增翻譯 LLM", "+ 번역 LLM 추가", "+ Añadir LLM de traducción", "+ Ajouter un LLM de traduction", "+ Übersetzungs-LLM hinzufügen"],
-
-  // translator enabled toggle
-  ["有効", "Enabled", "启用", "啟用", "사용", "Activo", "Activé", "Aktiv"],
-  ["有効な翻訳LLMがありません：Controllerが翻訳します", "No enabled translation LLM: the Controller translates", "没有启用的翻译 LLM：由 Controller 翻译", "沒有啟用的翻譯 LLM：由 Controller 翻譯", "사용 중인 번역 LLM이 없습니다: Controller가 번역합니다", "No hay LLM de traducción activo: traduce el Controller", "Aucun LLM de traduction activé : le Controller traduit", "Kein aktives Übersetzungs-LLM: Der Controller übersetzt"],
-
-  // translator languages
-  ["翻訳できる言語", "Languages it can translate", "可翻译的语言", "可翻譯的語言", "번역 가능한 언어", "Idiomas que puede traducir", "Langues traduisibles", "Übersetzbare Sprachen"],
-
   // translation language picker
   ["翻訳する言語", "Language to translate into", "翻译成的语言", "翻譯成的語言", "번역할 언어", "Idioma de destino", "Langue cible", "Zielsprache"],
   ["翻訳する言語を選択", "Choose a language", "选择语言", "選擇語言", "언어 선택", "Elige un idioma", "Choisir une langue", "Sprache wählen"],
-  ["その他の言語", "Other languages", "其他语言", "其他語言", "기타 언어", "Otros idiomas", "Autres langues", "Weitere Sprachen"],
   ["翻訳", "Translate", "翻译", "翻譯", "번역", "Traducir", "Traduire", "Übersetzen"],
 
   // reorder episodes
@@ -245,4 +230,29 @@ export const ROWS_4: Row[] = [
   ["開いている話を前の話と入れ替えます", "Swap the open episode with the previous one", "与上一话交换", "與上一話交換", "열려 있는 화를 이전 화와 바꿉니다", "Intercambiar el episodio abierto con el anterior", "Échanger l'épisode ouvert avec le précédent", "Geöffnete Episode mit der vorherigen tauschen"],
   ["開いている話を次の話と入れ替えます", "Swap the open episode with the next one", "与下一话交换", "與下一話交換", "열려 있는 화를 다음 화와 바꿉니다", "Intercambiar el episodio abierto con el siguiente", "Échanger l'épisode ouvert avec le suivant", "Geöffnete Episode mit der nächsten tauschen"],
   ["選択した2話を入れ替え", "Swap the 2 selected episodes", "交换所选的 2 话", "交換所選的 2 話", "선택한 2화 바꾸기", "Intercambiar los 2 episodios seleccionados", "Échanger les 2 épisodes sélectionnés", "Die 2 gewählten Episoden tauschen"],
+
+  // entity panel reflect-to-novel
+  ["最新データを再読み込み", "Reload latest data", "重新加载最新数据", "重新載入最新資料", "최신 데이터 다시 불러오기", "Recargar datos más recientes", "Recharger les dernières données", "Neueste Daten neu laden"],
+  ["反映中...", "Reflecting...", "反映中...", "反映中...", "반영 중...", "Reflejando...", "Réflexion en cours...", "Wird übernommen..."],
+  ["小説に反映", "Reflect to novel", "反映到小说", "反映到小說", "소설에 반영", "Reflejar en la novela", "Refléter dans le roman", "Im Roman übernehmen"],
+  ["反映処理に失敗しました。AIサービスを確認してください。", "Reflection failed. Please check the AI service.", "反映处理失败，请检查 AI 服务。", "反映處理失敗，請檢查 AI 服務。", "반영 처리에 실패했습니다. AI 서비스를 확인하세요.", "Error al reflejar. Comprueba el servicio de IA.", "La réflexion a échoué. Vérifiez le service IA.", "Übernahme fehlgeschlagen. Bitte KI-Dienst prüfen."],
+  ["キャラクター状態を{n}件更新。", "Updated {n} character states.", "已更新 {n} 件角色状态。", "已更新 {n} 件角色狀態。", "캐릭터 상태를 {n}건 업데이트했습니다.", "Se actualizaron {n} estados de personaje.", "{n} états de personnage mis à jour.", "{n} Charakterzustände aktualisiert."],
+  ["整合性チェック: {n}件の問題を検出。", "Continuity check: {n} issues found.", "整合性检查：检测到 {n} 件问题。", "整合性檢查：偵測到 {n} 件問題。", "정합성 검사: {n}건의 문제 발견.", "Comprobación de coherencia: {n} problema(s) detectado(s).", "Vérification de cohérence : {n} problème(s) détecté(s).", "Konsistenzprüfung: {n} Problem(e) gefunden."],
+  ["…他{n}件", "…and {n} more", "…另 {n} 件", "…另 {n} 件", "…외 {n}건", "…y {n} más", "…et {n} de plus", "…und {n} weitere"],
+
+  // connection settings
+  ["空欄にして保存するとサーバーの環境変数の既定値に戻ります。保存すると次回の呼び出しから即座に反映されます（再起動不要）。", "Saving with an empty field reverts it to the server environment variable default. Changes take effect from the next call after saving (no restart required).", "将字段清空后保存，将恢复为服务器环境变量的默认值。保存后，从下次调用起立即生效（无需重启）。", "將欄位清空後儲存，將還原為伺服器環境變數的預設值。儲存後，從下次呼叫起立即生效（無需重新啟動）。", "빈칸으로 저장하면 서버 환경 변수의 기본값으로 돌아갑니다. 저장하면 다음 호출부터 즉시 반영됩니다(재시작 불필요).", "Guardando con el campo vacío se revierte al valor predeterminado de la variable de entorno del servidor. Los cambios surten efecto desde la siguiente llamada al guardar (sin reinicio).", "Enregistrer avec un champ vide rétablit la valeur par défaut de la variable d'environnement du serveur. Les modifications prennent effet dès l'appel suivant après l'enregistrement (sans redémarrage).", "Mit leerem Feld speichern setzt den Standard der Server-Umgebungsvariable zurück. Änderungen gelten ab dem nächsten Aufruf nach dem Speichern (kein Neustart nötig)."],
+
+  // auto-signout notices
+  ["ネットワーク接続が切断されたため、自動的にサインアウトしました。", "You were automatically signed out because the network connection was lost.", "由于网络连接中断，已自动退出登录。", "由於網路連線中斷，已自動登出。", "네트워크 연결이 끊어져 자동으로 로그아웃되었습니다.", "Se cerró sesión automáticamente por pérdida de conexión de red.", "Déconnexion automatique suite à la perte de connexion réseau.", "Sie wurden automatisch abgemeldet, weil die Netzwerkverbindung unterbrochen wurde."],
+  ["10分間操作がなかったため、自動的にサインアウトしました。", "You were automatically signed out after 10 minutes of inactivity.", "因 10 分钟内无操作，已自动退出登录。", "因 10 分鐘內無操作，已自動登出。", "10분간 조작이 없어 자동으로 로그아웃되었습니다.", "Se cerró sesión automáticamente tras 10 minutos sin actividad.", "Déconnexion automatique après 10 minutes d'inactivité.", "Sie wurden nach 10 Minuten Inaktivität automatisch abgemeldet."],
+
+  // Anna AI OS auto-write panel
+  ["500話 自動執筆（Anna AI OS）", "500-episode auto-write (Anna AI OS)", "500 话自动写作（Anna AI OS）", "500 話自動寫作（Anna AI OS）", "500화 자동 집필 (Anna AI OS)", "Escritura automática de 500 episodios (Anna AI OS)", "Écriture automatique de 500 épisodes (Anna AI OS)", "Automatisches Schreiben von 500 Episoden (Anna AI OS)"],
+  ["Anna AI OS が自動執筆を実行します。Series → Arc → Mini Arc → Episode の階層計画を立て、Writer が EP 単位で本文を生成し、Controller が時系列・人物・世界観・プロットを監査します。", "Anna AI OS runs the auto-write. It builds a hierarchical plan of Series → Arc → Mini Arc → Episode, with the Writer generating episode content and the Controller auditing timeline, characters, world and plot.", "Anna AI OS 执行自动写作。建立 Series → Arc → Mini Arc → Episode 层级计划，Writer 以 EP 为单位生成正文，Controller 审核时间线、人物、世界观与情节。", "Anna AI OS 執行自動寫作。建立 Series → Arc → Mini Arc → Episode 層級計劃，Writer 以 EP 為單位生成正文，Controller 審核時間線、人物、世界觀與情節。", "Anna AI OS가 자동 집필을 실행합니다. Series → Arc → Mini Arc → Episode 계층 계획을 수립하고, Writer가 EP 단위로 본문을 생성하며, Controller가 타임라인·인물·세계관·플롯을 감사합니다.", "Anna AI OS ejecuta la escritura automática. Elabora un plan jerárquico de Series → Arc → Mini Arc → Episode; el Writer genera el contenido por episodio y el Controller audita cronología, personajes, mundo y trama.", "Anna AI OS pilote l'écriture automatique. Il construit un plan hiérarchique Series → Arc → Mini Arc → Episode ; le Writer génère le texte épisode par épisode et le Controller audite la chronologie, les personnages, l'univers et l'intrigue.", "Anna AI OS führt das automatische Schreiben aus. Es erstellt einen hierarchischen Plan aus Series → Arc → Mini Arc → Episode; der Writer generiert den Episodentext, der Controller prüft Zeitlinie, Figuren, Welt und Handlung."],
+  ["実行方法", "How to run", "使用方法", "使用方式", "실행 방법", "Cómo ejecutar", "Comment exécuter", "Ausführung"],
+  ["下のフォームでジョブを作成してください。", "Create a job using the form below.", "请使用下方表单创建任务。", "請使用下方表單建立任務。", "아래 양식에서 작업을 생성하세요.", "Crea un trabajo con el formulario de abajo.", "Créez un travail avec le formulaire ci-dessous.", "Erstellen Sie einen Auftrag mit dem Formular unten."],
+  ["Anna に「auto_write_step でジョブ {id} を実行してください」と依頼してください。", "Ask Anna to run job {id} with auto_write_step.", "请让 Anna 使用 auto_write_step 执行任务 {id}。", "請讓 Anna 使用 auto_write_step 執行任務 {id}。", "Anna에게 auto_write_step으로 작업 {id}를 실행해 달라고 요청하세요.", "Pídele a Anna que ejecute el trabajo {id} con auto_write_step.", "Demandez à Anna d'exécuter le travail {id} avec auto_write_step.", "Bitten Sie Anna, Auftrag {id} mit auto_write_step auszuführen."],
+  ["Anna が完了するまで auto_write_step を繰り返し呼び出します。", "Anna will keep calling auto_write_step until it is done.", "Anna 将持续调用 auto_write_step，直到完成为止。", "Anna 將持續呼叫 auto_write_step，直到完成為止。", "Anna가 완료될 때까지 auto_write_step을 반복 호출합니다.", "Anna seguirá llamando a auto_write_step hasta que termine.", "Anna continuera d'appeler auto_write_step jusqu'à la fin.", "Anna ruft auto_write_step wiederholt auf, bis es fertig ist."],
+  ["＋ ジョブを作成", "+ Create job", "＋ 创建任务", "＋ 建立任務", "＋ 작업 생성", "+ Crear trabajo", "+ Créer un travail", "+ Auftrag erstellen"],
 ];
