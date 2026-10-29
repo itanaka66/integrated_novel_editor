@@ -1,6 +1,6 @@
 [project]
 name = "tool-dev-ine-bridge"
-version = "0.2.11"
+version = "0.2.12"
 description = "INE Bridge — Executa stdio tool plugin for the Integrated Novel Editor Anna App"
 requires-python = ">=3.10"
 authors = [{ name = "INE" }]

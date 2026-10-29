@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -408,10 +408,8 @@ def _sample(
     params: dict[str, Any] = {
         "messages": messages,
         "maxTokens": max_tokens,
-        "metadata": {},
+        "metadata": {"invoke_id": _sampling_invoke_id} if _sampling_invoke_id else {},
     }
-    if _sampling_invoke_id:
-        params["metadata"]["executa_invoke_id"] = _sampling_invoke_id
     if system_prompt:
         params["systemPrompt"] = system_prompt
     send({"jsonrpc": "2.0", "id": req_id, "method": "sampling/createMessage", "params": params})
@@ -1190,7 +1188,7 @@ def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
         "protocolVersion": "2.0",
         "server_info": {"name": MANIFEST["display_name"], "version": MANIFEST["version"]},
         "capabilities": {},
-        "host_capabilities": {"llm": {"sample": {}}},
+        "client_capabilities": {"sampling": {}},
     }
 
 
