@@ -42,8 +42,8 @@ export default function DeleteProjectPanel({ project, onDeleted }: { project: Pr
           <ul>{children.map((c) => <li key={c.id}>{c.name}</li>)}</ul>
         </div>
       )}
-      <button disabled style={{ color: "#fff", background: "#b0b8c4", border: "none", padding: "8px 14px", borderRadius: 6, opacity: 0.4, cursor: "not-allowed" }}>
-        {t("この作品を削除")}
+      <button onClick={remove} disabled={busy || blocked} style={{ color: "#fff", background: blocked ? "#b0b8c4" : "#c0392b", border: "none", padding: "8px 14px", borderRadius: 6 }}>
+        {busy ? t("削除中...") : t("この作品を削除")}
       </button>
       {err && <p style={{ color: "#c0392b" }}>{err}</p>}
     </div>
