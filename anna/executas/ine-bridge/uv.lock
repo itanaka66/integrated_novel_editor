@@ -151,7 +151,7 @@ wheels = [
 
 [[package]]
 name = "tool-dev-ine-bridge"
-version = "0.1.4"
+version = "0.2.7"
 source = { editable = "." }
 
 [package.optional-dependencies]
