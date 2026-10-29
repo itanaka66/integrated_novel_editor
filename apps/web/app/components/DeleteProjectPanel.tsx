@@ -11,6 +11,7 @@ export default function DeleteProjectPanel({ project, onDeleted }: { project: Pr
   const [children, setChildren] = useState<Project[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -19,8 +20,7 @@ export default function DeleteProjectPanel({ project, onDeleted }: { project: Pr
   }, [project.id]);
 
   async function remove() {
-    if (!window.confirm(t("「{name}」を削除します。削除前にバックアップ（JSON）を自動でダウンロードします。この操作は取り消せません。よろしいですか？", { name: project.name }))) return;
-    setBusy(true); setErr("");
+    setBusy(true); setErr(""); setConfirming(false);
     try {
       // The backup must succeed first: if it cannot be saved, nothing is deleted.
       await downloadFile(`/projects/${project.id}/export?format=json`, `${project.name}.json`);
@@ -42,9 +42,19 @@ export default function DeleteProjectPanel({ project, onDeleted }: { project: Pr
           <ul>{children.map((c) => <li key={c.id}>{c.name}</li>)}</ul>
         </div>
       )}
-      <button onClick={remove} disabled={busy || blocked} style={{ color: "#fff", background: blocked ? "#b0b8c4" : "#c0392b", border: "none", padding: "8px 14px", borderRadius: 6 }}>
-        {busy ? t("削除中...") : t("この作品を削除")}
-      </button>
+      {confirming ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>{t("本当に削除しますか？この操作は取り消せません。")}</span>
+          <button onClick={remove} disabled={busy} style={{ color: "#fff", background: "#c0392b", border: "none", padding: "8px 14px", borderRadius: 6 }}>
+            {busy ? t("削除中...") : t("削除を確定する")}
+          </button>
+          <button onClick={() => setConfirming(false)} disabled={busy} style={{ padding: "8px 14px", borderRadius: 6 }}>{t("キャンセル")}</button>
+        </div>
+      ) : (
+        <button onClick={() => setConfirming(true)} disabled={blocked} style={{ color: "#fff", background: blocked ? "#b0b8c4" : "#c0392b", border: "none", padding: "8px 14px", borderRadius: 6 }}>
+          {t("この作品を削除")}
+        </button>
+      )}
       {err && <p style={{ color: "#c0392b" }}>{err}</p>}
     </div>
   );
