@@ -216,7 +216,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       <p>{cfg.hint}</p>
       <div className="entityToolbar">
         <button className="add" onClick={addRow}>{t("＋ 行を追加")}</button>
-        {cfg.aiKind && <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("＋ AIで10個追加")}</button>}
+        {cfg.aiKind && <button type="button" onClick={addByAi} disabled={aiBusy}>{aiBusy ? t("生成中...") : t("＋ AIで10個追加")}</button>}
         <button type="button" onClick={downloadTemplate}>{t("CSVテンプレート")}</button>
         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={csvBusy}>{csvBusy ? t("取り込み中...") : t("CSVインポート")}</button>
         <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleCsvFile} />
