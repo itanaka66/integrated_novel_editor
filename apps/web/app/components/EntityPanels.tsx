@@ -216,13 +216,13 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
       <p>{cfg.hint}</p>
       <div className="entityToolbar">
         <button className="add" onClick={addRow}>{t("＋ 行を追加")}</button>
-        {cfg.aiKind && <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{aiBusy ? t("AIが考え中...") : t("＋ AIで10個追加")}</button>}
-        <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("CSVテンプレート")}</button>
-        <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{csvBusy ? t("取り込み中...") : t("CSVインポート")}</button>
+        {cfg.aiKind && <button type="button" onClick={addByAi} disabled={aiBusy || busy}>{aiBusy ? t("AIが考え中...") : t("＋ AIで10個追加")}</button>}
+        <button type="button" onClick={downloadTemplate}>{t("CSVテンプレート")}</button>
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={csvBusy}>{csvBusy ? t("取り込み中...") : t("CSVインポート")}</button>
         <input ref={fileInputRef} type="file" accept=".csv" hidden onChange={handleCsvFile} />
         <button type="button" onClick={() => load()} disabled={busy} title={t("最新データを再読み込み")}>↻</button>
         {cfg.reflectKind && (
-          <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>
+          <button type="button" onClick={reflectToNovel} disabled={reflectBusy || busy}>
             {reflectBusy ? t("反映中...") : t("小説に反映")}
           </button>
         )}
