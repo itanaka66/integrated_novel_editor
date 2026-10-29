@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -1016,9 +1016,10 @@ def handle_describe(_params: dict[str, Any]) -> dict[str, Any]:
 
 def handle_initialize(params: dict[str, Any]) -> dict[str, Any]:
     return {
-        "protocolVersion": "1.0",
+        "protocolVersion": "2.0",
         "server_info": {"name": MANIFEST["display_name"], "version": MANIFEST["version"]},
         "capabilities": {},
+        "host_capabilities": {"llm": {"sample": {}}},
     }
 
 
