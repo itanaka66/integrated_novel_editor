@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 MANIFEST: dict[str, Any] = {
     "display_name": "INE Bridge",
-    "version": "0.1.8",
+    "version": "0.1.9",
     "description": (
         "Connect Anna to a local Integrated Novel Editor (INE) instance. "
         "List works, read the story twin, search episodes, manage plots and "
@@ -353,6 +353,26 @@ MANIFEST: dict[str, Any] = {
             "parameters": [
                 {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
                 {"name": "style", "type": "string", "description": "Art style hint: anime, realistic, watercolor, …", "required": False},
+            ],
+        },
+        {
+            "name": "add_ai_entities",
+            "description": (
+                "Generate and add story-knowledge rows (characters, world, glossary, plots, "
+                "foreshadowings, timeline) to a project using Anna's LLM via reverse RPC sampling. "
+                "Reads existing rows to avoid duplicates, then asks Anna to generate `count` new items "
+                "and POSTs each one back to the INE API. "
+                "Requires sampling context (must be called from an Anna session with sampling enabled)."
+            ),
+            "parameters": [
+                {"name": "project_id", "type": "integer", "description": "INE project id", "required": True},
+                {
+                    "name": "kind",
+                    "type": "string",
+                    "description": "characters | world | glossary | plots | foreshadowings | timeline",
+                    "required": True,
+                },
+                {"name": "count", "type": "integer", "description": "Number of rows to generate (default 10)", "required": False, "default": 10},
             ],
         },
         {
@@ -1069,6 +1089,211 @@ def tool_generate_cover_prompt(args: dict[str, Any], credentials: dict[str, Any]
     }
 
 
+_AI_ENTITY_KINDS: dict[str, dict] = {
+    "characters": {
+        "label": "キャラクター",
+        "list_path": "/characters",
+        "create_path": "/characters",
+        "key": "name",
+        "fields": {
+            "name": "名前",
+            "role": "役割（主人公・ライバル等）",
+            "personality": "性格",
+            "speech_style": "口調",
+            "goal": "目標",
+            "status": "alive / dead / missing / unknown のいずれか",
+            "description": "補足",
+        },
+        "choices": {"status": ["alive", "dead", "missing", "unknown"]},
+        "defaults": {"status": "alive"},
+    },
+    "world": {
+        "label": "世界観",
+        "list_path": "/world",
+        "create_path": "/world",
+        "key": "name",
+        "fields": {
+            "name": "名称",
+            "entity_type": "setting / location / technology / magic / organization / item のいずれか",
+            "description": "説明",
+            "rules": "ルール",
+            "location": "場所",
+            "era": "時代",
+        },
+        "choices": {"entity_type": ["setting", "location", "technology", "magic", "organization", "item"]},
+        "defaults": {"entity_type": "setting"},
+        "filter": lambda r: r.get("entity_type") != "glossary",
+    },
+    "glossary": {
+        "label": "用語集",
+        "list_path": "/world",
+        "create_path": "/world",
+        "key": "name",
+        "fields": {"name": "用語", "description": "説明", "location": "カテゴリ"},
+        "choices": {},
+        "defaults": {"entity_type": "glossary"},
+        "filter": lambda r: r.get("entity_type") == "glossary",
+    },
+    "plots": {
+        "label": "プロット",
+        "list_path": "/plots",
+        "create_path": "/plots",
+        "key": "title",
+        "fields": {
+            "title": "タイトル",
+            "plot_type": "main_arc / arc / subplot のいずれか",
+            "status": "planned / active / completed のいずれか",
+            "start_episode": "開始話数（整数）",
+            "end_episode": "終了話数（整数）",
+            "objective": "目的",
+            "conflict": "対立",
+            "resolution": "決着",
+        },
+        "choices": {"plot_type": ["main_arc", "arc", "subplot"], "status": ["planned", "active", "completed"]},
+        "defaults": {"plot_type": "arc", "status": "planned"},
+        "ints": ("start_episode", "end_episode"),
+    },
+    "foreshadowings": {
+        "label": "伏線",
+        "list_path": "/foreshadowings",
+        "create_path": "/foreshadowings",
+        "key": "title",
+        "fields": {
+            "title": "タイトル",
+            "description": "説明",
+            "setup_episode": "設置話数（整数）",
+            "payoff_episode": "回収話数（整数）",
+            "status": "open / resolved / abandoned のいずれか",
+        },
+        "choices": {"status": ["open", "resolved", "abandoned"]},
+        "defaults": {"status": "open"},
+        "ints": ("setup_episode", "payoff_episode"),
+    },
+    "timeline": {
+        "label": "年表",
+        "list_path": "/timeline",
+        "create_path": "/timeline",
+        "key": "title",
+        "fields": {
+            "episode_number": "話数（整数）",
+            "title": "出来事",
+            "world_time": "世界内時間",
+            "description": "説明",
+        },
+        "choices": {},
+        "defaults": {"episode_number": 1},
+        "ints": ("episode_number",),
+    },
+}
+
+
+def _ai_entity_clean(spec: dict, raw: dict) -> dict | None:
+    row = dict(spec["defaults"])
+    for k, hint in spec["fields"].items():
+        if k not in raw or raw[k] is None:
+            continue
+        v = raw[k]
+        if k in spec.get("ints", ()):
+            try:
+                row[k] = int(v)
+            except (TypeError, ValueError):
+                pass
+        else:
+            v = str(v).strip()
+            if k in spec["choices"] and v not in spec["choices"][k]:
+                continue
+            row[k] = v
+    key = spec["key"]
+    return row if row.get(key) not in (None, "") else None
+
+
+def tool_add_ai_entities(args: dict[str, Any], credentials: dict[str, Any] | None) -> Any:
+    if _sampling_token is None:
+        raise RuntimeError(
+            "Anna LLM sampling is required for add_ai_entities. "
+            "This tool must be called from an Anna session with sampling enabled."
+        )
+    pid = _int(args.get("project_id"), "project_id")
+    kind = (args.get("kind") or "").strip()
+    if kind not in _AI_ENTITY_KINDS:
+        raise ValueError(f"kind must be one of: {', '.join(_AI_ENTITY_KINDS)}")
+    count = max(1, min(_int(args.get("count"), "count", required=False, default=10) or 10, 30))
+    spec = _AI_ENTITY_KINDS[kind]
+
+    project = ine_call(credentials, "GET", f"/projects/{pid}")
+    existing_raw = ine_call(credentials, "GET", f"/projects/{pid}{spec['list_path']}") or []
+    if isinstance(existing_raw, dict):
+        existing_raw = existing_raw.get("items") or existing_raw.get(kind) or []
+    filt = spec.get("filter")
+    existing = [r for r in existing_raw if (filt is None or filt(r))]
+
+    key_field = spec["key"]
+    seen = {(r.get(key_field) or "").strip().lower() for r in existing if r.get(key_field)}
+    existing_names = [str(r.get(key_field, "")) for r in existing[:120]]
+
+    chars: list[str] = []
+    if kind != "characters":
+        char_list = ine_call(credentials, "GET", f"/projects/{pid}/characters") or []
+        chars = [c.get("name", "") for c in char_list[:40] if c.get("name")]
+
+    fields_text = "\n".join(f"- {k}: {hint}" for k, hint in spec["fields"].items())
+    existing_text = ", ".join(existing_names) if existing_names else "（なし）"
+    chars_text = ", ".join(chars) if chars else "（なし）"
+    prompt = (
+        f"あなたは長編小説の設定編集者です。次の作品に追加する「{spec['label']}」の新しい案を{count}件、考えてください。\n"
+        f"作品名: {project.get('name', '')}\n"
+        f"ジャンル: {project.get('genre', '')}\n"
+        f"あらすじ: {project.get('description', '')}\n"
+        f"ルール・方針: {project.get('rules', '')}\n"
+        f"既存の登場人物: {chars_text}\n"
+        f"既存の{spec['label']}（これらと重複しないこと）: {existing_text}\n\n"
+        "出力はJSON配列のみ（前置き・説明・コードブロック不要）。各要素は次のキーを持つオブジェクトにしてください。\n"
+        f"{fields_text}"
+    )
+
+    result_text = _sample(
+        [{"role": "user", "content": {"type": "text", "text": prompt}}],
+        max_tokens=4096,
+    )
+
+    match = re.search(r"\[.*\]", result_text or "", re.DOTALL)
+    raw_rows: list[dict] = []
+    if match:
+        try:
+            raw_rows = json.loads(match.group(0))
+            if not isinstance(raw_rows, list):
+                raw_rows = []
+        except Exception:
+            raw_rows = []
+
+    created = []
+    for raw in raw_rows:
+        if not isinstance(raw, dict):
+            continue
+        row = _ai_entity_clean(spec, raw)
+        if row is None:
+            continue
+        name_val = (row.get(key_field) or "").strip().lower()
+        if name_val in seen:
+            continue
+        seen.add(name_val)
+        try:
+            ine_call(credentials, "POST", f"/projects/{pid}{spec['create_path']}", json_body=row)
+            created.append(row.get(key_field, ""))
+        except Exception as exc:
+            _log(f"add_ai_entities: failed to create {row}: {exc}")
+        if len(created) >= count:
+            break
+
+    return {
+        "kind": kind,
+        "project_id": pid,
+        "created": len(created),
+        "items": created,
+        "source": "anna_sampling",
+    }
+
+
 def _build_proofread_prompt(style_guide: str, content: str) -> str:
     return (
         "あなたは日本語の校正者です。以下のスタイルガイドに従って本文を校正し、修正すべき箇所だけを列挙してください。\n\n"
@@ -1175,6 +1400,7 @@ TOOL_DISPATCH: dict[str, Callable[[dict[str, Any], dict[str, Any] | None], Any]]
     "reflect_to_novel": tool_reflect_to_novel,
     "list_covers": tool_list_covers,
     "generate_cover_prompt": tool_generate_cover_prompt,
+    "add_ai_entities": tool_add_ai_entities,
     "proofread_episode": tool_proofread_episode,
 }
 

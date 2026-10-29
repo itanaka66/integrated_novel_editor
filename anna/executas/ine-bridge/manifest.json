@@ -1,5 +1,5 @@
 {
-    "version":  "0.2.12",
+    "version":  "0.2.13",
     "display_name":  "INE Bridge",
     "description":  "Connect Anna to a running Integrated Novel Editor (INE) instance. Uses Anna\u0027s own LLM for prose generation and chat. List works, read the story twin, search episodes, manage plots and foreshadowings, reflect entities to novel, and manage auto-write jobs.",
     "host_capabilities":  [
@@ -698,6 +698,30 @@
                                              "name":  "kind",
                                              "type":  "string",
                                              "description":  "characters | plots | foreshadowings | all (default all)",
+                                             "required":  false
+                                         }
+                                     ]
+                  },
+                  {
+                      "name":  "add_ai_entities",
+                      "description":  "Generate and add story-knowledge rows (characters, world, glossary, plots, foreshadowings, timeline) to a project using Anna's LLM via reverse RPC sampling. Reads existing rows to avoid duplicates. Requires sampling context.",
+                      "parameters":  [
+                                         {
+                                             "name":  "project_id",
+                                             "type":  "integer",
+                                             "description":  "INE project id",
+                                             "required":  true
+                                         },
+                                         {
+                                             "name":  "kind",
+                                             "type":  "string",
+                                             "description":  "characters | world | glossary | plots | foreshadowings | timeline",
+                                             "required":  true
+                                         },
+                                         {
+                                             "name":  "count",
+                                             "type":  "integer",
+                                             "description":  "Number of rows to generate (default 10, max 30)",
                                              "required":  false
                                          }
                                      ]
