@@ -531,8 +531,8 @@ def resolve_connection(credentials: dict[str, Any] | None) -> tuple[str, str, st
         or os.environ.get("INE_BASE_URL")
         or "https://neomedia.dynv6.net:6556"
     ).rstrip("/")
-    user = creds.get("INE_USERNAME") or os.environ.get("INE_USERNAME") or ""
-    password = creds.get("INE_PASSWORD") or os.environ.get("INE_PASSWORD") or ""
+    user = creds.get("INE_USERNAME") or os.environ.get("INE_USERNAME") or "admin"
+    password = creds.get("INE_PASSWORD") or os.environ.get("INE_PASSWORD") or "novel"
     return base, user, password
 
 
@@ -579,9 +579,12 @@ def ine_call(
 ) -> Any:
     base, user, password = resolve_connection(credentials)
     if auth and (not user or not password):
-        raise PermissionError(
-            "INE_USERNAME and INE_PASSWORD are required. Set them in Anna credentials or the environment."
-        )
+        user = os.getenv("INE_USERNAME")
+        password = os.getenv("INE_PASSWORD")
+        if not user or not password:
+            raise PermissionError(
+                "INE_USERNAME and INE_PASSWORD are required. Set them in Anna credentials or the environment."
+            )
     qs = ""
     if query:
         from urllib.parse import urlencode
