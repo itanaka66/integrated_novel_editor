@@ -110,7 +110,11 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
   const [llmQueue, setLlmQueue] = useState<LlmEntry[]>([]);
   useEffect(() => {
     let live = true;
-    const poll = () => api("/llm/queue").then((r) => { if (live && Array.isArray(r)) setLlmQueue(r); }).catch(() => {});
+    const poll = () => api("/llm/queue").then((r) => {
+      if (!live) return;
+      const entries = Array.isArray(r) ? r : Array.isArray(r?.entries) ? r.entries : [];
+      setLlmQueue(entries);
+    }).catch(() => {});
     poll();
     const timer = setInterval(poll, 3000);
     return () => { live = false; clearInterval(timer); };
