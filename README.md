@@ -18,7 +18,6 @@ An AI-assisted writing environment for long-form novels (from a handful of episo
 | Installation manual | [docs/installation.md](docs/installation.md) | [docs/installation.ja.md](docs/installation.ja.md) |
 | Beginner's guide | [docs/getting-started.md](docs/getting-started.md) | [docs/getting-started.ja.md](docs/getting-started.ja.md) |
 | User guide (operation manual) | [docs/user-guide.md](docs/user-guide.md) | [docs/user-guide.ja.md](docs/user-guide.ja.md) |
-| Anna Framework | [docs/anna.md](docs/anna.md) | [docs/anna.ja.md](docs/anna.ja.md) |
 
 ## Requirements
 
@@ -88,7 +87,6 @@ ollama pull nomic-embed-text  # RAG embeddings
 - **Publishing support**: a 出版情報 dialog (title, subtitle, author, description, keywords, category, audience), a **KDP出版パッケージ** ZIP (EPUB + cover + CSV/Markdown listing sheet with a draft AI-disclosure), editable links/notes for posting destinations, and delete-a-work with an automatic JSON backup. There is no automatic posting — registering and publishing are done by you on each site.
 - **Background work and cancellation**: auto-write, import, translation and image jobs run on the server and keep going after logout (the dashboard lists them with per-job cancel buttons). A floating dialog shows the LLM queue with the novel and purpose of every call. Sessions end automatically after 10 idle minutes. The UI is available in eight languages (chosen on the login screen).
 - **AI-assisted knowledge tables**: CSV import skips duplicates, and 「＋ AIで10個追加」 asks the AI for ten new characters/world/plot/foreshadowing/timeline/glossary rows.
-- **Anna Framework**: an Anna App under [`anna/`](anna/) exposes INE as Executa tools (`#ine` in Anna chat, plus a small dashboard). The novel still lives in this app; Anna calls the local REST API with your INE login. See [docs/anna.md](docs/anna.md).
 - **Auto-write**: generates episodes 1 through up to 500 with minimal supervision, using a four-level planning hierarchy (Series → 5×100-episode Arcs → 50×10-episode Mini Arcs → per-episode blueprints) owned by a separate "Controller" Ollama model, handed off to a "Writer" Ollama model for prose. The Controller also runs a pre-write and post-write quality gate (timeline/character/world/plot only) and can force a rewrite. Existing episodes are skipped by default; overwrite is opt-in. A continuity audit runs automatically every 5 episodes. Live progress (percentage, phase, per-level plan counts) is exposed via API and shown in the 自動執筆 screen. See [the Auto-write section of the User Guide](docs/user-guide.md#auto-write) for the full mechanics.
 - **Deterministic planner-structure validation**: separately from the AI-generated plan content, `apps/api/app/planner/structure_validator.py` checks the *shape* the Series/Arc/Mini-Arc/Episode hierarchy is required to satisfy — exactly 5 arcs of exactly 100 episodes each, exactly 10 mini-arcs of exactly 10 episodes each, no gaps/overlaps/duplicates, full 1–500 coverage — independent of whatever the LLM actually generated.
 

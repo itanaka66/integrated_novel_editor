@@ -1,19 +1,5 @@
 import os
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _normalize_database_url(database_url: str) -> str:
-    if database_url.startswith('postgresql://'):
-        try:
-            import psycopg  # type: ignore
-
-            return database_url.replace('postgresql://', 'postgresql+psycopg://', 1)
-        except ModuleNotFoundError:
-            return database_url
-    return database_url
-
-
 class Settings(BaseSettings):
  # Real OS/container environment variables always win; a .env file here
  # (apps/api/.env — not the repo-root one docker-compose reads) is only a
@@ -23,15 +9,7 @@ class Settings(BaseSettings):
  # LAN addresses, CORS_ORIGINS=*, etc.) never leaks into the test suite —
  # see tests/conftest.py.
  model_config=SettingsConfigDict(env_file=None if os.environ.get('NOVEL_SKIP_DOTENV') else '.env',env_file_encoding='utf-8',extra='ignore')
-
- @model_validator(mode='before')
- @classmethod
- def normalize_database_url(cls, data):
-     if isinstance(data, dict) and isinstance(data.get('database_url'), str):
-         data['database_url'] = _normalize_database_url(data['database_url'])
-     return data
-
- database_url:str='sqlite:///./novel.db'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
+ database_url:str='postgresql+psycopg2://novel:novel@localhost:5432/novel'; qdrant_url:str='http://localhost:6333'; ollama_url:str='http://localhost:11434'; ollama_model:str='qwen3.8:27b'; ollama_embed_model:str='nomic-embed-text'; cors_origins:str='http://localhost:3000'
  admin_username:str='admin'; admin_password:str='novel-studio-change-me'
  controller_ollama_url:str='http://localhost:11434'; controller_ollama_model:str='qwen3:14b'
  # Translation model: blank = use the Controller's server/model.

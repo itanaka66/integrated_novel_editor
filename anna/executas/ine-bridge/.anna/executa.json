@@ -1,9 +1,0 @@
-{
-  "$schema": "anna-executa-identity/v1",
-  "host": "https://anna.partners",
-  "executa_id": 1254,
-  "tool_id": "tool-integrated-novel-editor-ine-bridge-vp9rg9xk",
-  "slug": "ine-bridge",
-  "executa_type": "tool",
-  "first_published_at": "2026-10-24T08:47:38.762Z"
-}

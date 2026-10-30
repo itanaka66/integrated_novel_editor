@@ -130,6 +130,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
           <button onClick={() => setShowImport(true)}>{t("ファイルからインポート")}</button>
           <button className="add" onClick={() => setShowNew(true)}>{t("＋ 新規作品作成")}</button>
           <button onClick={() => setShowAccount(true)}>{t("⚙ アカウント設定")}</button>
+          <button onClick={onLogout}>{t("⏻ ログアウト")}</button>
         </div>
       </header>
       {error && <p className="errorNote">{error}</p>}
@@ -171,14 +172,6 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       {showNew && <NewProjectForm onCancel={() => setShowNew(false)} onCreated={(p) => { setShowNew(false); onOpen(p); }} />}
       {showImport && <ImportPanel onCancel={() => setShowImport(false)} onImported={(p) => { setShowImport(false); onOpen(p); }} />}
       {showAccount && <AccountPanel isAdmin={!!user?.isAdmin} onCancel={() => setShowAccount(false)} />}
-
-      <button
-        type="button"
-        className="dashboardLogoutFixed"
-        onClick={onLogout}
-      >
-        ⏻ ログアウト
-      </button>
     </div>
   );
 }

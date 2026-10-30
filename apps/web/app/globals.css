@@ -133,27 +133,3 @@ button.saveButton,.writeHead button.saveButton,.entityRowActions button.saveButt
 
 .exportButtons a.button{display:inline-block;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#1d4ed8;text-decoration:none;font-size:13px}.exportButtons a.button:hover{background:#eff6ff}
 .pageLoadingOverlay{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:rgba(20,25,35,.35);cursor:progress}.pageLoadingCard{display:flex;flex-direction:column;gap:8px;align-items:stretch;min-width:min(340px,84vw);padding:20px 24px;border-radius:14px;background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.25);text-align:center}.pageLoadingCard small{color:#566273}.pageLoadingBar{height:8px;border-radius:99px;background:#e8edf2;overflow:hidden;position:relative}.pageLoadingBar i{position:absolute;top:0;bottom:0;width:40%;border-radius:99px;background:#2563eb;animation:llmSlide 1.2s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.pageLoadingBar i{animation:none;width:100%;opacity:.5}}
-/* Dashboard logout button: always visible at the bottom-right */
-.dashboardLogoutFixed {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 200;
-  padding: 12px 20px;
-  border: 1px solid #33415a;
-  border-radius: 8px;
-  background: #18202d;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.dashboardLogoutFixed:hover {
-  background: #2d3b50;
-}
-
-.dashboardLogoutFixed:focus-visible {
-  outline: 3px solid #60a5fa;
-  outline-offset: 3px;
-}

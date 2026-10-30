@@ -22,30 +22,6 @@ The test suite covers:
 - Hierarchical Planner model/table definitions
 - Writer/Controller default model assignments
 
-## Anna Executa plugin
-
-The INE Bridge Executa plugin has a small, standalone pytest suite. From the
-repository root, install its development dependency and run the tests:
-
-```bash
-python -m pip install -e "anna/executas/ine-bridge[dev]"
-python -m pytest -q anna/executas/ine-bridge/tests
-```
-
-Alternatively, run the suite from the plugin directory after installing its
-development dependency:
-
-```bash
-cd anna/executas/ine-bridge
-python -m pip install -e ".[dev]"
-python -m pytest -q tests
-```
-
-Tests mock the HTTP boundary, so a running INE server or Anna host is not
-required. Coverage includes tool and credential discovery, health checks,
-invoke validation and API errors, request construction, and a stdio round-trip
-for `describe` and unknown-method handling. CI runs the repository-root command.
-
 ## CI
 
 GitHub Actions installs `requirements-dev.txt`, runs `compileall`, then runs `pytest`.

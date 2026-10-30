@@ -1,9 +1,0 @@
-{
-  "$schema": "anna-executa-identity/v1",
-  "host": "https://anna.partners",
-  "executa_id": 1255,
-  "tool_id": "skill-integrated-novel-editor-novel-coach-hnvmc3ue",
-  "slug": "novel-coach",
-  "executa_type": "skill",
-  "first_published_at": "2026-10-24T08:52:02.858Z"
-}
