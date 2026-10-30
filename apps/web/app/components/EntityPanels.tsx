@@ -77,6 +77,8 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [successIds, setSuccessIds] = useState<Set<number>>(new Set());
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [reflectBusy, setReflectBusy] = useState(false);
   const [reflectResult, setReflectResult] = useState<ReflectResult | null>(null);
@@ -107,6 +109,11 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [key]: value } : it)));
     setDirtyIds((prev) => new Set(prev).add(id));
   }
+  function detailMessage(detail: unknown): string {
+    if (Array.isArray(detail)) return detail.map((e) => (e as { msg?: string }).msg ?? String(e)).join("; ");
+    return String(detail);
+  }
+
   async function commitRow(id: number) {
     const item = items.find((it) => it.id === id);
     if (!item) return;
@@ -115,9 +122,11 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     try {
       const result = await put(cfg.itemPath(id), item);
       if (result?.detail) {
-        setSaveError(result.detail);
+        setSaveError(detailMessage(result.detail));
       } else {
         setDirtyIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        setSuccessIds((prev) => new Set(prev).add(id));
+        setTimeout(() => setSuccessIds((prev) => { const n = new Set(prev); n.delete(id); return n; }), 2000);
       }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : t("更新に失敗しました"));
@@ -126,12 +135,12 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     }
   }
   async function remove(id: number) {
-    if (!confirm(t("削除しますか？"))) return;
+    setPendingDeleteId(null);
     setSaveError(null);
     try {
       const result = await del(cfg.itemPath(id));
       if (result?.detail) {
-        setSaveError(result.detail);
+        setSaveError(detailMessage(result.detail));
       } else {
         await load();
       }
@@ -288,8 +297,15 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
                     </td>
                   ))}
                   <td className="entityRowActions">
-                    <button className="saveButton" onClick={() => commitRow(id)}>{savingIds.has(id) ? t("保存中...") : t("更新")}</button>
-                    <button onClick={() => remove(id)}>{t("削除")}</button>
+                    <button type="button" className="saveButton" onClick={() => commitRow(id)}>{savingIds.has(id) ? t("保存中...") : successIds.has(id) ? "✓" : t("更新")}</button>
+                    {pendingDeleteId === id ? (
+                      <>
+                        <button type="button" style={{ background: "#c0392b", color: "#fff", border: 0 }} onClick={() => remove(id)}>{t("削除する")}</button>
+                        <button type="button" onClick={() => setPendingDeleteId(null)}>{t("取消")}</button>
+                      </>
+                    ) : (
+                      <button type="button" onClick={() => setPendingDeleteId(id)}>{t("削除")}</button>
+                    )}
                   </td>
                 </tr>
               );
