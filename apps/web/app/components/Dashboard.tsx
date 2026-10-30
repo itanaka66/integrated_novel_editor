@@ -145,6 +145,7 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
           <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("ファイルからインポート")}</button>
           <button className="add" onClick={() => setShowNew(true)}>{t("＋ 新規作品作成")}</button>
           <button disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("⚙ アカウント設定")}</button>
+          <button type="button" onClick={onLogout}>⏻ {t("ログアウト")}</button>
         </div>
       </header>
       {error && <p className="errorNote">{error}</p>}
@@ -199,13 +200,6 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       {showImport && <ImportPanel onCancel={() => setShowImport(false)} onImported={(p) => { setShowImport(false); onOpen(p); }} />}
       {showAccount && <AccountPanel isAdmin={!!user?.isAdmin} onCancel={() => setShowAccount(false)} />}
 
-      <button
-        type="button"
-        className="dashboardLogoutFixed"
-        onClick={onLogout}
-      >
-        ⏻ ログアウト
-      </button>
     </div>
   );
 }
