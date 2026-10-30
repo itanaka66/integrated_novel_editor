@@ -125,6 +125,14 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
     try { await api("/background-jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: j.kind, id: j.id }) }); } catch { /* already finished */ }
     api("/background-jobs").then((r) => { if (Array.isArray(r?.jobs)) setBgJobs(r.jobs); }).catch(() => {});
   }
+  async function cancelLlmEntry(entryId: number) {
+    try { await api(`/llm/queue/${entryId}`, { method: "DELETE" }); } catch { /* already gone */ }
+    api("/llm/queue").then((r) => {
+      if (!r) return;
+      const entries = Array.isArray(r) ? r : Array.isArray(r?.entries) ? r.entries : [];
+      setLlmQueue(entries);
+    }).catch(() => {});
+  }
   async function cancelAll() {
     if (!window.confirm(t("実行中のAI処理をすべてキャンセルします。ここまでの結果は残ります。よろしいですか？"))) return;
     for (const j of bgJobs) {
@@ -173,7 +181,8 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
                 <b>{e.kind_label}</b>
                 {e.purpose && <span>{e.purpose}</span>}
                 {e.project_name && <small>「{e.project_name}」</small>}
-                <small style={{ marginLeft: "auto", opacity: 0.6 }}>{e.elapsed_seconds}s</small>
+                <small style={{ opacity: 0.6 }}>{e.elapsed_seconds}s</small>
+                <button type="button" style={{ marginLeft: "auto", color: "#c0392b" }} onClick={() => cancelLlmEntry(e.id)}>{t("キャンセル")}</button>
               </p>
             ))}
           </div>

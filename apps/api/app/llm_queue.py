@@ -76,9 +76,18 @@ class Entry:
 
 _ids = itertools.count(1)
 _entries: dict[int, Entry] = {}
+_cancel_requested: set[int] = set()
 # Semaphores belong to one event loop; keyed weakly by loop so a finished
 # loop (tests call asyncio.run repeatedly) can't leave a stale one behind.
 _semaphores: 'weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict]' = weakref.WeakKeyDictionary()
+
+
+def cancel(entry_id: int) -> bool:
+    """Mark an entry for cancellation. Returns True if found."""
+    if entry_id not in _entries:
+        return False
+    _cancel_requested.add(entry_id)
+    return True
 
 
 def _semaphore(url: str, model: str) -> asyncio.Semaphore | None:
@@ -103,6 +112,11 @@ async def slot(*, kind: str, model: str, url: str):
     try:
         if sem is not None:
             await sem.acquire()
+        if entry.id in _cancel_requested:
+            _cancel_requested.discard(entry.id)
+            if sem is not None:
+                sem.release()
+            return
         entry.state = 'running'
         entry.started_at = time.time()
         try:
@@ -111,6 +125,7 @@ async def slot(*, kind: str, model: str, url: str):
             if sem is not None:
                 sem.release()
     finally:
+        _cancel_requested.discard(entry.id)
         _entries.pop(entry.id, None)
 
 

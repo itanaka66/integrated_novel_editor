@@ -14,7 +14,7 @@ from .rag import index,search,search_all_projects
 from .context import build
 from .continuity import update_character_states, check_continuity
 from .auth import AuthMiddleware
-from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot, set_project as llm_set_project
+from .llm_queue import PurposeMiddleware, snapshot as llm_queue_snapshot, set_project as llm_set_project, cancel as llm_cancel
 from .cors import DynamicCORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from . import export as export_mod
@@ -138,6 +138,9 @@ def init():
 def health():return {'status':'ok','version':'0.5.0','features':['continuity-checker','character-state-auto-update','story-digital-twin'],'oauth_providers':list(OAUTH_PROVIDERS.keys())}
 @app.get('/api/v1/llm/queue')
 def llm_queue():return {'entries':llm_queue_snapshot(),'max_concurrency':settings.ollama_max_concurrency}
+@app.delete('/api/v1/llm/queue/{entry_id}',status_code=204)
+def llm_queue_cancel(entry_id:int):
+ if not llm_cancel(entry_id):raise HTTPException(404,'LLM queue entry not found')
 @app.get('/api/v1/me')
 def me(request:Request,db:Session=Depends(get_db)):
  u=db.scalar(select(User).where(User.username==request.state.username))
