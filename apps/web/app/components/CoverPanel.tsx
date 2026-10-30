@@ -202,7 +202,7 @@ export default function CoverPanel({ projectId }: { projectId: number }) {
         <button type="button" disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{t("複数画像作成")}</button>
       </div>
       <div className="exportButtons">
-        <button onClick={generate} disabled={generating || !state.prompt.trim()}>{generating ? t("生成中...") : t("表紙を生成")}</button>
+        <button onClick={generate} disabled style={{ opacity: 0.4, cursor: "not-allowed" }}>{generating ? t("生成中...") : t("表紙を生成")}</button>
       </div>
       {error && <p style={{ color: "#c0392b" }}>{error}</p>}
       {batch && <p style={{ color: batch.status === "error" ? "#c0392b" : undefined }}>{batch.last_message}</p>}

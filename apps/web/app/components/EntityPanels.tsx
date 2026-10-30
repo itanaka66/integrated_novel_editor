@@ -2,7 +2,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { api, post, put, del } from "../lib/api";
 import { parseCSV, toCSV, downloadTextFile } from "../lib/csv";
-import { t } from "../lib/i18n";
+import { getLanguage, t } from "../lib/i18n";
 
 type Field = { key: string; label: string; type?: "text" | "textarea" | "number" | "select"; options?: string[] };
 type EntityConfig = {
@@ -76,6 +76,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   const [newRows, setNewRows] = useState<Record<string, unknown>[]>([]);
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvResult, setCsvResult] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [reflectBusy, setReflectBusy] = useState(false);
   const [reflectResult, setReflectResult] = useState<ReflectResult | null>(null);
@@ -110,17 +111,33 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
     const item = items.find((it) => it.id === id);
     if (!item) return;
     setSavingIds((prev) => new Set(prev).add(id));
+    setSaveError(null);
     try {
-      await put(cfg.itemPath(id), item);
-      setDirtyIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      const result = await put(cfg.itemPath(id), item);
+      if (result?.detail) {
+        setSaveError(result.detail);
+      } else {
+        setDirtyIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : t("更新に失敗しました"));
     } finally {
       setSavingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     }
   }
   async function remove(id: number) {
     if (!confirm(t("削除しますか？"))) return;
-    await del(cfg.itemPath(id));
-    await load();
+    setSaveError(null);
+    try {
+      const result = await del(cfg.itemPath(id));
+      if (result?.detail) {
+        setSaveError(result.detail);
+      } else {
+        await load();
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : t("削除に失敗しました"));
+    }
   }
 
   function addRow() { setNewRows((prev) => [...prev, emptyForm(cfg)]); }
@@ -185,7 +202,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
   async function addByAi() {
     setAiBusy(true); setCsvResult(null);
     try {
-      const r = await api(`/projects/${projectId}/ai-entities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: cfg.aiKind, count: 10 }) });
+      const r = await api(`/projects/${projectId}/ai-entities`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: cfg.aiKind, count: 10, locale_hint: getLanguage() }) });
       setCsvResult(typeof r?.created === "number" ? t("AIが{n}件を追加しました。", { n: r.created }) : (r?.detail || t("AIでの追加に失敗しました")));
       await load();
     } catch (e) {
@@ -227,6 +244,7 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
           </button>
         )}
       </div>
+      {saveError && <p style={{ color: "#c0392b", margin: "4px 0" }}>{saveError}</p>}
       {csvResult && <p className="searchSource">{csvResult}</p>}
       {reflectResult && (
         <div className="searchSource">

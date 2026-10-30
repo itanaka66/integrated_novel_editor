@@ -13,6 +13,11 @@ from .models import Character, WorldEntity, Plot, Foreshadowing, TimelineEvent
 from .ollama import generate
 from .translator import _PROMPT_LANG
 
+_LOCALE_LANG: dict[str, str] = {
+    'en': 'English', 'zh-CN': 'Simplified Chinese', 'zh-TW': 'Traditional Chinese',
+    'ko': 'Korean', 'es': 'Spanish', 'fr': 'French', 'de': 'German',
+}
+
 # kind -> model, key fields, field spec (name -> hint), constant defaults, row filter
 KINDS: dict[str, dict] = {
     'characters': {
@@ -92,7 +97,7 @@ def clean_row(spec: dict, raw: dict) -> dict | None:
     return row if all(row.get(k) not in (None, '') for k in spec['keys']) else None
 
 
-async def add_ai_rows(db, project, kind: str, count: int = 10) -> list:
+async def add_ai_rows(db, project, kind: str, count: int = 10, locale_hint: str | None = None) -> list:
     spec = KINDS[kind]
     model = spec['model']
     existing = [r for r in db.scalars(select(model).where(model.project_id == project.id)).all()
@@ -100,7 +105,7 @@ async def add_ai_rows(db, project, kind: str, count: int = 10) -> list:
     seen = {row_key(spec, r) for r in existing}
     names = [str(getattr(r, spec['keys'][-1])) for r in existing][:120]
     chars = [c.name for c in db.scalars(select(Character).where(Character.project_id == project.id)).all()][:40]
-    lang = _PROMPT_LANG.get(project.language or 'ja', 'Japanese')
+    lang = _LOCALE_LANG.get(locale_hint or '', None) or _PROMPT_LANG.get(project.language or 'ja', 'Japanese')
     fields = '\n'.join(f'- {k}: {hint}' for k, hint in spec['fields'].items())
     prompt = f'''あなたは長編小説の設定編集者です。次の作品に追加する「{spec['label']}」の新しい案を{count}件、考えてください。
 作品名: {project.name}

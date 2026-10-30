@@ -2,7 +2,17 @@
 import { useEffect, useRef, useState } from "react";
 import { api, post, streamSSE } from "../lib/api";
 import { ensureNotificationPermission, notify } from "../lib/notify";
-import { t } from "../lib/i18n";
+import { getLanguage, t } from "../lib/i18n";
+
+const LOCALE_INSTRUCTIONS: Record<string, string> = {
+  en: "Write in English.",
+  "zh-CN": "请用简体中文撰写。",
+  "zh-TW": "請用繁體中文撰寫。",
+  ko: "한국어로 작성해주세요。",
+  es: "Escribe en español.",
+  fr: "Rédigez en français.",
+  de: "Schreibe auf Deutsch.",
+};
 
 const PHASE_LABEL: any = {
   queued: t("待機中"), series_planner: t("Series Planner（全体構成）"), arc_planner: "Arc / Mini Arc / Episode Planner",
@@ -51,9 +61,11 @@ export default function AutoWritePanel({ projectId }: { projectId: number }) {
   async function createJob() {
     setBusy(true);
     ensureNotificationPermission();
+    const localeInstruction = LOCALE_INSTRUCTIONS[getLanguage()] ?? "";
+    const finalPremise = localeInstruction ? (premise ? `${premise}\n${localeInstruction}` : localeInstruction) : premise;
     try {
       const x = await post("/auto-write/start", {
-        project_id: projectId, start_episode: startEpisode, end_episode: endEpisode, premise, overwrite,
+        project_id: projectId, start_episode: startEpisode, end_episode: endEpisode, premise: finalPremise, overwrite,
       });
       setJob(x);
       setJobs((js) => [x, ...js]);

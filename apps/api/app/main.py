@@ -576,7 +576,7 @@ async def ai_entities(pid:int,x:AiEntitiesRequest,db:Session=Depends(get_db)):
  from . import ai_entities as ae
  p=crud_get_or_404(db,Project,pid,'Project')
  if x.kind not in ae.KINDS:raise HTTPException(400,'kind must be one of: '+', '.join(ae.KINDS))
- try:rows=await ae.add_ai_rows(db,p,x.kind,max(1,min(x.count,30)))
+ try:rows=await ae.add_ai_rows(db,p,x.kind,max(1,min(x.count,30)),locale_hint=x.locale_hint)
  except Exception as ex:raise HTTPException(503,f'Ollama error: {ex}')
  return {'created':len(rows),'items':[{c.name:getattr(r,c.name) for c in r.__table__.columns} for r in rows]}
 def _kdp_ai_hints(db,p):

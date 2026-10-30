@@ -105,6 +105,17 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
     return () => { live = false; clearInterval(timer); };
   }, []);
 
+  // Real-time LLM processing queue (individual AI calls currently running or waiting).
+  type LlmEntry = { id: number; position: number; state: string; kind_label: string; purpose: string | null; project_name: string | null; elapsed_seconds: number };
+  const [llmQueue, setLlmQueue] = useState<LlmEntry[]>([]);
+  useEffect(() => {
+    let live = true;
+    const poll = () => api("/llm/queue").then((r) => { if (live && Array.isArray(r)) setLlmQueue(r); }).catch(() => {});
+    poll();
+    const timer = setInterval(poll, 3000);
+    return () => { live = false; clearInterval(timer); };
+  }, []);
+
   async function cancelJob(j: BgJob) {
     if (j.id == null || !window.confirm(t("「{label}」をキャンセルします。ここまでの結果は残ります。よろしいですか？", { label: `${j.label}${j.project_name ? `「${j.project_name}」` : ""}` }))) return;
     try { await api("/background-jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: j.kind, id: j.id }) }); } catch { /* already finished */ }
@@ -146,6 +157,20 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
                   <b>{j.label}</b>{j.project_name ? `「${j.project_name}」` : ""}
                   {j.total ? ` ${j.done ?? 0}/${j.total}` : ""} <small>{j.message}</small>
                   {j.id != null && <button type="button" style={{ marginLeft: 8, color: "#c0392b" }} onClick={() => cancelJob(j)}>{t("キャンセル")}</button>}
+                </p>
+              ))}
+            </div>
+          )}
+          {llmQueue.length > 0 && (
+            <div className="card">
+              <small>{t("LLM処理状況")}</small>
+              {llmQueue.map((e) => (
+                <p key={e.id} style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className={`badge ${e.state}`}>{e.state === "running" ? t("実行中") : t("待機中")}</span>
+                  <b>{e.kind_label}</b>
+                  {e.purpose && <span>{e.purpose}</span>}
+                  {e.project_name && <small>「{e.project_name}」</small>}
+                  <small style={{ marginLeft: "auto", opacity: 0.6 }}>{e.elapsed_seconds}s</small>
                 </p>
               ))}
             </div>
