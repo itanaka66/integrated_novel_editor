@@ -147,33 +147,31 @@ export default function Dashboard({ onOpen, onLogout }: { onOpen: (p: Project) =
       {busy && projects.length === 0 ? <p className="loading">{t("読み込み中...")}</p> : null}
       <div className="dashboardGrid">
         <div className="dashboardWorks">
-          {bgJobs.length > 0 && (
-            <div className="card">
-              <small>{t("サーバーで実行中の処理（ログアウトしても続行されます）")}</small>
+          <div className="card">
+            <small>
+              {t("サーバーで実行中の処理（ログアウトしても続行されます）")}
               {bgJobs.length > 1 && <button type="button" style={{ marginLeft: 10, color: "#c0392b" }} onClick={cancelAll}>{t("すべてキャンセル")}</button>}
-              {bgJobs.map((j, i) => (
-                <p key={i} style={{ margin: "4px 0" }}>
-                  <b>{j.label}</b>{j.project_name ? `「${j.project_name}」` : ""}
-                  {j.total ? ` ${j.done ?? 0}/${j.total}` : ""} <small>{j.message}</small>
-                  {j.id != null && <button type="button" style={{ marginLeft: 8, color: "#c0392b" }} onClick={() => cancelJob(j)}>{t("キャンセル")}</button>}
-                </p>
-              ))}
-            </div>
-          )}
-          {llmQueue.length > 0 && (
-            <div className="card">
-              <small>{t("LLM処理状況")}</small>
-              {llmQueue.map((e) => (
-                <p key={e.id} style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className={`badge ${e.state}`}>{e.state === "running" ? t("実行中") : t("待機中")}</span>
-                  <b>{e.kind_label}</b>
-                  {e.purpose && <span>{e.purpose}</span>}
-                  {e.project_name && <small>「{e.project_name}」</small>}
-                  <small style={{ marginLeft: "auto", opacity: 0.6 }}>{e.elapsed_seconds}s</small>
-                </p>
-              ))}
-            </div>
-          )}
+            </small>
+            {bgJobs.length === 0 && llmQueue.length === 0 && (
+              <p style={{ margin: "4px 0", opacity: 0.5 }}><small>{t("実行中の処理はありません")}</small></p>
+            )}
+            {bgJobs.map((j, i) => (
+              <p key={i} style={{ margin: "4px 0" }}>
+                <b>{j.label}</b>{j.project_name ? `「${j.project_name}」` : ""}
+                {j.total ? ` ${j.done ?? 0}/${j.total}` : ""} <small>{j.message}</small>
+                {j.id != null && <button type="button" style={{ marginLeft: 8, color: "#c0392b" }} onClick={() => cancelJob(j)}>{t("キャンセル")}</button>}
+              </p>
+            ))}
+            {llmQueue.map((e) => (
+              <p key={e.id} style={{ margin: "4px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                <span className={`badge ${e.state}`}>{e.state === "running" ? t("実行中") : t("待機中")}</span>
+                <b>{e.kind_label}</b>
+                {e.purpose && <span>{e.purpose}</span>}
+                {e.project_name && <small>「{e.project_name}」</small>}
+                <small style={{ marginLeft: "auto", opacity: 0.6 }}>{e.elapsed_seconds}s</small>
+              </p>
+            ))}
+          </div>
           <small>{t("マイ作品")}</small>
           {projects.length === 0 && !busy && <div className="card"><b>{t("まだ作品がありません")}</b><p>{t("「新規作品作成」から最初の作品を作りましょう。")}</p></div>}
           {roots.map((p) => renderWork(p, 0, new Set()))}
