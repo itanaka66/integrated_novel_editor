@@ -288,8 +288,8 @@ export function EntityPanel({ projectId, cfg }: { projectId: number; cfg: Entity
                     </td>
                   ))}
                   <td className="entityRowActions">
-                    <button className="saveButton" onClick={() => commitRow(id)} disabled={savingIds.has(id)}>{savingIds.has(id) ? t("保存中...") : t("更新")}</button>
-                    <button onClick={() => remove(id)} disabled={savingIds.has(id)}>{t("削除")}</button>
+                    <button className="saveButton" onClick={() => commitRow(id)}>{savingIds.has(id) ? t("保存中...") : t("更新")}</button>
+                    <button onClick={() => remove(id)}>{t("削除")}</button>
                   </td>
                 </tr>
               );
