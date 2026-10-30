@@ -84,9 +84,10 @@ INEサーバーの `.env` に `ANNA_LLM_URL` を設定すると、`ollama.py` �
 
 ```env
 # apps/api/.env
-ANNA_LLM_URL=https://anna.partners/api/llm/v1
-ANNA_LLM_API_KEY=sk-…
-ANNA_LLM_MODEL=claude-sonnet-4-5  # 省略可: runtime_configのollama_modelを使用
+ANNA_LLM_URL=https://neomedia.dynv6.net:6559/v1
+ANNA_LLM_API_KEY=
+ANNA_LLM_MODEL=qwen3.8:27b
+runtime_configのollama_modelを使用
 ```
 
 `ANNA_LLM_URL` が設定されると Writer と Controller の両方がそのエンドポイントを使う（個別の `controller_ollama_url` は無視される）。

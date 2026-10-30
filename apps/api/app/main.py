@@ -717,6 +717,9 @@ def system_settings_test_connection(x:ConnectionTestRequest):
  elif x.target in ('ollama','controller_ollama','translator_ollama'):
   if not x.url:raise HTTPException(400,'url is required')
   ok,msg,ms=connection_test.test_ollama(x.url,x.model)
+ elif x.target=='anna_llm':
+  if not x.url:raise HTTPException(400,'url is required')
+  ok,msg,ms=connection_test.test_anna_llm(x.url,x.model,x.api_key)
  else:
   raise HTTPException(400,f'unknown target: {x.target}')
  return ConnectionTestResult(ok=ok,message=msg,latency_ms=ms)

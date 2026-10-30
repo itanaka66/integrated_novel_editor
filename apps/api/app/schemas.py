@@ -148,9 +148,10 @@ class ImportJobOut(BaseModel):
     model_config=ConfigDict(from_attributes=True)
 
 class ConnectionTestRequest(BaseModel):
-    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama'
+    target:str # 'database' | 'qdrant' | 'ollama' | 'controller_ollama' | 'anna_llm'
     url:str|None=None # ignored for 'database'; tests whatever value the form currently holds, saved or not
-    model:str|None=None # 'ollama' / 'controller_ollama' only — checks the model is pulled, not just reachable
+    model:str|None=None # 'ollama' / 'controller_ollama' / 'anna_llm' only
+    api_key:str|None=None # 'anna_llm' only
 
 class ConnectionTestResult(BaseModel):
     ok:bool; message:str; latency_ms:int

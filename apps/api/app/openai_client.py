@@ -39,6 +39,9 @@ async def _post_with_retry(url: str, payload: dict, timeout: float, headers: dic
                 return r
         except (httpx.TransportError, httpx.HTTPStatusError) as ex:
             last_error = ex
+            # 4xx are client-side configuration errors; retrying won't help.
+            if isinstance(ex, httpx.HTTPStatusError) and ex.response.status_code < 500:
+                break
             if attempt == MAX_ATTEMPTS:
                 break
             logger.warning(
