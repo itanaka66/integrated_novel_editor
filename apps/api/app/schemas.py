@@ -206,6 +206,8 @@ class TranslateJobOut(BaseModel):
     total_episodes:int; processed_episodes:int; last_message:str; progress_percent:float=0.0
 class TranslateAllJobOut(BaseModel):
     id:int; source_project_id:int; status:str; total_languages:int; done_languages:int; failed:list[str]=[]; current_language:str=''; last_message:str
+class RetranslateJobOut(BaseModel):
+    id:int; episode_id:int; status:str; last_message:str; episode:dict|None=None
 class DigestRequest(BaseModel): ratio:float=0.5; name:str=''
 class DigestResult(BaseModel): project:ProjectOut; source_episode_count:int; episode_count:int; source_chars:int; chars:int; source_numbers:list[int]
 class CoverPromptOut(BaseModel): prompt:str

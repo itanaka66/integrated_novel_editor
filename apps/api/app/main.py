@@ -381,6 +381,23 @@ def translate_job_get(job_id:int):
  job=translator.jobs.get(job_id)
  if not job:raise HTTPException(404,'Translate job not found')
  return _translate_job_out(job)
+@app.post('/api/v1/episodes/{eid}/retranslate',response_model=RetranslateJobOut)
+async def episode_retranslate(eid:int,db:Session=Depends(get_db)):
+ ep=crud_get_or_404(db,Episode,eid,'Episode')
+ dst=db.get(Project,ep.project_id)
+ if not dst or not dst.source_project_id:raise HTTPException(400,'このエピソードは翻訳作品ではありません')
+ for j in translator.retranslate_jobs.values():
+  if j['episode_id']==eid and j['status'] in ('queued','running'):
+   t=translator.retranslate_running.get(j['id'])
+   if t and not t.done():return j
+ job=translator.new_retranslate_job(eid)
+ translator.retranslate_running[job['id']]=asyncio.create_task(translator.run_retranslation(job))
+ return job
+@app.get('/api/v1/retranslate-jobs/{job_id}',response_model=RetranslateJobOut)
+def retranslate_job_get(job_id:int):
+ job=translator.retranslate_jobs.get(job_id)
+ if not job:raise HTTPException(404,'Retranslate job not found')
+ return job
 MAX_KEYWORDS=7
 def _publishing_path(p):
  d=file_sync.project_dir(p);d.mkdir(parents=True,exist_ok=True)

@@ -79,6 +79,10 @@ jobs: dict[int, dict] = {}
 running: dict[int, asyncio.Task] = {}
 _ids = itertools.count(1)
 
+retranslate_jobs: dict[int, dict] = {}
+retranslate_running: dict[int, asyncio.Task] = {}
+_retranslate_ids = itertools.count(1)
+
 
 def _state_file():
     d = file_sync.storage_root()
@@ -596,3 +600,75 @@ async def run_translation(job: dict) -> None:
             lock.release()
         db.close()
         running.pop(job['id'], None)
+
+
+def new_retranslate_job(episode_id: int) -> dict:
+    job = {'id': next(_retranslate_ids), 'episode_id': episode_id,
+           'status': 'queued', 'last_message': 'キューに追加しました'}
+    retranslate_jobs[job['id']] = job
+    return job
+
+
+async def run_retranslation(job: dict) -> None:
+    """Re-translate a single episode from the original source text."""
+    db = SessionLocal()
+    try:
+        job['status'] = 'running'
+        ep = db.get(Episode, job['episode_id'])
+        if ep is None:
+            job['status'] = 'error'
+            job['last_message'] = 'エピソードが見つかりません'
+            return
+        dst_project = db.get(Project, ep.project_id)
+        if dst_project is None or not dst_project.source_project_id:
+            job['status'] = 'error'
+            job['last_message'] = '翻訳元プロジェクトが見つかりません'
+            return
+        lang = dst_project.language or 'ja'
+        src_project = db.get(Project, dst_project.source_project_id)
+        if src_project is None:
+            job['status'] = 'error'
+            job['last_message'] = '原文プロジェクトが見つかりません'
+            return
+        from sqlalchemy import select as sa_select
+        src_ep = db.scalars(sa_select(Episode).where(
+            Episode.project_id == src_project.id, Episode.number == ep.number
+        )).first()
+        if src_ep is None:
+            job['status'] = 'error'
+            job['last_message'] = f'原文の第{ep.number}話が見つかりません'
+            return
+        chars = db.scalars(sa_select(Character).where(Character.project_id == src_project.id)).all()
+        glossary = ''
+        if chars:
+            glossary = '. Character names: ' + ', '.join(c.name for c in chars)
+        purpose.set(f"再翻訳（{LANGUAGES.get(lang, lang)}）第{ep.number}話")
+        job['last_message'] = f'第{ep.number}話を再翻訳中…'
+        set_project(src_project.id)
+        with _pin(lang):
+            if src_ep.chapter:
+                ep.chapter = (await translate_text(src_ep.chapter, lang, glossary)).strip() or src_ep.chapter
+            ep.title = (await translate_text(src_ep.title, lang, glossary)).strip() or src_ep.title
+            ep.summary = await translate_text(src_ep.summary, lang, glossary)
+            ep.content = await translate_text(src_ep.content, lang, glossary)
+        db.commit()
+        db.refresh(ep)
+        file_sync.write_episode_file(dst_project, ep)
+        job['status'] = 'completed'
+        job['last_message'] = f'第{ep.number}話の再翻訳が完了しました。'
+        job['episode'] = {
+            'id': ep.id, 'project_id': ep.project_id, 'number': ep.number,
+            'title': ep.title, 'summary': ep.summary, 'content': ep.content,
+            'chapter': ep.chapter or '', 'updated_at': ep.updated_at.isoformat() if ep.updated_at else '',
+        }
+    except asyncio.CancelledError:
+        job['status'] = 'cancelled'
+        job['last_message'] = '再翻訳をキャンセルしました'
+        raise
+    except Exception as ex:
+        logger.exception('Retranslate job %s failed', job['id'])
+        job['status'] = 'error'
+        job['last_message'] = f'再翻訳に失敗しました: {ex}'
+    finally:
+        db.close()
+        retranslate_running.pop(job['id'], None)

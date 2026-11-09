@@ -33,7 +33,10 @@ export default function WritePanel({ project }: { project: Project }) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showChecks, setShowChecks] = useState(false);
   const [showProofread, setShowProofread] = useState(false);
+  const [retranslateJobId, setRetranslateJobId] = useState<number | null>(null);
+  const [retranslateStatus, setRetranslateStatus] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const retranslatePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const episodeList = useResizableWidth("ine-write-episodelist-width", 190, 150, 400, "right");
   const rightPanel = useResizableWidth("ine-write-rightpanel-width", 280, 220, 560, "left");
 
@@ -166,6 +169,47 @@ export default function WritePanel({ project }: { project: Project }) {
     } finally { setBusy(false); }
   }
 
+  async function startRetranslate() {
+    if (!e) return;
+    if (!confirm(t("この話を原文から再翻訳します。現在の翻訳は上書きされます。続けますか？"))) return;
+    setRetranslateStatus(t("再翻訳を開始しました…"));
+    try {
+      const job = await post(`/episodes/${e.id}/retranslate`, {});
+      setRetranslateJobId(job.id);
+      pollRetranslate(job.id);
+    } catch {
+      setRetranslateStatus(t("再翻訳の開始に失敗しました"));
+    }
+  }
+
+  function pollRetranslate(jobId: number) {
+    if (retranslatePollRef.current) clearInterval(retranslatePollRef.current);
+    retranslatePollRef.current = setInterval(async () => {
+      try {
+        const job = await api(`/retranslate-jobs/${jobId}`);
+        setRetranslateStatus(job.last_message || "");
+        if (job.status === "completed") {
+          clearInterval(retranslatePollRef.current!);
+          retranslatePollRef.current = null;
+          setRetranslateJobId(null);
+          if (job.episode) {
+            const updated = job.episode as Episode;
+            setE(updated);
+            setEs((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
+          }
+        } else if (job.status === "error" || job.status === "cancelled") {
+          clearInterval(retranslatePollRef.current!);
+          retranslatePollRef.current = null;
+          setRetranslateJobId(null);
+        }
+      } catch {
+        clearInterval(retranslatePollRef.current!);
+        retranslatePollRef.current = null;
+        setRetranslateJobId(null);
+      }
+    }, 2000);
+  }
+
   if (!e) return <div className="panel"><p>{t("エピソードがまだありません。")}</p><button className="add" onClick={addEpisode}>{t("＋ エピソードを追加")}</button></div>;
 
   return (
@@ -201,8 +245,16 @@ export default function WritePanel({ project }: { project: Project }) {
           <div className="writeHeadActions">
             <button className="historyButton" onClick={openHistory}>{t("🕘 履歴")}</button>
             <button className="historyButton" onClick={() => setShowProofread(true)} title={t("スタイルガイドと照合し、差分を1件ずつ確認しながら修正します")}>{t("📐 文章校正")}</button>
+            {project.source_project_id && (
+              <button className="historyButton" onClick={startRetranslate} disabled={!!retranslateJobId} title={t("原文からこの話を再翻訳します")}>
+                {retranslateJobId ? t("再翻訳中…") : t("🔄 再翻訳")}
+              </button>
+            )}
             <button className="saveButton" onClick={async () => { await save(); await post(`/episodes/${e.id}/character-states`, {}); }}>{busy ? t("保存中") : t("保存＋人物状態更新")}</button>
           </div>
+          {retranslateStatus && project.source_project_id && (
+            <div style={{ fontSize: 12, color: "#687386", marginTop: 2 }}>{retranslateStatus}</div>
+          )}
         </div>
         {warnings.length > 0 && <div className="saveWarnings">{warnings.map((w, i) => <p key={i}>⚠ {w}</p>)}</div>}
         <div className="summary"><small>{t("章（Word出力の見出し1）")}</small><input value={e.chapter ?? ""} onChange={(x) => setE({ ...e, chapter: x.target.value })} placeholder={t("例）第一部 序章（空欄なら章なし）")} /></div>
